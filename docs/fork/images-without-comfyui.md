@@ -301,6 +301,24 @@ causes, and on Windows you need both fixes:
   pick a template manually — Qwen3 models want **ChatML**. Leaving it on
   `default.jinja2` (an Alpaca-style fallback) measurably degrades output.
 
+**All your Ollama models suddenly disappeared**
+: `OLLAMA_MODELS` isn't set for whatever process started Ollama, so it fell back to
+  `%USERPROFILE%\.ollama\models` instead of your real library. Nothing is deleted —
+  Ollama just isn't looking in the right place. Persist it and restart Ollama:
+
+  ```powershell
+  setx OLLAMA_MODELS "<path to your models dir>"
+  ```
+
+  `start-fork.bat` deliberately **refuses** to start Ollama when `OLLAMA_MODELS` is
+  unset, rather than starting it against a near-empty directory. Machine-specific
+  paths go in the untracked `start-fork.local.bat`.
+
+**"Another Talemate frontend is already connected. Only one connection is allowed."**
+: The backend accepts a **single** frontend websocket. Close the other tab/window.
+  Worth knowing when testing — a second browser will be refused, and that refusal
+  is itself proof the backend is healthy.
+
 **Generation is slower than expected**
 : KoboldCpp uses `stable-diffusion.cpp`, which is slower than diffusers, and it
   puts CLIP on CPU by default (`Backend assignment: "CLIP=CPU"`). Try

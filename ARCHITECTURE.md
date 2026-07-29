@@ -555,6 +555,11 @@ exists for exactly this and is gitignored-adjacent (each dir ships a
 
 ## 6. Clients: Ollama, and the image-generation question
 
+!!! note "One frontend at a time"
+    The backend accepts a **single** frontend websocket connection; a second one is
+    rejected with *"Another Talemate frontend is already connected."* Relevant when
+    testing — you cannot drive the UI from a second browser while a tab is open.
+
 ### 6.1 The Ollama client
 
 `src/talemate/client/ollama.py`:
@@ -581,6 +586,19 @@ client owns `api_url`. For *visual backends*, the URL lives in the agent's own
 action config (`comfyui_image_create.api_url`,
 `openai_compatible_image_analyzation.base_url`) and is per-backend-slot, so the
 create/edit/analyse slots can each point somewhere different.
+
+**Reconnect behaviour.** The status loop is resilient: Talemate polls
+`GET /api/version` every ~3 s and re-fetches `/api/tags` on the 15 s
+`FETCH_MODELS_INTERVAL`. Restarting Ollama under a running backend needs no
+intervention — verified by killing and restarting Ollama, after which the poll
+resumed with 200s and the client reported connected without a Talemate restart.
+
+**Model library location (environment, not Talemate).** Ollama resolves models
+*only* from `OLLAMA_MODELS`, falling back to `%USERPROFILE%\.ollama\models`. On this
+machine the real library is 254 GB / 40 models on `I:`, while the fallback holds
+1 manifest / 0.6 GB — so starting Ollama without the variable makes every model
+appear to vanish. Now persisted via `setx` (2026-07-29) and also set in the
+untracked `start-fork.local.bat`; `start-fork.bat` refuses to start Ollama blind.
 
 ### 6.2 Ollama image generation — tested, and blocked on Windows
 
