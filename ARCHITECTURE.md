@@ -725,4 +725,22 @@ End-to-end exercised: scene load, LLM text generation via Ollama
 Director action generation, visual prompt generation, and image generation through
 KoboldCpp with the asset saved to the scene library.
 
-Not yet exercised: `pytest`, TTS, image editing, image analysis.
+Not yet exercised: TTS, image editing, image analysis.
+
+### Test suite baseline
+
+`uv sync --extra dev` then `python -m pytest`: **7 failed, 5517 passed, 1 skipped**
+in ~70 s. All 7 are **upstream tests that assume POSIX** — we have changed zero
+Python files since the fork point (`git diff --name-only c12a829..HEAD` is
+markdown + one `.pages` line), so this is the clean baseline, not our regression:
+
+| Test | Cause |
+|---|---|
+| `test_base_extras.py::TestSystemTime::test_full_format`, `::test_unknown_format_falls_back_to_full` | `ValueError: Invalid format string` — POSIX-only `strftime` directive, unsupported by MSVC |
+| `test_template_section_validation.py::test_all_sections_explicitly_closed`, `::test_no_bot_token_inside_sections` | `open()` with no `encoding=`, so Windows defaults to cp1252 and dies on a non-ASCII byte in a template |
+| `test_encryption.py::TestKeyFilePath::test_env_var_override` | Asserts `/custom/secrets/...`; Windows yields `\custom\secrets\...` |
+| `test_director_templates.py::...::test_chat_list_sorted_by_created_at`, `::test_falls_back_to_most_recent` | Chats created in one tick share a `created_at`, so sort order ties. Windows' ~15.6 ms clock granularity makes the tie likely |
+
+**Practical consequence:** treat "7 failed" as green. Before blaming our work for a
+test failure, check it isn't one of these seven. Also note `--strict` mkdocs builds
+fail on 5 pre-existing upstream doc warnings; build without `--strict`.
