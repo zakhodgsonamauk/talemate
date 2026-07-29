@@ -20,11 +20,12 @@ git checkout feature/tell-me-a-story && git rebase main   # or merge
 
 ## Modified upstream files
 
-**None yet.** Phase 0 was recon only.
-
 | File | Lines touched | Why | Added |
 |---|---|---|---|
-| — | — | — | — |
+| `docs/.pages` | +1 (after line 5) | Add `- Fork notes: fork` so our `docs/fork/` pages appear in the mkdocs nav. Root `.pages` uses an explicit nav list, so an unlisted directory is invisible. | 2026-07-29 |
+
+Conflict risk: **very low.** One appended nav line in a 5-line file. If upstream
+adds its own top-level section the merge is a trivial both-added.
 
 When this table gains rows, note the *upstream* line numbers at time of change so
 a future rebase can find the hunk.
@@ -42,6 +43,7 @@ These do not conflict — but they can be *orphaned* by upstream refactors, so t
 | `ARCHITECTURE.md` | Subsystem map from Phase 0 recon | Line refs valid at `0.38.0` — restate on major bumps |
 | `PLAN.md` | Phased implementation plan | — |
 | `FORK.md` | This file | — |
+| `docs/fork/images-without-comfyui.md` | Phase 1 setup guide: KoboldCpp + SDXL Turbo | `client/koboldcpp.py` `visual_automatic1111_setup`; the Visualizer's `automatic_setup` default staying `True`; a1111 backend config key names |
 
 ---
 
@@ -49,6 +51,15 @@ These do not conflict — but they can be *orphaned* by upstream refactors, so t
 
 - `.git/info/exclude` — holds `.idea/`. Upstream's `.gitignore` doesn't cover it,
   and we don't want to modify a tracked file just for editor noise.
+- `.venv/Lib/site-packages/zzz_torchcodec_dll_fix.pth` — adds `torch/lib` and
+  `.venv/Scripts` to the Windows DLL search path at interpreter startup. Without
+  it `sentence_transformers` fails to import (torchcodec cannot resolve its
+  dependencies), which breaks the **Memory agent** and therefore scene loading.
+  Environment fix, not a code fix; **lost if `.venv` is recreated**. Recipe in
+  `docs/fork/images-without-comfyui.md`. Root cause is `exclude-newer = "1 week"`
+  in `pyproject.toml` resolving newer torch/torchcodec than upstream tested.
+- FFmpeg 8 shared DLLs copied into `.venv/Scripts` (what `install-ffmpeg.bat`
+  does). Also required by the above.
 
 ---
 

@@ -33,20 +33,40 @@ written so either ordering works.
 
 Goal unchanged: inline scene images, no ComfyUI.
 
-### 1A. KoboldCpp path — **recommended first**
-**Difficulty: trivial (docs only). Risk: low.**
+### 1A. KoboldCpp path — ✅ **DONE, working**
+**Difficulty: trivial (docs only). Risk: low. Actual code changes: zero.**
 
-No code. Steps are: run KoboldCpp with a text GGUF **and** an SD model
-(`--sdmodel`), add it as a Talemate client, leave the Visualizer's
-`automatic_setup` at its default `True`. The client's `visual_automatic1111_setup`
-(`client/koboldcpp.py:516-564`) probes `/sdapi/v1/sd-models` and self-configures
-the `automatic1111` backend at the KoboldCpp URL.
+Built and verified 2026-07-29. KoboldCpp 1.117.1 in **image-only** mode (`--sdmodel`,
+no text model) + SDXL Turbo, Ollama retained for text. Auto-setup configured the
+Visualizer with no manual backend selection; a full *Visualize Moment* round trip
+produced a scene-appropriate 1216×832 illustration saved to the scene library,
+without blocking the story loop.
 
-- Deliverable: `docs/` page + manual test steps.
-- Caveat: this makes KoboldCpp your text backend too, so it displaces Ollama for
-  narration unless you run both and point agents at different clients. Worth
-  deciding explicitly — **question for you** (see end).
-- Needs you to test: I cannot verify anything requiring a loaded model.
+Guide + manual test steps: **`docs/fork/images-without-comfyui.md`**.
+
+Three things worth knowing that the code doesn't tell you:
+
+1. **`Euler a` is mandatory** with a Turbo model. Talemate's a1111 defaults
+   (`steps=40, cfg=7, DPM++ 2M`) yield artifacted garbage; steps/cfg alone don't
+   fix it. Now the single most important line in the setup doc.
+2. **Adding the KoboldCpp client hijacks every text agent** (first-enabled-client
+   rule). Disabling the client afterwards restores Ollama and leaves image
+   generation working, since the backend owns its own URL.
+3. **A blocking environment bug had to be fixed first** — torchcodec DLL loading
+   broke `sentence_transformers` → Memory agent → scene loading. Two-part fix in
+   `FORK.md`. Not image-related, but you'd hit it immediately.
+
+Still your call to re-run the manual tests; my verification used your GPU but I'd
+rather you confirm image *quality* is acceptable for the story use case.
+
+Mechanism: KoboldCpp's `visual_automatic1111_setup`
+(`client/koboldcpp.py:516-564`) probes `/sdapi/v1/sd-models` and self-configures the
+`automatic1111` backend at the KoboldCpp URL, driven by the Visualizer's
+`automatic_setup` (default `True`).
+
+Resolved while building: a text GGUF is **not** required. `koboldcpp.py:1270`
+accepts `--sdmodel` alone, so KoboldCpp can run image-only. That answers the
+"does KoboldCpp displace Ollama for narration?" question — it doesn't have to.
 
 ### 1B. `base_url` on the `openai` visual backend
 **Difficulty: low (~40 lines). Risk: low-medium (touches an upstream file).**
@@ -205,6 +225,8 @@ package's own `modules/*.json` — picked up automatically because
 | Embedding change = full re-index | Low-Medium | Don't change embedding presets casually (§5.1). |
 | `exclude-newer = "1 week"` in pyproject | Low | Dependency resolution is time-pinned; surprising on fresh installs. |
 | Dropbox syncing `.venv`/`node_modules` | Medium | See below. |
+| `.venv`-local torchcodec DLL fix | Medium | **Lost on `.venv` recreation**, and its absence blocks scene loading entirely. Recipe in `FORK.md`. |
+| `exclude-newer = "1 week"` dependency drift | Medium | Root cause of the above. Our resolved dep set ≠ what upstream tested. Expect more of this class. |
 
 **Non-code recommendation:** this repo lives in `I:\Dropbox (Personal)\`. `.venv`
 (445 packages incl. torch) plus `node_modules` is on the order of 10⁵ files that
@@ -218,7 +240,7 @@ changed anything.
 
 ## Suggested order
 
-1. **1A** KoboldCpp docs + you test → working inline images, no code. *(now)*
+1. ~~**1A** KoboldCpp docs + you test → working inline images, no code.~~ **Done.**
 2. **Phase 2** once you've filled in the feature list. Cheapest wins first.
 3. **3C decision** (asset transport) — do this *before* 3B so the backend isn't
    built against the wrong assumption.
@@ -228,16 +250,24 @@ changed anything.
 
 ---
 
-## Questions before Phase 1
+## Questions
 
-1. **Reorder Phase 1 to lead with KoboldCpp?** (my recommendation — see top)
-2. **Do you have KoboldCpp and an SD/GGUF model, or should I write the docs
-   against a setup you'll build?** I can't test either way, but it changes how
-   prescriptive the doc should be.
-3. **If KoboldCpp becomes the image path, does it also become the text path?**
-   Or run Ollama for narration + KoboldCpp for images, with agents pointed at
-   different clients? Affects the doc and your VRAM budget.
+Q1–Q3 from the original plan are now answered by having built it: Phase 1 leads
+with KoboldCpp, it's installed, and it runs image-only so Ollama keeps text.
+
+Still open:
+
+1. **Is SDXL Turbo image quality good enough for the story use case?** It's fast
+   (~14 s at 1216×832) but Turbo trades quality for steps. If you want better,
+   the options are a non-Turbo SDXL checkpoint (~30–60 s/image) or a different
+   fine-tune. Your aesthetic call, and it decides whether inline generation stays
+   viable mid-story.
+2. **Should image generation be automatic?** `automatic_generation` is currently
+   **off**. Turning it on lets the Visualizer illustrate beats unprompted, which is
+   closer to the brief's "inline as the story progresses" — but it costs a GPU
+   generation per beat.
+3. **Phase 2 feature list** — still `TBD` in the brief. Blocks phase 2 estimation.
 4. **Phase 3 asset transport: option 1 (HTTP route) or option 2 (base64 + short
    clips)?** Only needs answering before Phase 3.
 
-Stopping here per the brief — not starting Phase 1.
+Not starting Phase 2 or 3 — waiting on your review and the feature list.

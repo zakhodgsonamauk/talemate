@@ -22,6 +22,7 @@ Three things that change the plan and should be read before anything else.
 2. **The KoboldCpp path is already fully implemented upstream** and needs zero
    code from us (§6.3). The brief lists it as a fallback to "evaluate, don't
    implement". It is in fact the only working no-ComfyUI image path on Windows.
+   **Now verified working end to end** — see `docs/fork/images-without-comfyui.md`.
 3. **The existing `openai_compatible` visual backend cannot be repointed for
    image generation** — it is analysis-only (`image_create = False`). And the
    `openai` *image* backend has no configurable base URL. So the brief's "is
@@ -637,6 +638,32 @@ Gated by the visual agent's `automatic_setup` config, **which defaults to True**
 generation configures itself. Zero code, zero config.** The same pattern exists
 for TTS (`tts_openai_compatible_setup :566`).
 
+**Verified 2026-07-29** with KoboldCpp 1.117.1 running image-only (`--sdmodel` with
+no `--model`; valid because `koboldcpp.py:1270` accepts `args.sdmodel` alone) and
+SDXL Turbo. Adding the client produced, unprompted:
+
+```
+KoboldCpp AUTOMATIC1111 setup         sd_model=sd_xl_turbo_1.0_fp16
+reinitializing automatic1111 backend  api_url=http://localhost:5001
+Backend.on_status_change               backend=automatic1111
+```
+
+Then a full *Visualize Moment* round trip: Ollama built the keyword prompt from
+live scene context, the a1111 backend generated at 1216×832, and the asset was
+saved and surfaced in the Visual Library — with the scene loop staying responsive
+throughout (`background processing done agent=visual`).
+
+Two operational notes not obvious from the code:
+
+- Adding the KoboldCpp client reassigns **every** text agent to it
+  (`ensure_agent_llm_client` takes the first enabled client), and in image-only mode
+  it has no text model. Disabling the *client* afterwards sends agents back to
+  Ollama and **does not** disturb the image backend — the backend holds its own
+  `api_url` and is independent of client state.
+- Talemate's a1111 defaults (`steps=40, cfg=7, DPM++ 2M`) produce badly artifacted
+  output with a Turbo model. `Euler a` is the setting that actually matters; steps
+  and cfg alone are not enough.
+
 ---
 
 ## 7. Environment / setup friction
@@ -677,10 +704,25 @@ toolchain, because you already have `uv` and Node. Consequences:
 6. `uv.lock` is committed; `uv sync` respected it. `pyproject.toml:127` also sets
    `exclude-newer = "1 week"`, so resolution is time-pinned.
 
-**Verified running:** backend on `:5050`, frontend on `:8082`. The UI loads, the
-websocket reports `connected`, all agents enumerate, Memory shows green on
-ChromaDB + sentence-transformer + `all-MiniLM-L6-v2` + cpu, Visualizer correctly
-shows "No backend configured". **Zero console errors.**
+7. **`torchcodec` cannot load its DLLs on Windows**, which breaks
+   `sentence_transformers`, which breaks the **Memory agent**, which blocks scene
+   loading entirely. Surfaces as
+   `Failed to set up the database: Could not load libtorchcodec`. Needs **two**
+   fixes: FFmpeg 8 shared DLLs in `.venv/Scripts` (what `install-ffmpeg.bat` does),
+   **and** `torch/lib` + `.venv/Scripts` added to the DLL search path, because
+   Python 3.8+ does not search the executable's directory for `ctypes` loads. Both
+   recorded in `FORK.md` and `docs/fork/images-without-comfyui.md`. Underlying cause
+   is `exclude-newer = "1 week"` (item 6) resolving torch 2.11.0 / torchcodec 0.13.0,
+   newer than upstream tested against.
 
-Not yet exercised: any actual LLM generation (no client configured in the UI
-yet), and `pytest`.
+**Verified running:** backend on `:5050`, frontend on `:8082`. The UI loads, the
+websocket reports `connected`, all agents enumerate, Memory reaches
+`chromadb agent status='db ready'`, and the Visualizer runs on `automatic1111`.
+**Zero console errors.**
+
+End-to-end exercised: scene load, LLM text generation via Ollama
+(`qwen3:8b-q4_K_M`, ChatML template — auto-detect fails and must be set by hand),
+Director action generation, visual prompt generation, and image generation through
+KoboldCpp with the asset saved to the scene library.
+
+Not yet exercised: `pytest`, TTS, image editing, image analysis.
