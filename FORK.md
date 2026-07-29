@@ -44,6 +44,13 @@ These do not conflict — but they can be *orphaned* by upstream refactors, so t
 | `PLAN.md` | Phased implementation plan | — |
 | `FORK.md` | This file | — |
 | `docs/fork/images-without-comfyui.md` | Phase 1 setup guide: KoboldCpp + SDXL Turbo | `client/koboldcpp.py` `visual_automatic1111_setup`; the Visualizer's `automatic_setup` default staying `True`; a1111 backend config key names |
+| `start-fork.bat` | One-shot launcher: Ollama → KoboldCpp → backend → frontend → Chrome | `src/talemate/server/run.py` CLI flags; `talemate_frontend` pnpm `serve` script; default ports 5050/8082 |
+
+!!! note
+    `start-fork.bat` is a **new** file, deliberately not an edit to upstream's
+    `start.bat` / `start-backend.bat` / `start-frontend.bat`. Those assume the
+    embedded Python/Node that `install.bat` provisions, which this checkout does
+    not use.
 
 ---
 
@@ -92,6 +99,23 @@ Prefer these. Established during recon (see `ARCHITECTURE.md` for detail):
 |---|---|---|
 | A visual backend | 3 lines in `src/talemate/agents/visual/agent.py` | import + mixin base + `add_actions()` call. No plugin discovery for backends. |
 | An HTTP asset route | new file in `src/talemate/server/` + 1 router include | Additive — the good kind of diff |
+
+## Runtime dirties the working tree
+
+Running the backend writes to **tracked** files, so `git status` is rarely clean
+after using the app:
+
+- `scenes/<scene>/assets/library.json` — every generated image is recorded here.
+- `tests/data/scenes/talemate-laboratory/assets/library.json` — the startup asset
+  migration touches this test fixture too (line endings at minimum).
+
+Before committing, revert anything you didn't mean to keep:
+
+```bash
+git checkout -- scenes/ tests/
+```
+
+Worth remembering when reviewing a diff — image test-runs look like source changes.
 
 ## Do not touch
 

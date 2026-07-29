@@ -56,6 +56,19 @@ KoboldCpp is the working path, and Talemate already auto-detects it.
 - Talemate installed and running (see the fork's `ARCHITECTURE.md` §7 for the
   non-`install.bat` startup commands).
 
+!!! tip "Already set up? Just run `start-fork.bat`"
+    Once you've done the one-time setup below, **`start-fork.bat`** in the repo
+    root starts Ollama, KoboldCpp, the backend and the frontend, waits for each,
+    and opens Chrome. It skips anything already listening, so re-running is safe.
+
+    Useful switches: `set SKIP_IMAGES=1` (text only), `set NO_BROWSER=1`, and
+    `KCPP_MODEL` / `KCPP_PORT` / `TALEMATE_BACKEND_PORT` /
+    `TALEMATE_FRONTEND_PORT` to override the defaults.
+
+    Do **not** use upstream's `start.bat` / `start-backend.bat` — they require the
+    embedded Python that `install.bat` provisions, and will trigger a full
+    reinstall on this checkout.
+
 ---
 
 ## 1. Get KoboldCpp
