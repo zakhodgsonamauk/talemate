@@ -45,6 +45,12 @@ if "%KCPP_MODEL%"==""             set "KCPP_MODEL=%KCPP_DIR%\models\sd_xl_turbo_
 set "TALEMATE_DEBUG=1"
 set "COREPACK_ENABLE_DOWNLOAD_PROMPT=0"
 
+REM Machine-specific overrides (model paths, ports, OLLAMA_MODELS) live in
+REM start-fork.local.bat, which is untracked. Keeps this file generic.
+REM The .\ prefix is required: cmd fails to resolve a bare command name
+REM containing more than one dot.
+if exist "start-fork.local.bat" call .\start-fork.local.bat
+
 REM Prefer the embedded Node runtime when install.bat provisioned one.
 if exist "embedded_node\node.exe" set "PATH=%CD%\embedded_node;%PATH%"
 
@@ -92,7 +98,21 @@ if errorlevel 1 (
     goto :after_ollama
 )
 
-echo [start] Ollama not detected - launching 'ollama serve'
+REM Ollama only sees models in OLLAMA_MODELS. If that is unset it falls back to
+REM %USERPROFILE%\.ollama\models - which on this machine is nearly empty, because
+REM the real library lives elsewhere. Starting Ollama without it makes every
+REM model appear to vanish, so refuse to start blind.
+if not defined OLLAMA_MODELS (
+    echo [WARN]  Ollama is not running and OLLAMA_MODELS is not set.
+    echo         Not starting it: it would use %%USERPROFILE%%\.ollama\models and
+    echo         your model library would appear empty.
+    echo         Set OLLAMA_MODELS in start-fork.local.bat, or start Ollama
+    echo         yourself the usual way, then re-run this script.
+    goto :after_ollama
+)
+
+echo [start] Ollama on 11434
+echo         OLLAMA_MODELS=%OLLAMA_MODELS%
 start "Ollama :11434" /min cmd /k "ollama serve"
 call :wait_for 11434 30 Ollama
 
