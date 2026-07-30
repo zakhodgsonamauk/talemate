@@ -162,6 +162,25 @@ git checkout -- scenes/ tests/
 
 Worth remembering when reviewing a diff — image test-runs look like source changes.
 
+!!! warning "Look at the diff before you revert it"
+    That command is only safe for churn *you* just caused. `git checkout --`
+    destroys working-tree changes irrecoverably, and a modification sitting in
+    `scenes/` may predate your session — someone else's unsaved work. This bit us on
+    2026-07-30: a pre-existing 154-line change to
+    `scenes/infinity-quest-dynamic-story-v2/assets/library.json` was reverted as
+    assumed noise, discarding the registrations for 12 locally generated images.
+    `git diff -- scenes/` first, and only revert what you recognise.
+
+    Recovery, for reference, was partial and lucky: the running backend still held
+    the asset cache in memory (`_invalidate_cache` is never called), and a later
+    write flushed most of it back. Upstream is no help — it ships only the 4 assets
+    that came with the scene.
+
+    The registry is not disposable in general: `library.json` is the only record of
+    an asset's `vis_type`, `name` and prompt, and an unregistered PNG is invisible to
+    the Visual Library even though the file is intact. Messages referencing an
+    unregistered asset stop rendering it.
+
 ## Gitignore does not mean untracked
 
 `.gitignore:23` lists `templates/world-state/*.yaml`, which reads as "all user data".
