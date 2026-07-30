@@ -499,12 +499,15 @@ class StyleMixin:
             characters = list(getattr(self, "characters", None) or scene.characters)
             in_frame = characters_in_frame(prompt, characters)
 
-            # Only the primary subject is described. A flat prompt has no way to bind
-            # attributes to separate people, so "human male" and "alien woman" together
-            # do not produce two characters - they produce one blended one. The others
-            # are counted instead, which tells the model how many people are present
-            # without telling it contradictory things about any of them.
-            for character in in_frame[:1]:
+            # Anchors go in for everyone in frame; _finalize_prompt keeps one and drops
+            # the rest. The choice has to be made there, not here, because this runs
+            # before the prompt has any parts and so has no text to judge by - picking
+            # here meant picking the first character in the scene regardless of who the
+            # paragraph was about.
+            #
+            # Only one survives: a flat prompt cannot bind attributes to separate people,
+            # so "human male" and "alien woman" together produce one blended person.
+            for character in in_frame:
                 keywords = []
 
                 # Before reading the anchor, not after: if the story has stated a lasting

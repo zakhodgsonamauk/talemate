@@ -1397,19 +1397,35 @@ async def test_only_the_primary_character_gets_a_full_anchor(styling_agent):
     A flat prompt cannot bind attributes to two subjects. One full identity, and the
     others counted rather than described, so the model is told there are two people
     without being told two contradictory things about one.
+
+    Both stages are exercised deliberately. apply_styles inserts a candidate anchor per
+    character in frame; the choice of which survives belongs to _finalize_prompt, which
+    is the first point with any text to judge by.
     """
     from talemate.agents.visual.schema import VIS_TYPE
+    from talemate.context import active_scene
 
     prompt = _prompt_with_descriptive(
         "Kaira watches the console while Elmer leans over it.",
         keywords=["control room"],
     )
     await styling_agent.apply_styles(prompt, VIS_TYPE.SCENE_ILLUSTRATION)
-    positive = prompt.positive_prompt
 
-    anchored = [a for a in (KAIRA_ANCHOR, ELMER_ANCHOR) if a.split(",")[0] in positive]
-    assert len(anchored) == 1, f"expected one anchored subject, got {anchored}"
-    assert "second figure" in positive
+    assert "second figure" in prompt.positive_prompt
+
+    request = _request(prompt.positive_prompt)
+    request.instructions = "Kaira watches the console while Elmer leans over it."
+
+    token = active_scene.set(styling_agent.scene)
+    try:
+        await styling_agent._finalize_prompt(request)
+    finally:
+        active_scene.reset(token)
+
+    anchored = [
+        a for a in (KAIRA_ANCHOR, ELMER_ANCHOR) if a.split(",")[0] in request.prompt
+    ]
+    assert len(anchored) == 1, f"expected one described subject, got {anchored}"
 
 
 async def test_single_character_scene_gets_no_extra_figure_token(styling_agent):
@@ -1697,3 +1713,99 @@ async def test_budget_accounts_for_emphasis_overhead(styling_agent):
 
     budget = styling_agent.actions["prompt_generation"].config["image_max_tokens"].value
     assert estimate_prompt_tokens(request.prompt) <= budget
+
+
+# ===========================================================================
+# Subject selection
+#
+# A paragraph entirely about Kaira produced an image of Elmer. Nothing consulted the
+# paragraph: prompt.parts is empty when apply_styles runs, so the in-frame matcher fell
+# through to "all characters in scene order" and the single-subject rule took the first,
+# which is the player character. Deterministic, and wrong every time.
+# ===========================================================================
+
+
+OBSERVING_KAIRA = (
+    "Kaira's movements are methodical as she reaches for the seal on her suit's chest "
+    "plate. She pulls the suit away in a single fluid motion. Beneath, her violet skin "
+    "is smooth and unmarred, the faint geometric patterns along her forearms and jaw "
+    "catching the harsh light of the control room. She stands there barefoot on the "
+    "cold metal floor. Her large dark eyes with no visible iris track Elmer's face with "
+    "the same unblinking intensity she applies to her instruments."
+)
+
+
+async def test_subject_comes_from_the_paragraph_not_scene_order(styling_agent):
+    """The reported bug, verbatim. Kaira is named throughout, Elmer once in passing."""
+    from talemate.context import active_scene
+
+    request = _request(
+        ", ".join([SCENE_ANCHOR, ELMER_ANCHOR, KAIRA_ANCHOR, "control room"])
+    )
+    request.instructions = OBSERVING_KAIRA
+
+    token = active_scene.set(styling_agent.scene)
+    try:
+        await styling_agent._finalize_prompt(request)
+    finally:
+        active_scene.reset(token)
+
+    assert KAIRA_ANCHOR.split(", ")[0] in request.prompt
+    assert "human man" not in request.prompt, "described the wrong character"
+
+
+async def test_explicit_character_name_wins_outright(styling_agent):
+    """A caller naming the subject is not a hint to be weighed against word counts."""
+    from talemate.context import active_scene
+
+    request = _request(
+        ", ".join([SCENE_ANCHOR, ELMER_ANCHOR, KAIRA_ANCHOR, "control room"])
+    )
+    request.instructions = OBSERVING_KAIRA
+    request.character_name = "Elmer"
+
+    token = active_scene.set(styling_agent.scene)
+    try:
+        await styling_agent._finalize_prompt(request)
+    finally:
+        active_scene.reset(token)
+
+    assert "human man" in request.prompt
+    assert "alien woman" not in request.prompt
+
+
+async def test_subject_falls_back_to_keywords_without_instructions(styling_agent):
+    from talemate.context import active_scene
+
+    request = _request(
+        ", ".join([SCENE_ANCHOR, ELMER_ANCHOR, KAIRA_ANCHOR, "Kaira", "control room"])
+    )
+    request.instructions = ""
+
+    token = active_scene.set(styling_agent.scene)
+    try:
+        await styling_agent._finalize_prompt(request)
+    finally:
+        active_scene.reset(token)
+
+    assert "alien woman" in request.prompt
+
+
+async def test_emphasis_follows_the_chosen_subject(styling_agent):
+    """Emphasis reading the same evidence matters - it previously weighted the wrong
+    character at 1.3, making the error louder rather than quieter."""
+    from talemate.context import active_scene
+
+    styling_agent.actions["prompt_generation"].config["identity_weight"].value = 1.3
+    request = _request(", ".join([ELMER_ANCHOR, KAIRA_ANCHOR, "control room"]))
+    request.instructions = OBSERVING_KAIRA
+
+    token = active_scene.set(styling_agent.scene)
+    try:
+        await styling_agent._finalize_prompt(request)
+    finally:
+        active_scene.reset(token)
+
+    assert "alien woman" in request.prompt
+    assert ":1.3)" in request.prompt
+    assert "human man" not in request.prompt

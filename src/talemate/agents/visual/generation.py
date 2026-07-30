@@ -337,6 +337,55 @@ class GenerationMixin:
 
         return surviving
 
+    def _choose_subject(self, characters: list, keywords: list[str], request):
+        """
+        Decide who the image is of.
+
+        Evidence, strongest first:
+
+        1. an explicit `character_name` from the caller - that is a statement, not a hint
+        2. the text being visualised (`request.instructions`) - the paragraph the user
+           clicked on, which is what they expect to drive it
+        3. names in the LLM's keywords
+        4. scene order, as a last resort
+
+        Anchor insertion cannot make this call: `apply_styles` runs before the prompt has
+        any parts, so it has no text to read and was falling straight through to scene
+        order. The result was that the first character in the scene got drawn no matter
+        what the paragraph said.
+        """
+        if not characters:
+            return None
+
+        if request.character_name:
+            for character in characters:
+                if character.name.lower() == request.character_name.strip().lower():
+                    log.debug("choose_subject", by="character_name", name=character.name)
+                    return character
+
+        for source, evidence in (
+            ("instructions", request.instructions or ""),
+            ("keywords", ", ".join(keywords)),
+        ):
+            if not evidence.strip():
+                continue
+            scored = [(_mention_count(evidence, c.name), c) for c in characters]
+            scored = [row for row in scored if row[0]]
+            if not scored:
+                continue
+            # Stable sort keeps scene order for ties.
+            scored.sort(key=lambda row: row[0], reverse=True)
+            log.debug(
+                "choose_subject",
+                by=source,
+                name=scored[0][1].name,
+                counts={c.name: n for n, c in scored},
+            )
+            return scored[0][1]
+
+        log.debug("choose_subject", by="scene order", name=characters[0].name)
+        return characters[0]
+
     async def _primary_and_secondary(
         self, keywords: list[str], request: GenerationRequest
     ) -> tuple[set[str], set[str]]:
@@ -355,29 +404,36 @@ class GenerationMixin:
         characters = list(getattr(self, "characters", None) or scene.characters)
         present = {kw.strip().lower() for kw in keywords}
 
-        scored: list[tuple[int, set[str], object]] = []
+        anchors: list[tuple[object, set[str]]] = []
         for character in characters:
-            tokens = set()
             anchor = await self.character_anchor(character)
-            if anchor:
-                tokens.update(t.strip().lower() for t in anchor.split(","))
-            if not tokens:
+            if not anchor:
                 continue
-            scored.append((len(tokens & present), tokens, character))
+            anchors.append(
+                (character, {t.strip().lower() for t in anchor.split(",")})
+            )
 
-        if not scored:
+        if not anchors:
             return set(), set()
 
-        scored.sort(key=lambda row: row[0], reverse=True)
-        primary_hits, primary_tokens, primary = scored[0]
+        primary = self._choose_subject(
+            [character for character, _ in anchors], keywords, request
+        )
+        if not primary:
+            return set(), set()
 
-        if not primary_hits:
-            # Nobody's anchor is in the prompt - nothing to emphasise or strip.
+        primary_tokens = next(
+            tokens for character, tokens in anchors if character is primary
+        )
+        if not primary_tokens & present:
+            # The chosen subject's anchor is not in the prompt, so there is nothing here
+            # to emphasise and nothing of theirs to protect.
             return set(), set()
 
         secondary: set[str] = set()
-        for _, tokens, _character in scored[1:]:
-            secondary |= tokens
+        for character, tokens in anchors:
+            if character is not primary:
+                secondary |= tokens
         # A trait shared by both characters belongs to the one being drawn.
         secondary -= primary_tokens
 
