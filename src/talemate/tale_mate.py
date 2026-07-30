@@ -155,6 +155,10 @@ class Scene(Emitter):
         # map of agent_name -> world-state template uid (group__template)
         self.agent_persona_templates: dict[str, str] = {}
         self.visual_style_template = None
+        # Comma-delimited setting keywords prepended to every image prompt for this
+        # scene. Without it the keyword prompt kept losing the setting entirely - a
+        # starship control room rendered with mountains outside the windows.
+        self.visual_anchor = None
         self.id = str(uuid.uuid4())[:10]
         self.rev = 0
 
@@ -1423,6 +1427,7 @@ class Scene(Emitter):
                 "writing_style_template": self.writing_style_template,
                 "agent_persona_templates": self.agent_persona_templates,
                 "visual_style_template": self.visual_style_template,
+                "visual_anchor": self.visual_anchor,
                 "agent_persona_names": self.agent_persona_names,
                 "intent": self.intent,
                 "story_intent": self.story_intent,
@@ -2148,6 +2153,7 @@ class Scene(Emitter):
             "writing_style_template": scene.writing_style_template,
             "agent_persona_templates": scene.agent_persona_templates,
             "visual_style_template": scene.visual_style_template,
+            "visual_anchor": scene.visual_anchor,
             "restore_from": scene.restore_from,
             "nodes_filename": scene._nodes_filename,
             "creative_nodes_filename": scene._creative_nodes_filename,

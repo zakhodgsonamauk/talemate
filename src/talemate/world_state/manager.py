@@ -453,6 +453,25 @@ class WorldStateManager:
         character.visual_rules = visual_rules or None
         character.memory_dirty = True
 
+    async def update_character_visual_anchor(
+        self, character_name: str, visual_anchor: str | None
+    ):
+        """
+        Updates the visual anchor for a character.
+
+        Arguments:
+            character_name: The name of the character to be updated.
+            visual_anchor: Comma-delimited appearance keywords, or None to clear
+                (which lets the next image generation re-derive it).
+        """
+        character = self.scene.get_character(character_name)
+        if not character:
+            log.error("character not found", character_name=character_name)
+            return
+
+        character.visual_anchor = visual_anchor or None
+        character.memory_dirty = True
+
     async def update_character_actor(
         self,
         character_name: str,
@@ -1137,6 +1156,7 @@ class WorldStateManager:
         writing_style_template: str | None = None,
         agent_persona_templates: dict[str, str] | None = None,
         visual_style_template: str | None = None,
+        visual_anchor: str | None = None,
         restore_from: str | None = None,
         **agent_settings_kwargs,
     ) -> "Scene":
@@ -1145,6 +1165,7 @@ class WorldStateManager:
         scene.experimental = experimental
         scene.writing_style_template = writing_style_template
         scene.visual_style_template = visual_style_template
+        scene.visual_anchor = visual_anchor or None
         if agent_persona_templates is not None:
             scene.agent_persona_templates = agent_persona_templates or {}
 

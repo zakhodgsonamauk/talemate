@@ -126,7 +126,7 @@
     },
     {
       "id": "T15",
-      "name": "Playwright E2E \u00e2\u20ac\u201d AC1-AC9",
+      "name": "Playwright E2E - AC1-AC9",
       "status": "pending",
       "deps": [
         "T8",

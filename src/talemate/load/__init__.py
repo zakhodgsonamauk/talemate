@@ -315,6 +315,9 @@ async def load_scene_from_data(
     scene.writing_style_template = scene_data.get("writing_style_template", "")
     scene.agent_persona_templates = scene_data.get("agent_persona_templates", {})
     scene.visual_style_template = scene_data.get("visual_style_template", "")
+    # None rather than "" - an empty anchor and an absent one mean the same thing to
+    # the prompt builder, and None keeps the "not derived yet" check honest.
+    scene.visual_anchor = scene_data.get("visual_anchor") or None
     scene.nodes_filename = scene_data.get("nodes_filename", "")
     scene.creative_nodes_filename = scene_data.get("creative_nodes_filename", "")
     scene.character_data = {

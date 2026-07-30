@@ -46,6 +46,11 @@ class Character(pydantic.BaseModel):
     avatar: str | None = None  # default avatar (used as fallback for messages)
     current_avatar: str | None = None  # current avatar (used to set message.asset_id)
     visual_rules: str | None = None
+    # Comma-delimited appearance keywords injected verbatim into every image prompt
+    # this character appears in. Derived once from base_attributes["appearance"] and
+    # cached here, because re-deriving it per generation produced a different person
+    # every time. See docs/fork/visual-consistency-design.md.
+    visual_anchor: str | None = None
     voice: Voice | None = None
 
     # shared context
