@@ -34,6 +34,13 @@ class UpdateCharacterVisualAnchorPayload(pydantic.BaseModel):
     visual_anchor: str | None = None
 
 
+class UpdateCharacterVisualWardrobePayload(pydantic.BaseModel):
+    """Payload for updating a character visual wardrobe."""
+
+    name: str
+    visual_wardrobe: str | None = None
+
+
 class DeriveCharacterVisualAnchorPayload(pydantic.BaseModel):
     """Payload for (re)deriving a character visual anchor from their appearance."""
 
@@ -181,6 +188,34 @@ class CharacterMixin:
             )
             await self.signal_operation_failed(
                 "Failed to update character visual anchor"
+            )
+            return
+
+        await self.handle_get_character_details({"name": payload.name})
+        await self.signal_operation_done()
+        self.scene.emit_status()
+
+    async def handle_update_character_visual_wardrobe(self, data: dict):
+        """Update a character visual wardrobe."""
+        try:
+            payload = UpdateCharacterVisualWardrobePayload(**data)
+        except pydantic.ValidationError as e:
+            log.error("Invalid payload for update_character_visual_wardrobe", error=e)
+            await self.signal_operation_failed(str(e))
+            return
+
+        try:
+            await self.world_state_manager.update_character_visual_wardrobe(
+                payload.name, payload.visual_wardrobe
+            )
+        except Exception as e:
+            log.error(
+                "Failed to update character visual wardrobe",
+                character=payload.name,
+                error=e,
+            )
+            await self.signal_operation_failed(
+                "Failed to update character visual wardrobe"
             )
             return
 

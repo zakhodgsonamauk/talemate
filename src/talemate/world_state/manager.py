@@ -75,6 +75,7 @@ class CharacterDetails(pydantic.BaseModel):
     current_avatar: Union[str, None] = None  # current avatar
     visual_rules: Union[str, None] = None
     visual_anchor: Union[str, None] = None
+    visual_wardrobe: Union[str, None] = None
     color: Union[str, None] = None
     voice: Union[Voice, None] = None
     shared: bool = False
@@ -207,6 +208,7 @@ class WorldStateManager:
             current_avatar=character.current_avatar,
             visual_rules=character.visual_rules,
             visual_anchor=character.visual_anchor,
+            visual_wardrobe=character.visual_wardrobe,
             color=character.color,
             voice=character.voice,
             shared=character.shared,
@@ -472,6 +474,25 @@ class WorldStateManager:
             return
 
         character.visual_anchor = visual_anchor or None
+        character.memory_dirty = True
+
+    async def update_character_visual_wardrobe(
+        self, character_name: str, visual_wardrobe: str | None
+    ):
+        """
+        Updates the visual wardrobe for a character.
+
+        A manual edit holds until the wardrobe reinforcement next reports something
+        different, at which point the story wins. The fingerprint is cleared so that
+        happens on the next refresh rather than being mistaken for already-current.
+        """
+        character = self.scene.get_character(character_name)
+        if not character:
+            log.error("character not found", character_name=character_name)
+            return
+
+        character.visual_wardrobe = visual_wardrobe or None
+        character._wardrobe_fingerprint = None
         character.memory_dirty = True
 
     async def update_character_actor(
@@ -1159,6 +1180,7 @@ class WorldStateManager:
         agent_persona_templates: dict[str, str] | None = None,
         visual_style_template: str | None = None,
         visual_anchor: str | None = None,
+        visual_anchors: dict[str, str] | None = None,
         restore_from: str | None = None,
         **agent_settings_kwargs,
     ) -> "Scene":
@@ -1168,6 +1190,13 @@ class WorldStateManager:
         scene.writing_style_template = writing_style_template
         scene.visual_style_template = visual_style_template
         scene.visual_anchor = visual_anchor or None
+        # None means the caller omitted it; only an explicit dict replaces the cache.
+        # Treating None as {} here would wipe every location anchor whenever some other
+        # setting changed.
+        if visual_anchors is not None:
+            scene.visual_anchors = {
+                key: value for key, value in visual_anchors.items() if value
+            }
         if agent_persona_templates is not None:
             scene.agent_persona_templates = agent_persona_templates or {}
 

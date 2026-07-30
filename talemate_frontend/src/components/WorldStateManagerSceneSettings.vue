@@ -67,6 +67,30 @@
                     </v-col>
                 </v-row>
 
+                <v-row v-if="locationAnchors.length">
+                    <v-col cols="12" lg="12">
+                        <div class="text-subtitle-2 text-muted mb-2">
+                            <v-icon size="small" class="mr-1">mdi-map-marker-outline</v-icon>
+                            Setting keywords per location
+                        </div>
+                        <p class="text-body-2 text-muted mb-3">
+                            Derived the first time an image is generated somewhere, then reused
+                            whenever the story returns there.
+                        </p>
+                        <v-textarea
+                            v-for="entry in locationAnchors"
+                            :key="entry.key"
+                            v-model="entry.value"
+                            :label="entry.key"
+                            rows="2"
+                            auto-grow
+                            density="compact"
+                            class="mb-2"
+                            @blur="updateLocationAnchor(entry)"
+                        ></v-textarea>
+                    </v-col>
+                </v-row>
+
                 <v-row>
                     <v-col cols="12" lg="6">
                         <v-checkbox 
@@ -185,6 +209,12 @@ export default {
         },
     },
     computed: {
+        locationAnchors() {
+            const anchors = this.scene?.data?.visual_anchors || {};
+            return Object.keys(anchors)
+                .sort()
+                .map((key) => ({ key, value: anchors[key] }));
+        },
         writingStyleTemplates() {
             let templates = Object.values(this.templates.by_type.writing_style).map((template) => {
                 return {
@@ -303,6 +333,7 @@ export default {
                 agent_persona_templates: this.scene.data.agent_persona_templates || {},
                 visual_style_template: this.scene.data.visual_style_template,
                 visual_anchor: this.scene.data.visual_anchor,
+                visual_anchors: this.scene.data.visual_anchors || {},
                 restore_from: this.scene.data.restore_from,
             }));
         },
@@ -320,6 +351,7 @@ export default {
                 agent_persona_templates: this.scene.data.agent_persona_templates || {},
                 visual_style_template: this.scene.data.visual_style_template,
                 visual_anchor: this.scene.data.visual_anchor,
+                visual_anchors: this.scene.data.visual_anchors || {},
                 restore_from: this.scene.data.restore_from,
             };
 
@@ -332,6 +364,14 @@ export default {
             }
 
             this.getWebsocket().send(JSON.stringify(payload));
+        },
+        updateLocationAnchor(entry) {
+            if (!this.scene?.data) return;
+            const anchors = { ...(this.scene.data.visual_anchors || {}) };
+            if (anchors[entry.key] === entry.value) return;
+            anchors[entry.key] = entry.value;
+            this.scene.data.visual_anchors = anchors;
+            this.update();
         },
         deriveVisualAnchor() {
             this.isDerivingAnchor = true;

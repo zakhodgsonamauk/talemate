@@ -25,6 +25,29 @@
         </template>
     </v-textarea>
 
+    <v-textarea
+        v-model="visualWardrobe"
+        label="Currently Wearing"
+        hint="Maintained automatically as the story advances. Edits hold until the next update."
+        rows="2"
+        auto-grow
+        variant="outlined"
+        @blur="saveVisualWardrobe"
+        :loading="isSavingWardrobe"
+        persistent-hint
+        class="mt-4"
+    >
+        <template v-slot:append-inner>
+            <v-icon size="small" color="muted" title="Kept current by the Visualizer's Appearance Freshness setting">mdi-autorenew</v-icon>
+        </template>
+    </v-textarea>
+
+    <v-alert v-if="visualWardrobe" density="compact" variant="text" color="muted" class="mt-1">
+        <v-icon size="x-small" class="mr-1">mdi-information-outline</v-icon>
+        When the scene says something different about what they are wearing, the scene wins
+        and this is left out of that image.
+    </v-alert>
+
     <v-card variant="outlined" color="muted" class="mt-4">
         <v-card-text>
             <div class="d-flex align-start">
@@ -97,8 +120,10 @@ export default {
         return {
             visualRules: this.character?.visual_rules || '',
             visualAnchor: this.character?.visual_anchor || '',
+            visualWardrobe: this.character?.visual_wardrobe || '',
             isSaving: false,
             isSavingAnchor: false,
+            isSavingWardrobe: false,
             isDeriving: false,
         }
     },
@@ -122,6 +147,14 @@ export default {
             },
             immediate: true,
         },
+        'character.visual_wardrobe': {
+            handler(newVal) {
+                if (newVal !== this.visualWardrobe) {
+                    this.visualWardrobe = newVal || '';
+                }
+            },
+            immediate: true,
+        },
     },
     methods: {
         saveVisualAnchor() {
@@ -137,6 +170,21 @@ export default {
 
             setTimeout(() => {
                 this.isSavingAnchor = false;
+            }, 500);
+        },
+        saveVisualWardrobe() {
+            if (this.visualWardrobe === (this.character?.visual_wardrobe || '')) return;
+
+            this.isSavingWardrobe = true;
+            this.getWebsocket().send(JSON.stringify({
+                type: 'world_state_manager',
+                action: 'update_character_visual_wardrobe',
+                name: this.character.name,
+                visual_wardrobe: this.visualWardrobe,
+            }));
+
+            setTimeout(() => {
+                this.isSavingWardrobe = false;
             }, 500);
         },
         deriveVisualAnchor() {

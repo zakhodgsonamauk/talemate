@@ -184,6 +184,7 @@ class SceneSettingsPayload(pydantic.BaseModel):
     agent_persona_templates: dict[str, str | None] | None = None
     visual_style_template: str | None = None
     visual_anchor: str | None = None
+    visual_anchors: dict[str, str] | None = None
     restore_from: str | None = None
     # Presence-aware via `model_fields_set` — see handler. None = opt out;
     # string = link to that file; unset (caller omits the key) = leave the
