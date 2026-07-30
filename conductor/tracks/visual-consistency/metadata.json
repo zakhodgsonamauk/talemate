@@ -1,0 +1,168 @@
+{
+  "version": 3,
+  "track_id": "visual-consistency",
+  "name": "Image generation consistency",
+  "type": "feature",
+  "created": "2026-07-30",
+  "status": "planned",
+  "design_doc": "docs/fork/visual-consistency-design.md",
+  "loop_state": {
+    "current_step": "EXECUTE",
+    "step_status": "PASSED",
+    "fix_cycle_count": 0,
+    "max_fix_cycles": 5,
+    "superpower_enhanced": true,
+    "checkpoints": {
+      "PLAN": {
+        "status": "PASSED"
+      },
+      "EVALUATE_PLAN": {
+        "status": "PASSED",
+        "notes": "Verified LLM part 8cfcb710 carries both keywords and descriptive, so T5 is viable with no graph change. Sanitiser scope tightened to a pre_existing snapshot. No overlap with url-state-sync (touches VisualLibrary*.vue; this track touches WorldStateManagerCharacterVisualsRules.vue + scene settings). A1111 live on :5001, frontend on :8082 - T15 runnable."
+      }
+    }
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "name": "Character.visual_anchor field + manager setter",
+      "status": "pending",
+      "deps": []
+    },
+    {
+      "id": "T2",
+      "name": "Scene.visual_anchor field + 5 plumbing sites",
+      "status": "pending",
+      "deps": []
+    },
+    {
+      "id": "T3",
+      "name": "derive-visual-anchor.jinja2 (character + scene modes)",
+      "status": "pending",
+      "deps": []
+    },
+    {
+      "id": "T4",
+      "name": "Derive-and-cache in agents/visual/anchors.py",
+      "status": "pending",
+      "deps": [
+        "T1",
+        "T2",
+        "T3"
+      ]
+    },
+    {
+      "id": "T5",
+      "name": "In-frame character matcher",
+      "status": "pending",
+      "deps": []
+    },
+    {
+      "id": "T6",
+      "name": "Anchor insertion in apply_styles (fixes RC1 + RC4)",
+      "status": "pending",
+      "deps": [
+        "T4",
+        "T5"
+      ]
+    },
+    {
+      "id": "T7",
+      "name": "Sanitiser blocklist on LLM part only",
+      "status": "pending",
+      "deps": [
+        "T6"
+      ]
+    },
+    {
+      "id": "T8",
+      "name": "Image-prompt token cap + truncation order",
+      "status": "pending",
+      "deps": [
+        "T7"
+      ]
+    },
+    {
+      "id": "T9",
+      "name": "Rewrite generate-image-SCENE_ILLUSTRATION.jinja2",
+      "status": "pending",
+      "deps": []
+    },
+    {
+      "id": "T10",
+      "name": "Rewrite generate-image-prompt-type.jinja2",
+      "status": "pending",
+      "deps": []
+    },
+    {
+      "id": "T11",
+      "name": "SamplerSettings.seed + seed_mode",
+      "status": "pending",
+      "deps": []
+    },
+    {
+      "id": "T12",
+      "name": "Websocket plumbing for anchors + derive action",
+      "status": "pending",
+      "deps": [
+        "T4"
+      ]
+    },
+    {
+      "id": "T13",
+      "name": "Character anchor UI",
+      "status": "pending",
+      "deps": [
+        "T12"
+      ]
+    },
+    {
+      "id": "T14",
+      "name": "Scene anchor UI",
+      "status": "pending",
+      "deps": [
+        "T12"
+      ]
+    },
+    {
+      "id": "T15",
+      "name": "Playwright E2E \u00e2\u20ac\u201d AC1-AC9",
+      "status": "pending",
+      "deps": [
+        "T8",
+        "T9",
+        "T10",
+        "T11",
+        "T13",
+        "T14"
+      ]
+    },
+    {
+      "id": "T16",
+      "name": "FORK.md rows + design doc status + decision log",
+      "status": "pending",
+      "deps": [
+        "T15"
+      ]
+    }
+  ],
+  "root_causes": {
+    "RC1": "No identity anchor - appearance re-derived by LLM every generation",
+    "RC2": "Keyword compression drops the setting, keeps plot words",
+    "RC3": "Template meta-instructions leak into the image prompt",
+    "RC4": "visual_rules silently dropped"
+  },
+  "decisions": [
+    "Anchors resolve visual_anchor -> derive-from-prose-once-and-cache -> none; both fields hand-editable",
+    "Insertion happens in StyleMixin.apply_styles - the 140-node generate-visual-asset.json graph stays untouched",
+    "In-frame selection by matching character names in the LLM's descriptive prose, capped at 3 for CLIP safety",
+    "Seed pinning included but scoped honestly: style consistency only, not per-character identity in txt2img",
+    "Changes go in place; upstream-merge-friendly layout explicitly dropped",
+    "Reference-image / IP-Adapter path deferred - strongest lever but needs a second backend running"
+  ],
+  "constraints": {
+    "new_npm_dependencies": 0,
+    "note": "Python side is TDD - tests/ has a real pytest suite. Frontend has no runner, so P5 is browser-verified via Playwright."
+  },
+  "open_gaps": []
+}

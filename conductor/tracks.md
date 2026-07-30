@@ -7,6 +7,7 @@ Active and completed development tracks.
 | Track ID | Name | Type | Status | Step | Created |
 |----------|------|------|--------|------|---------|
 | url-state-sync | URL reflects app state | ui | implemented, pending review | EVALUATE_EXECUTION | 2026-07-30 |
+| visual-consistency | Image generation consistency | feature | planned | EVALUATE_PLAN | 2026-07-30 |
 
 ## Completed Tracks
 
