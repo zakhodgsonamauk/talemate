@@ -4,10 +4,10 @@
   "name": "Image generation consistency",
   "type": "feature",
   "created": "2026-07-30",
-  "status": "planned",
+  "status": "implemented-tested-pending-review",
   "design_doc": "docs/fork/visual-consistency-design.md",
   "loop_state": {
-    "current_step": "EXECUTE",
+    "current_step": "EVALUATE_EXECUTION",
     "step_status": "PASSED",
     "fix_cycle_count": 0,
     "max_fix_cycles": 5,
@@ -19,6 +19,9 @@
       "EVALUATE_PLAN": {
         "status": "PASSED",
         "notes": "Verified LLM part 8cfcb710 carries both keywords and descriptive, so T5 is viable with no graph change. Sanitiser scope tightened to a pre_existing snapshot. No overlap with url-state-sync (touches VisualLibrary*.vue; this track touches WorldStateManagerCharacterVisualsRules.vue + scene settings). A1111 live on :5001, frontend on :8082 - T15 runnable."
+      },
+      "EXECUTE": {
+        "status": "PASSED"
       }
     }
   },
@@ -26,25 +29,25 @@
     {
       "id": "T1",
       "name": "Character.visual_anchor field + manager setter",
-      "status": "pending",
+      "status": "done",
       "deps": []
     },
     {
       "id": "T2",
       "name": "Scene.visual_anchor field + 5 plumbing sites",
-      "status": "pending",
+      "status": "done",
       "deps": []
     },
     {
       "id": "T3",
       "name": "derive-visual-anchor.jinja2 (character + scene modes)",
-      "status": "pending",
+      "status": "done",
       "deps": []
     },
     {
       "id": "T4",
       "name": "Derive-and-cache in agents/visual/anchors.py",
-      "status": "pending",
+      "status": "done",
       "deps": [
         "T1",
         "T2",
@@ -54,13 +57,14 @@
     {
       "id": "T5",
       "name": "In-frame character matcher",
-      "status": "pending",
-      "deps": []
+      "status": "done",
+      "deps": [],
+      "note": "Implemented, but the descriptive-prose source is unavailable at apply_styles time. In-frame selection moved to _finalize_prompt and reads the LLM keyword list instead."
     },
     {
       "id": "T6",
       "name": "Anchor insertion in apply_styles (fixes RC1 + RC4)",
-      "status": "pending",
+      "status": "done",
       "deps": [
         "T4",
         "T5"
@@ -69,41 +73,43 @@
     {
       "id": "T7",
       "name": "Sanitiser blocklist on LLM part only",
-      "status": "pending",
+      "status": "done",
       "deps": [
         "T6"
-      ]
+      ],
+      "note": "Moved from apply_styles to _finalize_prompt - apply_styles never sees the LLM output. Blocklist tuned across three live generations."
     },
     {
       "id": "T8",
       "name": "Image-prompt token cap + truncation order",
-      "status": "pending",
+      "status": "done",
       "deps": [
         "T7"
-      ]
+      ],
+      "note": "Drop order revised: action keywords hold a 35% reserve. Default budget 150 -> 250."
     },
     {
       "id": "T9",
       "name": "Rewrite generate-image-SCENE_ILLUSTRATION.jinja2",
-      "status": "pending",
+      "status": "done",
       "deps": []
     },
     {
       "id": "T10",
       "name": "Rewrite generate-image-prompt-type.jinja2",
-      "status": "pending",
+      "status": "done",
       "deps": []
     },
     {
       "id": "T11",
       "name": "SamplerSettings.seed + seed_mode",
-      "status": "pending",
+      "status": "done",
       "deps": []
     },
     {
       "id": "T12",
       "name": "Websocket plumbing for anchors + derive action",
-      "status": "pending",
+      "status": "done",
       "deps": [
         "T4"
       ]
@@ -111,7 +117,7 @@
     {
       "id": "T13",
       "name": "Character anchor UI",
-      "status": "pending",
+      "status": "done",
       "deps": [
         "T12"
       ]
@@ -119,7 +125,7 @@
     {
       "id": "T14",
       "name": "Scene anchor UI",
-      "status": "pending",
+      "status": "done",
       "deps": [
         "T12"
       ]
@@ -127,7 +133,7 @@
     {
       "id": "T15",
       "name": "Playwright E2E - AC1-AC9",
-      "status": "pending",
+      "status": "done",
       "deps": [
         "T8",
         "T9",
@@ -135,12 +141,13 @@
         "T11",
         "T13",
         "T14"
-      ]
+      ],
+      "note": "AC1-AC4, AC6, AC7, AC9 verified live. AC5 unit-tested only. AC8 verified for RANDOM mode only."
     },
     {
       "id": "T16",
       "name": "FORK.md rows + design doc status + decision log",
-      "status": "pending",
+      "status": "done",
       "deps": [
         "T15"
       ]
@@ -158,11 +165,29 @@
     "In-frame selection by matching character names in the LLM's descriptive prose, capped at 3 for CLIP safety",
     "Seed pinning included but scoped honestly: style consistency only, not per-character identity in txt2img",
     "Changes go in place; upstream-merge-friendly layout explicitly dropped",
-    "Reference-image / IP-Adapter path deferred - strongest lever but needs a second backend running"
+    "Reference-image / IP-Adapter path deferred - strongest lever but needs a second backend running",
+    "apply_styles runs BEFORE the LLM keywords exist - the Prompt node is built empty. Filtering had to move to GenerationMixin._finalize_prompt. Unit tests missed this because they fed apply_styles a prompt shape the real graph never produces.",
+    "Action keywords hold a 35% budget reserve; three derived anchors otherwise consumed the entire 150-token budget and left the image depicting nobody doing anything.",
+    "Blocklist cannot ban rendering words the style templates themselves emit, because the pass runs over the whole assembled prompt.",
+    "AnchorMixin._derive_anchor needs @set_processing to establish the ActiveAgent context the prompt machinery reads."
   ],
   "constraints": {
     "new_npm_dependencies": 0,
     "note": "Python side is TDD - tests/ has a real pytest suite. Frontend has no runner, so P5 is browser-verified via Playwright."
   },
-  "open_gaps": []
+  "open_gaps": [
+    "AC5 (off-screen characters excluded) is unit-tested but never observed live - both characters were named in every verification run, so there was nothing to prune.",
+    "AC8 verified for RANDOM mode only (payload correctly omits seed). Per-scene and Fixed modes are unit-tested but were not exercised through the UI.",
+    "The keyword blocklist needs ongoing tuning. The LLM reliably names the category of a visual detail rather than the detail: \"posture\" for \"shoulders hunched\", \"lighting\" for \"lit from below\".",
+    "Prompt correctness is not rendering fidelity. Prompts are now stable and setting-anchored, but CyberRealistic PonySemi V5 does not render \"deep violet skin\" faithfully at cfg 5 - a model/CFG matter, out of this track.",
+    "The character Visuals sub-tab (Cover Image / Portrait / Rules) is not URL-addressable, so Playwright has to click through to reach the anchor field.",
+    "tests/prompts/test_template_section_validation.py crashes on Windows (read_text without encoding) before it can validate anything - which is masking a real malformed section marker, <|SECTION:TASK> at refine-prompt.jinja2:28."
+  ],
+  "actuals": {
+    "upstream_files_modified": 16,
+    "new_files": 4,
+    "new_npm_dependencies": 0,
+    "tests_added": 53,
+    "suite": "5568 passed; 5 pre-existing failures unrelated to this track (2 Windows-only encoding/strftime, 2 time-ordering flakes, 1 encryption env var)"
+  }
 }

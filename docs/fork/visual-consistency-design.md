@@ -1,6 +1,7 @@
 # Visual consistency — design
 
-**Status**: design agreed, not implemented
+**Status**: implemented. Amended during execution — see *Amendments* at the end. Read
+that section before trusting D2, D4 or D6 as written.
 **Date**: 2026-07-30
 **Applies to**: `SCENE_ILLUSTRATION` first; `CHARACTER_CARD` / `SCENE_CARD` /
 `SCENE_BACKGROUND` inherit the same machinery.
@@ -269,3 +270,68 @@ review queue at
   output. Do not spend effort preserving them; do not blind-revert them either.
 - The `visual=review` URL parameter is the review-queue deep link and works today —
   Playwright can go straight there.
+
+## Amendments made during execution
+
+Three things in the design above were wrong. All three were found by running real
+generations, not by reading code.
+
+### A1 — apply_styles is not the choke point for filtering (amends D2, D4, D6)
+
+The claim was that `apply_styles` runs *after* the LLM's parts are in `prompt.parts`.
+It does not. The `Prompt` node is constructed **empty**; `apply_styles` adds styles and
+anchors; the LLM's keywords are appended to the part list afterwards.
+
+Consequences, all confirmed in a live A1111 payload:
+
+- the sanitiser placed in `apply_styles` silently filtered nothing
+- the in-frame matcher found no `positive_descriptive` and always took its
+  all-characters fallback, so every active character got an anchor
+
+**Anchor insertion in `apply_styles` is fine** — anchors flow onward into the final
+prompt, in the intended order, and that part of D2 holds. Everything that needs to *see*
+the LLM's output moved to `GenerationMixin._finalize_prompt`, which runs immediately
+before backend dispatch.
+
+In-frame selection ended up with better evidence than the design gave it. The LLM's own
+keywords name whoever is in the shot, and the derivation template forbids proper names
+in anchors, so searching the keyword list for a character name cannot match that
+character's own anchor.
+
+**Why the tests did not catch this**: they handed `apply_styles` a prompt already
+containing an LLM part — a shape the real graph never produces. A test fixture that
+mirrors an assumption cannot falsify it.
+
+### A2 — the budget drop order starved the image (amends D6)
+
+D6 said to drop the LLM's action keywords first. Against real anchors that was wrong:
+three derived anchors plus the style tags reached ~155 tokens on their own, so at the
+150-token budget tail-trimming removed **every** action keyword. The result was two
+accurately-described people standing in an accurately-described room doing nothing.
+
+Action keywords now hold a reserved share of the budget (`ACTION_BUDGET_RESERVE`, 35%).
+Sacrifice order: action down to the reserve, then character anchors past the first, then
+the scene anchor, then the reserve itself. Default budget raised 150 → 250, because
+derived anchors are wordier than the template's "10-14 keywords" suggests — the LLM
+writes "indigo hair pulled back in a secure style", not "indigo hair".
+
+### A3 — the sanitiser runs over the whole prompt, styles included (amends D4)
+
+Because filtering moved to the final assembled string, the blocklist sees the art
+style's own tags. Banning rendering words like `semi-realistic` or `masterpiece` would
+strip the configured style template's output. Only rendering words the templates do not
+emit are banned, and there is a test pinning that the "Semi-Real (Pony)" tag set
+survives untouched.
+
+### Also worth knowing
+
+- `AnchorMixin._derive_anchor` needs `@set_processing`. It establishes the `ActiveAgent`
+  context the prompt machinery reads; without it, derivation raises `AttributeError` on
+  a `None` context when called from a websocket handler. Agent methods calling
+  `Prompt.request` outside an existing agent context all need this.
+- The blocklist is tuned against observed output and will need tuning again. The LLM's
+  persistent habit is naming the *category* of a visual detail rather than the detail:
+  "posture" for "shoulders hunched", "lighting" for "lit from below".
+- Prompt-assembly correctness is not rendering fidelity. The prompts are now stable,
+  correctly ordered and setting-anchored; how faithfully a given checkpoint renders
+  "deep violet skin" is a model and CFG question this track does not address.

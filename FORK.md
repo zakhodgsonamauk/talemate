@@ -29,6 +29,23 @@ git checkout feature/tell-me-a-story && git rebase main   # or merge
 | `talemate_frontend/src/components/VisualLibraryScene.vue` | +2 / -1 (`emits:` at 167, listener at ~97) | URL state sync: re-emit the child's tab change upward as `update:detail-tab`. Pure pass-through. | 2026-07-30 |
 | `talemate_frontend/src/components/SceneMessages.vue` | +10 (`data()` at 534, `provide()` at 658) | URL state sync for story images: central `viewedAssetId` plus `getViewedAssetId` / `setViewedAssetId` provides. Needed because the viewer state was previously per-message. | 2026-07-30 |
 | `talemate_frontend/src/components/MessageAssetImage.vue` | +33 / -9 (`inject`/`data`/`computed` at 79-118) | URL state sync for story images: `showAssetView` becomes a computed over the provided central id; `inject` switched to object form so the two new keys can default to `null`. | 2026-07-30 |
+| `src/talemate/character.py` | +5 (`visual_anchor` at 49) | Visual consistency: cached appearance keywords, injected into every image the character appears in. Pydantic, so it serializes for free. | 2026-07-30 |
+| `src/talemate/tale_mate.py` | +6 (`__init__` ~157, status emit ~1428, serializer ~2153) | Visual consistency: `Scene.visual_anchor`. Scene is a plain class, so each plumbing site needs its own entry. | 2026-07-30 |
+| `src/talemate/load/__init__.py` | +3 (after 317) | Visual consistency: load `Scene.visual_anchor`, coercing `""` to `None` so "not derived yet" stays distinguishable. | 2026-07-30 |
+| `src/talemate/world_state/manager.py` | +23 (`CharacterDetails` at 77, builder at 209, `update_character_visual_anchor` after 455, `update_scene_settings` at ~1140) | Visual consistency: anchor setters and exposure to the world editor. | 2026-07-30 |
+| `src/talemate/server/world_state_manager/__init__.py` | +42 (`SceneSettingsPayload` at 186, `handle_derive_scene_visual_anchor` after 1159) | Visual consistency: scene anchor round-trip plus its derive action. | 2026-07-30 |
+| `src/talemate/server/world_state_manager/character.py` | +92 (payloads at 29, two handlers after 147) | Visual consistency: character anchor update and derive actions, mirroring the `visual_rules` pair. | 2026-07-30 |
+| `src/talemate/agents/visual/agent.py` | +25 / -2 (`AnchorMixin` at 24/56, `seed_mode`+`seed` at ~152, `image_max_tokens` at ~178) | Visual consistency: mix in anchors, add the image-prompt budget and seed settings. | 2026-07-30 |
+| `src/talemate/agents/visual/style.py` | +190 / -3 (`apply_styles` now async, `_insert_anchors`, blocklist, `estimate_prompt_tokens`) | Visual consistency: anchors inserted ahead of the LLM's keywords; insertion order is load-bearing because `_build_prompt` dedupes first-occurrence-wins. | 2026-07-30 |
+| `src/talemate/agents/visual/generation.py` | +170 (`_apply_seed`, `_finalize_prompt`, `_drop_absent_character_anchors`, `_trim_to_budget`) | Visual consistency: the only place the assembled prompt is complete, so sanitising, in-frame pruning and budget enforcement all happen here. See design doc amendment A1. | 2026-07-30 |
+| `src/talemate/agents/visual/schema.py` | +45 (`SEED_MODE`, `resolve_seed`, `SamplerSettings.seed`) | Visual consistency: seed control. sha256 over the scene id, not `hash()`, which is per-process salted. | 2026-07-30 |
+| `src/talemate/agents/visual/nodes.py` | +3 / -1 (line 350) | Visual consistency: `await` the now-async `apply_styles`. | 2026-07-30 |
+| `src/talemate/agents/visual/backends/automatic1111.py` | +25 / -18 (`build_payload` extracted) | Visual consistency: pass the seed, and make the payload assertable without a live backend. | 2026-07-30 |
+| `src/talemate/prompts/templates/visual/generate-image-SCENE_ILLUSTRATION.jinja2` | +18 / -24 | Visual consistency: dropped the per-character appearance query (the direct cause of the inconsistency, and one LLM call per character per image) and the format-emphasis instruction; added the demand to name the location and genre. | 2026-07-30 |
+| `src/talemate/prompts/templates/visual/generate-image-prompt-type.jinja2` | +4 | Visual consistency: keywords must name something a camera could photograph; state the budget. | 2026-07-30 |
+| `talemate_frontend/src/components/WorldStateManagerCharacterVisualsRules.vue` | +95 / -3 | Visual consistency: Appearance Keywords field plus its derive button. | 2026-07-30 |
+| `talemate_frontend/src/components/WorldStateManagerSceneSettings.vue` | +55 / -1 | Visual consistency: Setting Keywords field plus derive. `visual_anchor` had to be added to **both** payload literals — that handler sends the whole settings set, so a field missing from either would be written back as null on any later change. | 2026-07-30 |
+| `tests/data/graphs/results/test-harness-assets.json` | +1 | Visual consistency: baseline gains `"seed": null` from the new `SamplerSettings` field. Shape drift, not behaviour. | 2026-07-30 |
 
 Conflict risk: **low.**
 
@@ -76,6 +93,11 @@ These do not conflict — but they can be *orphaned* by upstream refactors, so t
 | `talemate_frontend/src/utils/urlState.js` | Hash ⇄ state, pure functions | — |
 | `talemate_frontend/src/utils/urlStateSlices.js` | Reads/writes app state per URL slice | `scene_status.project_name` and `.save_files`; `WorldStateManager.tab` + `show()` + `$refs.characters.{selected,page}`; `AppConfig.{dialog,tab}` + `show()`; `DebugTools.{tab,selectTab}`; `VisualLibrary.{dialog,dialogModel,activeTab,sceneSelectedId,sceneInitialTab,sceneOpenNodes,open,openWithAsset}` and its `activeTab` values `review_queue`/`pending_queue`/`scene`; `VisualAssetsTree` folder-id format `VIS_TYPE::CharacterName`; `SceneMessages.{messages,viewedAssetId}` + `$refs.requestRegenerateInstructions`; `TalemateApp.availableTabs` |
 | `talemate_frontend/src/components/UrlStateMixin.js` | Hash writer/reader + boot restore orchestration | `config.recent_scenes.scenes[].path`; `load_scene` / `request_scenes_list` / `scenes_list` message shapes; `registerMessageHandler` |
+| `docs/fork/visual-consistency-design.md` | Design, amendments and verification results for image consistency | — |
+| `src/talemate/agents/visual/anchors.py` | Derive-and-cache visual anchors; in-frame character matching | `Prompt.request` + `AnchorExtractor`; `set_processing` establishing the `ActiveAgent` context; the `visualize` prompt kind (150 tokens) |
+| `src/talemate/prompts/templates/visual/derive-visual-anchor.jinja2` | Turns appearance/premise prose into fixed keyword lists | `character.base_attributes["appearance"]`; `scene.description` / `.context`; `llm_can_be_coerced()` |
+| `tests/test_visual_anchor.py` | 43 tests: anchors, in-frame matching, sanitising, budget | — |
+| `tests/test_visual_seed.py` | 10 tests: seed modes and the A1111 payload | — |
 
 !!! warning
     `urlStateSlices.js` reaches into four upstream components through `$refs` and is

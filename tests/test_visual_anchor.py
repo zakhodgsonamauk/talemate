@@ -793,3 +793,25 @@ def test_sanitise_drops_category_words_observed_in_live_output():
     )
 
     assert kept == ["shoulders hunched", "lit from below", "harsh shadows"]
+
+
+def test_sanitise_drops_genre_and_plot_abstractions():
+    """Third-wave tuning, from the final verification run. These name the story someone
+    is in, not anything visible in the frame."""
+    from talemate.agents.visual.style import sanitise_keywords
+
+    kept = sanitise_keywords(
+        [
+            "mystery",
+            "investigation",
+            "problem-solving",
+            "adventure",
+            "elite crew",
+            "sci-fi setting",
+            "warning light",
+            "recycled air",
+            "metal flooring",
+        ]
+    )
+
+    assert kept == ["warning light", "recycled air", "metal flooring"]

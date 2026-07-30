@@ -171,6 +171,19 @@ BANNED_ABSTRACT_KEYWORDS = {
     "painterly",
     "rendered finish",
     "painterly finish",
+    # Third wave: genre and plot abstractions. These describe the story someone is in,
+    # not anything visible in the frame.
+    "mystery",
+    "investigation",
+    "problem-solving",
+    "adventure",
+    "exploration",
+    "discovery",
+    "sci-fi setting",
+    "science fiction setting",
+    "fantasy setting",
+    "elite crew",
+    "space exploration",
 }
 
 BANNED_KEYWORDS = BANNED_FORMAT_KEYWORDS | BANNED_ABSTRACT_KEYWORDS
