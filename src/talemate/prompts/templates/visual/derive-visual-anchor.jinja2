@@ -1,0 +1,85 @@
+{#-
+Derives a visual anchor: the short, fixed keyword list that gets injected verbatim
+into every image prompt featuring this subject.
+
+Called once per subject and cached (Character.visual_anchor / Scene.visual_anchor),
+because deriving appearance fresh on each generation is what made every image show a
+different person. See docs/fork/visual-consistency-design.md.
+
+Modes, set via `anchor_mode`:
+  - "character": vars = character
+  - "scene": vars = scene
+
+Extractors:
+  - anchor: AnchorExtractor("<ANCHOR>", "</ANCHOR>")
+-#}
+<|SECTION:SOURCE MATERIAL|>
+{% if anchor_mode == "character" %}
+Subject: {{ character.name }}
+{% if character.base_attributes.get("species") %}Species: {{ character.base_attributes.get("species") }}{% endif %}
+{% if character.base_attributes.get("gender") %}Gender: {{ character.base_attributes.get("gender") }}{% endif %}
+{% if character.base_attributes.get("age") %}Age: {{ character.base_attributes.get("age") }}{% endif %}
+
+{% if character.base_attributes.get("appearance") %}
+Appearance:
+{{ character.base_attributes.get("appearance") }}
+{% else %}
+No appearance attribute exists. Work from the description below, and extract only what
+it actually states about how the subject looks.
+
+Description:
+{{ character.description }}
+{% endif %}
+{% else %}
+Setting: {{ scene.title or scene.name }}
+Genre context: {{ scene.context }}
+
+Premise:
+{{ scene.description }}
+{% endif %}
+<|CLOSE_SECTION|>
+
+<|SECTION:TASK|>
+{% if anchor_mode == "character" %}
+Extract a compact, comma-delimited keyword list describing what {{ character.name }}
+physically looks like. This list is reused unchanged in every image of them, so it must
+describe only what is permanently true of their appearance.
+
+Include, where the source material states it: species or race, skin colour and
+markings, hair colour and how it is worn, eye colour or notable eye features, build and
+height, distinctive anatomy, and the clothing they habitually wear.
+
+Target 10 to 14 keywords.
+{% else %}
+Extract a compact, comma-delimited keyword list describing where this story takes
+place. This list is reused unchanged in every image of the scene, so it must describe
+only what is permanently true of the setting.
+
+Include: the concrete location type, the genre, the dominant materials or architecture,
+and the dominant colour or lighting palette.
+
+Target 8 to 10 keywords.
+{% endif %}
+
+Rules:
+
+1. **Only physically visible things.** A diffusion model can render violet skin. It
+   cannot render competence, grief, duty, or a classified archive.
+2. **No personality, no history, no plot.** Nothing about what the subject wants,
+   fears, remembers, or is doing right now.
+3. **No camera or format language.** No orientation, framing, shot type, composition,
+   or aspect ratio. Those are set elsewhere.
+4. **No art style.** No medium, no rendering style, no quality tags. Those are set
+   elsewhere.
+5. **No proper names.** An image model has never heard of {{ "this character" if anchor_mode == "character" else "this ship or place" }}.
+   Describe the thing, do not name it.
+6. **Invent nothing.** If the source material does not state a trait, leave it out.
+
+Output the keyword list between <ANCHOR></ANCHOR> tags, on one line, comma-delimited.
+{% if anchor_mode == "character" %}
+Example shape (do not copy the content): <ANCHOR>alien woman, deep violet skin, geometric facial markings, indigo hair pulled back, large black eyes, lean and tall, four-fingered hands, fitted dark blue-grey utility suit, tool belt</ANCHOR>
+{% else %}
+Example shape (do not copy the content): <ANCHOR>starship interior, deep space, science fiction, worn metal panelling, exposed conduits, cool blue screen glow</ANCHOR>
+{% endif %}
+<|CLOSE_SECTION|>
+{% if llm_can_be_coerced() %}{{ set_prepared_response("<ANCHOR>") }}{% endif %}

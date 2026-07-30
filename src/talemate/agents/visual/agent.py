@@ -21,6 +21,7 @@ from .websocket_handler import VisualWebsocketHandler
 from .schema import ReadyCheckResult, BackendStatusType, PROMPT_TYPE
 import talemate.agents.visual.nodes  # noqa: F401
 
+from .anchors import AnchorMixin
 from .style import StyleMixin
 from .generation import GenerationMixin
 from .analyze import AnalysisMixin
@@ -52,6 +53,7 @@ log = structlog.get_logger("talemate.agents.visual")
 
 @register()
 class VisualAgent(
+    AnchorMixin,
     StyleMixin,
     GenerationMixin,
     AnalysisMixin,
