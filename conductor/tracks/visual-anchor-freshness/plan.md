@@ -26,8 +26,13 @@ Commit after each task.
 - [ ] Failing tests: an anchor containing `fitted dark blue-grey utility suit` loses that
       token and keeps every other; an anchor with no clothing is untouched; running twice
       changes nothing.
-- [ ] `strip_wardrobe_tokens()` in `agents/visual/anchors.py`, applied on character load.
-      No LLM call.
+- [ ] `strip_wardrobe_tokens()` in `agents/visual/anchors.py`, applied via a pydantic
+      `model_validator(mode="after")` on `Character`. No LLM call.
+
+**Amended during plan evaluation**: not at the load site. `load/__init__.py:323`
+constructs `Character(**character_data)`, but character-card import and other paths build
+characters too, and each would need its own hook. A validator on the model catches every
+construction path at once.
 - [ ] Verify: `pytest tests/test_visual_anchor.py -k migration`
 
 **AC7**.
@@ -53,8 +58,12 @@ Commit after each task.
 
 ### T5 — Managed wardrobe reinforcement
 
-- [ ] Decide the `insert` mode first — inspect the options. `sequential` adds a message to
-      history on every refresh, which we probably do not want for this.
+- [ ] **Decided during plan evaluation**: `insert="never"`. The valid modes are
+      `sequential`, `all-context`, `conversation-context`, `never`. `never` stores the
+      answer without injecting it anywhere, which is exactly what we need — the image
+      prompt consumes it, the story does not — and it sidesteps the history-flooding
+      hazard entirely, since the message-popping path is `sequential`-only
+      (`reinforcements.py:126-131`).
 - [ ] Failing tests: the reinforcement is created once per character, not duplicated on
       reload; a changed answer triggers one wardrobe re-derivation; an unchanged answer
       triggers none.
@@ -83,9 +92,13 @@ Commit after each task.
 
 ### T7 — Appearance edit clears the anchor
 
-- [ ] Failing test: `update_character_attribute("appearance", ...)` leaves
-      `visual_anchor` as `None`; editing any other attribute leaves it alone.
-- [ ] Five lines in `world_state/manager.py:334`.
+- [ ] Failing test: setting the `appearance` attribute leaves `visual_anchor` as `None`;
+      setting any other attribute leaves it alone.
+- [ ] **Amended during plan evaluation**: put it in `Character.set_base_attribute`
+      (`character.py:557`), not `WorldStateManager.update_character_attribute`. The
+      manager method just delegates to the setter, so the setter is the single funnel
+      every caller passes through — including the world-state agent's own attribute
+      updates.
 - [ ] Verify: `pytest tests/test_visual_anchor.py -k invalidate`
 
 **AC4**.

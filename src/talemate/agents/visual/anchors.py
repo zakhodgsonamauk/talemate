@@ -27,8 +27,10 @@ __all__ = [
     "AnchorMixin",
     "ANCHOR_SPEC",
     "MAX_CHARACTERS_IN_FRAME",
+    "WARDROBE_MARKERS",
     "characters_in_frame",
     "normalize_anchor",
+    "strip_wardrobe_tokens",
 ]
 
 log = structlog.get_logger("talemate.agents.visual.anchors")
@@ -44,6 +46,99 @@ ANCHOR_SPEC = ResponseSpec(
     },
     required=[],
 )
+
+
+# Words that make a keyword about clothing or worn equipment rather than about the body.
+# Used two ways: migrating clothing out of identity anchors cached by the previous track,
+# and deciding whether the scene has already spoken about what someone is wearing.
+#
+# Kept to garments and worn things. Body words that sound adjacent - "bare shoulders",
+# "broad-shouldered" - must not match, or migration would quietly delete real identity
+# detail.
+WARDROBE_MARKERS = {
+    "suit",
+    "uniform",
+    "armour",
+    "armor",
+    "jacket",
+    "coat",
+    "cloak",
+    "cape",
+    "robe",
+    "dress",
+    "gown",
+    "shirt",
+    "blouse",
+    "tunic",
+    "vest",
+    "trousers",
+    "pants",
+    "jeans",
+    "skirt",
+    "shorts",
+    "leggings",
+    "boots",
+    "shoes",
+    "sandals",
+    "footwear",
+    "gloves",
+    "gauntlets",
+    "helmet",
+    "hat",
+    "hood",
+    "mask",
+    "belt",
+    "harness",
+    "holster",
+    "backpack",
+    "pockets",
+    "collar",
+    "sleeves",
+    "clothing",
+    "clothes",
+    "outfit",
+    "attire",
+    "garment",
+    "garments",
+    "naked",
+    "nude",
+    "undressed",
+    "barefoot",
+    "shirtless",
+    "topless",
+    "half-naked",
+}
+
+
+def _is_wardrobe_token(token: str) -> bool:
+    """Whether a keyword is about clothing or worn equipment."""
+    words = re.findall(r"[\w'-]+", token.lower())
+    return any(word in WARDROBE_MARKERS for word in words)
+
+
+def strip_wardrobe_tokens(anchor: str | None) -> str | None:
+    """
+    Remove clothing keywords from an identity anchor.
+
+    A one-time migration for anchors cached by the previous track, whose derivation
+    template asked for "the clothing they habitually wear". Those anchors now contradict
+    the scene - one live prompt held both "fitted dark blue-grey utility suit" and
+    "naked". Stripping in place costs no LLM call and is idempotent.
+    """
+    if not anchor:
+        return anchor
+
+    tokens = [token.strip() for token in anchor.split(",") if token.strip()]
+    kept = [token for token in tokens if not _is_wardrobe_token(token)]
+
+    if len(kept) == len(tokens):
+        return anchor
+
+    log.debug(
+        "strip_wardrobe_tokens",
+        removed=[token for token in tokens if _is_wardrobe_token(token)],
+    )
+    return ", ".join(kept)
 
 
 def normalize_anchor(raw: str | None) -> str | None:

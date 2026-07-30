@@ -193,3 +193,75 @@ def test_prompt_type_requires_photographable_keywords():
 
     assert "a camera could photograph" in source
     assert "will be discarded before generation" in source
+
+
+# ---------------------------------------------------------------------------
+# derive-visual-anchor - identity/wardrobe split
+#
+# Clothing used to live in the identity anchor, which meant a cached "utility suit"
+# argued with a scene that said "naked". Identity is permanent; clothing is not.
+# ---------------------------------------------------------------------------
+
+
+def test_derive_anchor_character_mode_excludes_clothing(kaira):
+    rendered = render_template(
+        "visual.derive-visual-anchor",
+        vars={"anchor_mode": "character", "character": kaira},
+    )
+
+    assert "Exclude clothing entirely" in rendered
+    assert "the clothing they habitually wear" not in rendered
+    # The worked example must not model the behaviour we just banned.
+    assert "utility suit</ANCHOR>" not in rendered
+
+
+def test_derive_anchor_wardrobe_mode_renders(kaira):
+    rendered = render_template(
+        "visual.derive-visual-anchor",
+        vars={
+            "anchor_mode": "wardrobe",
+            "character": kaira,
+            "wardrobe_report": "She has removed her EVA suit and stands barefoot.",
+        },
+    )
+
+    assert "She has removed her EVA suit and stands barefoot." in rendered
+    assert "wearing right now" in rendered
+    assert "Exclude their permanent appearance" in rendered
+
+
+def test_derive_anchor_wardrobe_mode_allows_present_tense(kaira):
+    """Wardrobe is explicitly about now, so the "nothing about what they are doing right
+    now" rule must not apply to it - unlike identity mode."""
+    identity = render_template(
+        "visual.derive-visual-anchor",
+        vars={"anchor_mode": "character", "character": kaira},
+    )
+    wardrobe = render_template(
+        "visual.derive-visual-anchor",
+        vars={
+            "anchor_mode": "wardrobe",
+            "character": kaira,
+            "wardrobe_report": "Wearing a torn jacket.",
+        },
+    )
+
+    assert "or is doing right now" in identity
+    assert "or is doing right now" not in wardrobe
+
+
+def test_derive_anchor_scene_mode_includes_location_when_known(mock_scene):
+    mock_scene.description = "The Starlight Nomad."
+    mock_scene.context = "science fiction"
+    mock_scene.title = "Infinity Quest"
+
+    rendered = render_template(
+        "visual.derive-visual-anchor",
+        vars={
+            "anchor_mode": "scene",
+            "scene": mock_scene,
+            "location": "the derelict structure's interior",
+        },
+    )
+
+    assert "the derelict structure's interior" in rendered

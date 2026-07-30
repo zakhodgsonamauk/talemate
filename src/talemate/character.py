@@ -51,6 +51,11 @@ class Character(pydantic.BaseModel):
     # cached here, because re-deriving it per generation produced a different person
     # every time. See docs/fork/visual-consistency-design.md.
     visual_anchor: str | None = None
+    # What they are wearing and their visible condition, right now. Refreshed from a
+    # world-state reinforcement as the story advances, unlike visual_anchor which is
+    # permanent. Keeping the two apart is what stops a cached outfit contradicting a
+    # scene. See docs/fork/visual-anchor-freshness-design.md.
+    visual_wardrobe: str | None = None
     voice: Voice | None = None
 
     # shared context
@@ -79,6 +84,21 @@ class Character(pydantic.BaseModel):
     actor: "Actor | None" = pydantic.Field(default=None, exclude=True)
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    @pydantic.model_validator(mode="after")
+    def _migrate_wardrobe_out_of_visual_anchor(self) -> "Character":
+        """
+        Strip clothing from identity anchors cached before the split existed.
+
+        A validator rather than a hook at the load site, because characters are also
+        built by card import and by copying, and each of those paths would otherwise
+        need its own call. Idempotent, no LLM call.
+        """
+        if self.visual_anchor:
+            from talemate.agents.visual.anchors import strip_wardrobe_tokens
+
+            self.visual_anchor = strip_wardrobe_tokens(self.visual_anchor)
+        return self
 
     @property
     def gender(self) -> str:
@@ -556,6 +576,13 @@ class Character(pydantic.BaseModel):
 
     async def set_base_attribute(self, name: str, value):
         memory_agent = instance.get_agent("memory")
+
+        # The identity anchor was derived from this prose, so changing it makes the
+        # anchor wrong. Clearing rather than re-deriving here keeps this method free of
+        # LLM calls; the next image re-derives.
+        if name == "appearance" and self.visual_anchor:
+            log.debug("visual_anchor.invalidated", character=self.name, reason=name)
+            self.visual_anchor = None
 
         if not value:
             try:

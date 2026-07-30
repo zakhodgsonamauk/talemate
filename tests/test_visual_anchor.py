@@ -48,7 +48,9 @@ def test_character_visual_anchor_defaults_to_none(kaira):
 
 
 def test_character_visual_anchor_round_trips(kaira):
-    kaira.visual_anchor = "violet skin, indigo hair, dark blue-grey utility suit"
+    # Identity only. Clothing in a visual_anchor is now stripped on construction - see
+    # the freshness track's migration tests.
+    kaira.visual_anchor = "violet skin, indigo hair, four-fingered hands"
 
     restored = Character(**kaira.model_dump())
 
@@ -305,7 +307,9 @@ def test_in_frame_caps_at_three_keeping_most_mentioned():
 
 
 KAIRA_ANCHOR = "alien woman, deep violet skin, indigo hair pulled back"
-ELMER_ANCHOR = "human man, weathered face, close-cropped greying hair, black EVA suit"
+ELMER_ANCHOR = "human man, weathered face, close-cropped greying hair, six feet tall"
+ELMER_WARDROBE = "standard-issue black EVA suit, silver rank markings"
+KAIRA_WARDROBE = "fitted dark blue-grey utility suit, tool loops on belt"
 SCENE_ANCHOR = "starship interior, deep space, science fiction, worn metal panelling"
 
 
@@ -815,3 +819,119 @@ def test_sanitise_drops_genre_and_plot_abstractions():
     )
 
     assert kept == ["warning light", "recycled air", "metal flooring"]
+
+
+# ===========================================================================
+# Track: visual-anchor-freshness
+#
+# Identity stays pinned; state follows the story. Previously clothing lived in the
+# identity anchor, so a cached "utility suit" contradicted a scene saying "naked".
+# ===========================================================================
+
+
+WARDROBE_TOKENS_IN_OLD_ANCHOR = (
+    "alien woman, deep violet skin, indigo hair pulled back, "
+    "fitted dark blue-grey utility suit, tool loops and pockets on belt"
+)
+
+
+# --- T3: visual_wardrobe field -------------------------------------------------
+
+
+def test_character_visual_wardrobe_defaults_to_none(kaira):
+    assert kaira.visual_wardrobe is None
+
+
+def test_character_visual_wardrobe_round_trips(kaira):
+    kaira.visual_wardrobe = "bare feet, smudged with soot"
+
+    restored = Character(**kaira.model_dump())
+
+    assert restored.visual_wardrobe == kaira.visual_wardrobe
+
+
+# --- T2: one-time migration ---------------------------------------------------
+
+
+def test_strip_wardrobe_tokens_removes_garments():
+    from talemate.agents.visual.anchors import strip_wardrobe_tokens
+
+    result = strip_wardrobe_tokens(WARDROBE_TOKENS_IN_OLD_ANCHOR)
+
+    assert result == "alien woman, deep violet skin, indigo hair pulled back"
+
+
+def test_strip_wardrobe_tokens_leaves_identity_only_anchors_alone():
+    from talemate.agents.visual.anchors import strip_wardrobe_tokens
+
+    clean = "alien woman, deep violet skin, four-fingered hands, lean and tall"
+
+    assert strip_wardrobe_tokens(clean) == clean
+
+
+def test_strip_wardrobe_tokens_is_idempotent():
+    from talemate.agents.visual.anchors import strip_wardrobe_tokens
+
+    once = strip_wardrobe_tokens(WARDROBE_TOKENS_IN_OLD_ANCHOR)
+
+    assert strip_wardrobe_tokens(once) == once
+
+
+def test_strip_wardrobe_tokens_keeps_body_words_that_merely_look_like_clothing():
+    """"barefoot" is a state, but "bare shoulders" describes the body. Over-stripping
+    would quietly delete identity detail."""
+    from talemate.agents.visual.anchors import strip_wardrobe_tokens
+
+    result = strip_wardrobe_tokens("lean and tall, broad shoulders, four-fingered hands")
+
+    assert result == "lean and tall, broad shoulders, four-fingered hands"
+
+
+def test_character_migrates_a_cached_anchor_on_construction():
+    """AC7. Runs for every construction path - scene load, character card import, copy -
+    because it is a model validator rather than a hook at one call site."""
+    character = Character(
+        name="Kaira", visual_anchor=WARDROBE_TOKENS_IN_OLD_ANCHOR
+    )
+
+    assert "utility suit" not in character.visual_anchor
+    assert "deep violet skin" in character.visual_anchor
+
+
+def test_character_migration_does_not_touch_wardrobe_field():
+    character = Character(
+        name="Kaira",
+        visual_anchor=WARDROBE_TOKENS_IN_OLD_ANCHOR,
+        visual_wardrobe="fitted dark blue-grey utility suit",
+    )
+
+    assert character.visual_wardrobe == "fitted dark blue-grey utility suit"
+
+
+# --- T7: appearance edit invalidates the anchor --------------------------------
+
+
+@pytest.fixture
+def stub_memory_agent():
+    """set_base_attribute commits to memory; these tests care only about the anchor."""
+    with patch("talemate.instance.get_agent", return_value=AsyncMock()):
+        yield
+
+
+async def test_setting_appearance_clears_the_identity_anchor(kaira, stub_memory_agent):
+    """AC4. Previously the anchor went stale silently and permanently."""
+    kaira.visual_anchor = "alien woman, deep violet skin"
+
+    await kaira.set_base_attribute("appearance", "Now has a livid scar across her jaw.")
+
+    assert kaira.visual_anchor is None
+
+
+async def test_setting_another_attribute_leaves_the_anchor_alone(
+    kaira, stub_memory_agent
+):
+    kaira.visual_anchor = "alien woman, deep violet skin"
+
+    await kaira.set_base_attribute("personality", "Warmer than she used to be.")
+
+    assert kaira.visual_anchor == "alien woman, deep violet skin"

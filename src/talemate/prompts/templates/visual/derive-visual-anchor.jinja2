@@ -30,9 +30,15 @@ it actually states about how the subject looks.
 Description:
 {{ character.description }}
 {% endif %}
+{% elif anchor_mode == "wardrobe" %}
+Subject: {{ character.name }}
+
+What the story currently reports about their clothing and condition:
+{{ wardrobe_report }}
 {% else %}
 Setting: {{ scene.title or scene.name }}
 Genre context: {{ scene.context }}
+{% if location %}Current location: {{ location }}{% endif %}
 
 Premise:
 {{ scene.description }}
@@ -47,9 +53,27 @@ describe only what is permanently true of their appearance.
 
 Include, where the source material states it: species or race, skin colour and
 markings, hair colour and how it is worn, eye colour or notable eye features, build and
-height, distinctive anatomy, and the clothing they habitually wear.
+height, and distinctive anatomy.
 
-Target 10 to 14 keywords.
+**Exclude clothing entirely** - no garments, uniforms, armour, footwear, belts or
+accessories. What someone wears changes between scenes; this list does not. Clothing is
+supplied separately, per image, and a garment named here would contradict it.
+
+Target 8 to 12 keywords.
+{% elif anchor_mode == "wardrobe" %}
+Extract a compact, comma-delimited keyword list describing what {{ character.name }} is
+wearing right now, and any visible physical condition they are in.
+
+Include, where the source material states it: garments and their colour and fit,
+footwear or the lack of it, armour, visible equipment, and visible condition - dirt,
+blood, injuries, soaked clothing, dishevelment.
+
+**Exclude their permanent appearance** - no species, skin colour, hair, eyes, build or
+anatomy. Those are supplied separately and would be duplicated here.
+
+If the source material says they are undressed, say so plainly and list nothing else.
+
+Target 4 to 10 keywords.
 {% else %}
 Extract a compact, comma-delimited keyword list describing where this story takes
 place. This list is reused unchanged in every image of the scene, so it must describe
@@ -66,7 +90,7 @@ Rules:
 1. **Only physically visible things.** A diffusion model can render violet skin. It
    cannot render competence, grief, duty, or a classified archive.
 2. **No personality, no history, no plot.** Nothing about what the subject wants,
-   fears, remembers, or is doing right now.
+   fears, remembers{{ ", or is doing right now" if anchor_mode != "wardrobe" else "" }}.
 3. **No camera or format language.** No orientation, framing, shot type, composition,
    or aspect ratio. Those are set elsewhere.
 4. **No art style.** No medium, no rendering style, no quality tags. Those are set
@@ -77,7 +101,9 @@ Rules:
 
 Output the keyword list between <ANCHOR></ANCHOR> tags, on one line, comma-delimited.
 {% if anchor_mode == "character" %}
-Example shape (do not copy the content): <ANCHOR>alien woman, deep violet skin, geometric facial markings, indigo hair pulled back, large black eyes, lean and tall, four-fingered hands, fitted dark blue-grey utility suit, tool belt</ANCHOR>
+Example shape (do not copy the content): <ANCHOR>alien woman, deep violet skin, geometric facial markings, indigo hair pulled back, large black eyes, lean and tall, four-fingered hands</ANCHOR>
+{% elif anchor_mode == "wardrobe" %}
+Example shape (do not copy the content): <ANCHOR>fitted dark blue-grey utility suit, tool loops on belt, bare feet, smudged with soot</ANCHOR>
 {% else %}
 Example shape (do not copy the content): <ANCHOR>starship interior, deep space, science fiction, worn metal panelling, exposed conduits, cool blue screen glow</ANCHOR>
 {% endif %}
