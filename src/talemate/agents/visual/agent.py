@@ -194,12 +194,12 @@ class VisualAgent(
                     ),
                     "image_max_tokens": AgentActionConfig(
                         type="number",
-                        value=150,
+                        value=250,
                         label="Max. Image Prompt Length",
-                        description="Token budget for the assembled image prompt itself. Distinct from the setting above, which limits how much the LLM may write while composing it. Past roughly two 77-token chunks an SDXL text encoder stops attending, so extra tokens are spent rather than used.",
-                        note="When over budget, action keywords are dropped first, then extra character appearances, then the setting. The style and the first character's appearance are never dropped.",
+                        description="Token budget for the assembled image prompt itself. Distinct from the setting above, which limits how much the LLM may write while composing it. An SDXL text encoder works in 77-token chunks and attends less to each successive one, so very long prompts spend tokens without using them.",
+                        note="Over budget, action keywords go first - but a share is always held back so the image still depicts something happening. After that, extra character appearances, then the setting. The style and the first character's appearance are never dropped.",
                         min=77,
-                        max=450,
+                        max=600,
                         step=1,
                     ),
                     "automatic_analysis": AgentActionConfig(

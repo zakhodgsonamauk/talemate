@@ -13,8 +13,10 @@ from talemate.agents.base import (
 import talemate.emit.async_signals as async_signals
 from talemate.emit import emit
 from talemate.context import active_scene
+from .anchors import _mention_count
 from .schema import (
     GEN_TYPE,
+    PROMPT_TYPE,
     SEED_MODE,
     GenerationResponse,
     BackendStatusType,
@@ -23,9 +25,19 @@ from .schema import (
     FORMAT_TYPE,
     resolve_seed,
 )
+from .style import (
+    VIS_TYPES_WITHOUT_CAST,
+    estimate_prompt_tokens,
+    sanitise_keywords,
+)
 from .exceptions import ImageEditNotAvailableError, TextToImageNotAvailableError
 
 log = structlog.get_logger("talemate.agents.visual.generation")
+
+# Share of the prompt budget held back for what is happening in the shot. Without a
+# reserve, three derived character anchors fill the whole budget and the image ends up
+# depicting nobody doing anything.
+ACTION_BUDGET_RESERVE = 0.35
 
 async_signals.register(
     "agent.visual.generation.before_generate",
@@ -153,9 +165,207 @@ class GenerationMixin:
             request.sampler_settings.seed = seed
             log.debug("apply_seed", mode=str(mode), seed=seed)
 
+    async def _finalize_prompt(self, request: GenerationRequest) -> None:
+        """
+        Last pass over the assembled positive prompt, before it goes to a backend.
+
+        This runs here rather than in apply_styles for a concrete reason: the node graph
+        constructs the VisualPrompt empty, lets apply_styles add styles and anchors, and
+        only then appends the LLM's keywords. apply_styles never sees the LLM's output,
+        so a filter placed there silently does nothing. This is the first point where the
+        prompt is complete.
+
+        Three jobs, in order:
+
+        1. Drop keywords a diffusion model cannot render.
+        2. Drop anchors for characters who are not in the shot.
+        3. Trim to the token budget.
+        """
+        if not request.prompt:
+            return
+
+        # Only comma-delimited keyword prompts. A DESCRIPTIVE backend receives prose,
+        # where splitting on commas would shred sentences.
+        backend = (
+            self.backend_image_edit
+            if request.gen_type == GEN_TYPE.IMAGE_EDIT
+            else self.backend
+        )
+        if getattr(backend, "prompt_type", PROMPT_TYPE.KEYWORDS) != PROMPT_TYPE.KEYWORDS:
+            return
+
+        original = request.prompt
+        keywords = [kw.strip() for kw in original.split(",") if kw.strip()]
+
+        keywords = sanitise_keywords(keywords)
+        keywords = await self._drop_absent_character_anchors(keywords, request)
+        keywords = await self._trim_to_budget(keywords, request)
+
+        request.prompt = ", ".join(dict.fromkeys(keywords))
+
+        if request.prompt != original:
+            log.debug(
+                "finalize_prompt",
+                before=estimate_prompt_tokens(original),
+                after=estimate_prompt_tokens(request.prompt),
+            )
+
+    async def _drop_absent_character_anchors(
+        self, keywords: list[str], request: GenerationRequest
+    ) -> list[str]:
+        """
+        Remove a character's appearance keywords when nothing in the prompt names them.
+
+        The anchors were inserted before the LLM's keywords existed, so every active
+        character got one. The LLM's own keywords name whoever is actually in the shot -
+        that is the evidence used here. Anchors never contain proper names (the
+        derivation template forbids it), so searching the whole keyword list for a name
+        cannot match the anchor itself.
+        """
+        scene = active_scene.get()
+        if not scene or request.vis_type in VIS_TYPES_WITHOUT_CAST:
+            return keywords
+
+        # Same source as _insert_anchors, so what gets pruned matches what was added.
+        characters = list(getattr(self, "characters", None) or scene.characters)
+        if len(characters) < 2:
+            # Nothing to disambiguate; a single-cast scene keeps its anchor.
+            return keywords
+
+        haystack = ", ".join(keywords)
+        surviving = list(keywords)
+
+        for character in characters:
+            if _mention_count(haystack, character.name):
+                continue
+
+            anchor = await self.character_anchor(character)
+            drop = set()
+            if anchor:
+                drop.update(token.strip().lower() for token in anchor.split(","))
+            if character.visual_rules:
+                drop.update(
+                    token.strip().lower() for token in character.visual_rules.split(",")
+                )
+
+            if not drop:
+                continue
+
+            before = len(surviving)
+            surviving = [kw for kw in surviving if kw.strip().lower() not in drop]
+            if len(surviving) != before:
+                log.debug(
+                    "finalize_prompt.dropped_absent_character",
+                    character=character.name,
+                    removed=before - len(surviving),
+                )
+
+        return surviving
+
+    async def _anchor_token_sets(
+        self, request: GenerationRequest
+    ) -> tuple[set[str], list[set[str]]]:
+        """
+        The lowercased anchor tokens, by role: (scene, [per character]).
+
+        Needed because trimming has to know what it is dropping. Anchors are cached, so
+        this costs nothing.
+        """
+        scene = active_scene.get()
+        if not scene:
+            return set(), []
+
+        scene_tokens: set[str] = set()
+        scene_anchor = await self.scene_anchor(scene)
+        if scene_anchor:
+            scene_tokens = {t.strip().lower() for t in scene_anchor.split(",")}
+
+        character_tokens: list[set[str]] = []
+        if request.vis_type not in VIS_TYPES_WITHOUT_CAST:
+            characters = list(getattr(self, "characters", None) or scene.characters)
+            for character in characters:
+                tokens = set()
+                anchor = await self.character_anchor(character)
+                if anchor:
+                    tokens.update(t.strip().lower() for t in anchor.split(","))
+                if character.visual_rules:
+                    tokens.update(
+                        t.strip().lower() for t in character.visual_rules.split(",")
+                    )
+                if tokens:
+                    character_tokens.append(tokens)
+
+        return scene_tokens, character_tokens
+
+    async def _trim_to_budget(
+        self, keywords: list[str], request: GenerationRequest
+    ) -> list[str]:
+        """
+        Trim to the token budget while keeping the prompt a picture of something.
+
+        The naive version of this trimmed only from the tail, on the theory that styles
+        and anchors sit at the front and the LLM's action detail is the cheapest thing to
+        lose. Against real data that was wrong: three derived anchors filled the entire
+        budget on their own, so tail-trimming deleted every action keyword and left an
+        accurate character standing in an accurate room doing nothing.
+
+        So action keywords get a reserved share. Order of sacrifice:
+
+        1. action keywords down to the reserve
+        2. character anchors past the first - fewer right-looking people beats several
+        3. the scene anchor
+        4. only then, the reserve itself
+        """
+        budget = self._max_prompt_tokens()
+        if estimate_prompt_tokens(", ".join(keywords)) <= budget:
+            return keywords
+
+        scene_tokens, character_tokens = await self._anchor_token_sets(request)
+        anchor_tokens = set(scene_tokens)
+        for tokens in character_tokens:
+            anchor_tokens |= tokens
+
+        def over() -> bool:
+            return estimate_prompt_tokens(", ".join(keywords)) > budget
+
+        def is_action(kw: str) -> bool:
+            return kw.strip().lower() not in anchor_tokens
+
+        # 1. trim action from the tail, but stop at the reserve
+        reserve = max(1, int(budget * ACTION_BUDGET_RESERVE))
+        while over():
+            action = [kw for kw in keywords if is_action(kw)]
+            if estimate_prompt_tokens(", ".join(action)) <= reserve:
+                break
+            for index in range(len(keywords) - 1, -1, -1):
+                if is_action(keywords[index]):
+                    del keywords[index]
+                    break
+            else:
+                break
+
+        # 2. character anchors past the first, last one first
+        for tokens in reversed(character_tokens[1:]):
+            if not over():
+                break
+            keywords = [kw for kw in keywords if kw.strip().lower() not in tokens]
+            log.debug("prompt_budget.dropped_character_anchor")
+
+        # 3. the scene anchor
+        if over() and scene_tokens:
+            keywords = [kw for kw in keywords if kw.strip().lower() not in scene_tokens]
+            log.debug("prompt_budget.dropped_scene_anchor")
+
+        # 4. the reserve, as a last resort
+        while keywords and over():
+            keywords = keywords[:-1]
+
+        return keywords
+
     @set_processing
     async def generate(self, request: GenerationRequest) -> GenerationResponse:
         self._apply_seed(request)
+        await self._finalize_prompt(request)
 
         response = GenerationResponse(
             request=request,

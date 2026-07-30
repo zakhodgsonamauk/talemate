@@ -89,15 +89,30 @@ DERIVED = (
 )
 
 
+class _StubClient:
+    """Just enough client for the prompt machinery; Prompt.request is stubbed anyway."""
+
+    name = "stub"
+    enabled = True
+    current_status = "idle"
+    decensor_enabled = False
+    optimize_prompt_caching = False
+    max_token_length = 8192
+
+
 @pytest.fixture
 def anchor_agent():
-    """Minimal object carrying AnchorMixin plus the client attribute it needs."""
-    from talemate.agents.visual.anchors import AnchorMixin
+    """
+    A real VisualAgent, not a hand-rolled double.
 
-    class _Agent(AnchorMixin):
-        client = object()
+    The first version of this fixture was a bare class carrying only AnchorMixin, and it
+    passed while the real thing raised AttributeError from a websocket handler: the
+    prompt machinery reads an ActiveAgent context that set_processing establishes, and a
+    stub agent never exercised it. Use the real class.
+    """
+    from talemate.agents.visual.agent import VisualAgent
 
-    return _Agent()
+    return VisualAgent(client=_StubClient())
 
 
 def _stub_request(anchor_text: str):
@@ -296,10 +311,11 @@ SCENE_ANCHOR = "starship interior, deep space, science fiction, worn metal panel
 
 @pytest.fixture
 def styling_agent(kaira):
-    """Agent carrying both mixins, with style templates and derivation stubbed out so
-    the test observes ordering rather than template resolution."""
-    from talemate.agents.visual.anchors import AnchorMixin
-    from talemate.agents.visual.style import StyleMixin
+    """
+    A real VisualAgent with style resolution stubbed, so these tests observe assembly
+    order rather than world-state template lookup.
+    """
+    from talemate.agents.visual.agent import VisualAgent
 
     elmer = Character(
         name="Elmer",
@@ -311,17 +327,14 @@ def styling_agent(kaira):
     scene = Scene()
     scene.visual_anchor = SCENE_ANCHOR
 
-    class _Agent(AnchorMixin, StyleMixin):
-        client = object()
-
-        def __init__(self):
-            self.scene = scene
-            self.characters = [kaira, elmer]
-
+    class _StyledVisualAgent(VisualAgent):
         def style_template(self, vis_type):
             return None
 
-    agent = _Agent()
+    agent = _StyledVisualAgent(client=_StubClient())
+    agent.scene = scene
+    # `characters` shadows the scene generator so the fixture does not need actors.
+    agent.characters = [kaira, elmer]
     agent.kaira = kaira
     agent.elmer = elmer
     return agent
@@ -490,100 +503,293 @@ def test_sanitise_is_case_insensitive():
     ]
 
 
-async def test_apply_styles_sanitises_only_the_llm_part(styling_agent):
-    """The anchors and styles are ours and are already clean. Only the LLM's list gets
-    filtered - and its descriptive prose must survive, because the in-frame matcher
-    reads it and a DESCRIPTIVE backend would ship it."""
-    from talemate.agents.visual.schema import VIS_TYPE
-
-    prompt = _prompt_with_descriptive(
-        "Kaira watches the console. The composition is horizontal and cinematic.",
-        keywords=OBSERVED_BAD_PROMPT,
-    )
-
-    await styling_agent.apply_styles(prompt, VIS_TYPE.SCENE_ILLUSTRATION)
-    positive = prompt.positive_prompt
-
-    assert "horizontal" not in positive
-    assert "corruption" not in positive
-    assert KAIRA_ANCHOR in positive
-    assert SCENE_ANCHOR in positive
-
-    surviving_descriptive = " ".join(
-        part.positive_descriptive for part in prompt.parts if part.positive_descriptive
-    )
-    assert "horizontal and cinematic" in surviving_descriptive
-
-
 # ---------------------------------------------------------------------------
-# T8 — prompt budget
+# _finalize_prompt — the real choke point
+#
+# apply_styles cannot sanitise or budget anything: the node graph builds the
+# VisualPrompt empty, apply_styles adds styles and anchors, and the LLM's keywords are
+# appended afterwards. A filter placed in apply_styles silently does nothing. Found by
+# running a real generation, not by reading the graph.
 # ---------------------------------------------------------------------------
 
 
-def test_estimate_prompt_tokens_counts_words_and_separators():
+def _set_budget(agent, tokens: int) -> None:
+    """Drive the real config knob rather than the module default."""
+    agent.actions["prompt_generation"].config["image_max_tokens"].value = tokens
+
+
+def _assembled_prompt() -> str:
+    """A prompt shaped exactly like the one a live generation produces: styles, scene
+    anchor, both character anchors, then the LLM's keywords."""
+    return ", ".join(
+        [
+            "score_9",
+            "semi-realistic",
+            SCENE_ANCHOR,
+            ELMER_ANCHOR,
+            "head and face rendered completely in shadow",
+            KAIRA_ANCHOR,
+            # the LLM's contribution, verbatim shape from the observed generation
+            "Captain Elmer Farstield",
+            "Kaira",
+            "control room",
+            "console",
+            "corruption",
+            "tense atmosphere",
+            "frozen moment",
+            "characters in action",
+        ]
+    )
+
+
+def _request(prompt: str, vis_type=None):
+    from talemate.agents.visual.schema import GenerationRequest, VIS_TYPE
+
+    return GenerationRequest(
+        prompt=prompt, vis_type=vis_type or VIS_TYPE.SCENE_ILLUSTRATION
+    )
+
+
+async def test_finalize_drops_the_junk_that_reached_a1111(styling_agent):
+    """AC3, against the tokens observed surviving into a live A1111 payload."""
+    request = _request(_assembled_prompt())
+
+    await styling_agent._finalize_prompt(request)
+
+    for dropped in ["corruption", "tense atmosphere", "frozen moment",
+                    "characters in action"]:
+        assert dropped not in request.prompt
+
+
+async def test_finalize_keeps_anchors_and_styles(styling_agent):
+    request = _request(_assembled_prompt())
+
+    await styling_agent._finalize_prompt(request)
+
+    assert SCENE_ANCHOR in request.prompt
+    assert KAIRA_ANCHOR in request.prompt
+    assert "score_9" in request.prompt
+    assert "control room" in request.prompt
+
+
+async def test_finalize_is_idempotent(styling_agent):
+    """AC1 depends on this: running twice must not drift."""
+    first = _request(_assembled_prompt())
+    await styling_agent._finalize_prompt(first)
+
+    second = _request(first.prompt)
+    await styling_agent._finalize_prompt(second)
+
+    assert first.prompt == second.prompt
+
+
+async def test_finalize_trims_from_the_end_when_over_budget(styling_agent):
+    """AC6. Styles and anchors sit at the front, so trimming the tail spends the LLM's
+    action detail and protects identity."""
+    _set_budget(styling_agent, 30)
+    request = _request(_assembled_prompt())
+
+    await styling_agent._finalize_prompt(request)
+
+    assert "score_9" in request.prompt
+    assert SCENE_ANCHOR.split(",")[0] in request.prompt
+    assert "console" not in request.prompt
+
+
+async def test_finalize_leaves_a_prompt_under_budget_alone(styling_agent):
+    request = _request("score_9, " + SCENE_ANCHOR + ", control room, console")
+
+    await styling_agent._finalize_prompt(request)
+
+    assert "console" in request.prompt
+
+
+async def test_finalize_skips_descriptive_backends(styling_agent):
+    """Prose must not be split on commas - that would shred sentences."""
+    from talemate.agents.visual.schema import PROMPT_TYPE
+
+    prose = (
+        "A tense moment in the control room, where the corruption spreads, "
+        "horizontal and cinematic."
+    )
+    request = _request(prose)
+
+    class _DescriptiveBackend:
+        prompt_type = PROMPT_TYPE.DESCRIPTIVE
+
+    styling_agent.backend = _DescriptiveBackend()
+    await styling_agent._finalize_prompt(request)
+
+    assert request.prompt == prose
+
+
+async def test_finalize_drops_the_anchor_of_an_absent_character(styling_agent):
+    """
+    AC5. Anchors are inserted before the LLM's keywords exist, so every active character
+    gets one. The LLM's keywords name who is actually in the shot; anyone unnamed loses
+    their appearance keywords here.
+    """
+    from talemate.context import active_scene
+
+    prompt = ", ".join(
+        [
+            "score_9",
+            SCENE_ANCHOR,
+            ELMER_ANCHOR,
+            "head and face rendered completely in shadow",
+            KAIRA_ANCHOR,
+            # Only Kaira is named - Elmer is off-screen this shot.
+            "Kaira",
+            "darkened bridge",
+        ]
+    )
+    request = _request(prompt)
+
+    token = active_scene.set(styling_agent.scene)
+    try:
+        await styling_agent._finalize_prompt(request)
+    finally:
+        active_scene.reset(token)
+
+    assert KAIRA_ANCHOR in request.prompt
+    assert "human man" not in request.prompt
+    assert "black EVA suit" not in request.prompt
+    assert "head and face rendered completely in shadow" not in request.prompt
+    assert "darkened bridge" in request.prompt
+
+
+async def test_finalize_keeps_both_anchors_when_both_are_named(styling_agent):
+    from talemate.context import active_scene
+
+    prompt = ", ".join(
+        [SCENE_ANCHOR, ELMER_ANCHOR, KAIRA_ANCHOR, "Kaira", "Elmer", "control room"]
+    )
+    request = _request(prompt)
+
+    token = active_scene.set(styling_agent.scene)
+    try:
+        await styling_agent._finalize_prompt(request)
+    finally:
+        active_scene.reset(token)
+
+    assert KAIRA_ANCHOR in request.prompt
+    assert ELMER_ANCHOR in request.prompt
+
+
+async def test_finalize_never_starves_the_action_keywords(styling_agent):
+    """
+    Regression for the failure a live generation exposed: three derived anchors filled
+    the entire budget, tail-trimming removed every action keyword, and the prompt
+    described two accurate people in an accurate room doing nothing at all.
+    """
+    from talemate.context import active_scene
+
+    action = [
+        "control room",
+        "flickering displays",
+        "hand gripping console edge",
+        "back turned",
+        "blue-white screen glow",
+    ]
+    prompt = ", ".join(
+        [
+            "score_9",
+            SCENE_ANCHOR,
+            ELMER_ANCHOR,
+            "head and face rendered completely in shadow",
+            KAIRA_ANCHOR,
+            "Kaira",
+            "Elmer",
+        ]
+        + action
+    )
+    request = _request(prompt)
+
+    # Tight enough that the anchors alone would consume everything.
+    _set_budget(styling_agent, 60)
+
+    token = active_scene.set(styling_agent.scene)
+    try:
+        await styling_agent._finalize_prompt(request)
+    finally:
+        active_scene.reset(token)
+
+    surviving_action = [kw for kw in action if kw in request.prompt]
+    assert surviving_action, "every action keyword was trimmed away"
+
     from talemate.agents.visual.style import estimate_prompt_tokens
 
-    assert estimate_prompt_tokens("") == 0
-    # 3 words + 1 comma separator
-    assert estimate_prompt_tokens("violet skin, tall") == 4
+    assert estimate_prompt_tokens(request.prompt) <= 60
 
 
-async def test_budget_drops_llm_keywords_first(styling_agent, monkeypatch):
-    """AC6. When something has to go, the LLM's action keywords go before the anchors -
-    a wrong-looking character is worse than a vaguer action."""
-    from talemate.agents.visual import style as style_module
-    from talemate.agents.visual.schema import VIS_TYPE
+async def test_finalize_drops_extra_anchors_before_the_reserve(styling_agent):
+    """The second character's appearance is sacrificed before the action reserve is."""
+    from talemate.context import active_scene
 
-    monkeypatch.setattr(style_module, "DEFAULT_MAX_PROMPT_TOKENS", 20)
+    prompt = ", ".join(
+        [
+            SCENE_ANCHOR,
+            ELMER_ANCHOR,
+            KAIRA_ANCHOR,
+            "Kaira",
+            "Elmer",
+            "hand gripping console edge",
+            "blue-white screen glow",
+        ]
+    )
+    request = _request(prompt)
+    _set_budget(styling_agent, 45)
 
-    prompt = _prompt_with_descriptive(
-        "Kaira watches the console while Elmer leans over it.",
-        keywords=[f"filler keyword {n}" for n in range(40)],
+    token = active_scene.set(styling_agent.scene)
+    try:
+        await styling_agent._finalize_prompt(request)
+    finally:
+        active_scene.reset(token)
+
+    assert "hand gripping console edge" in request.prompt
+    # First character anchor survives; the second is gone.
+    assert ("alien woman" in request.prompt) != ("human man" in request.prompt)
+
+
+def test_sanitise_does_not_strip_the_style_templates_own_tags():
+    """
+    The sanitiser runs over the whole assembled prompt, styles included. Banning a
+    rendering word the configured art style emits would delete that style's own tags -
+    "Semi-Real (Pony)" ships exactly these.
+    """
+    from talemate.agents.visual.style import sanitise_keywords
+
+    style_tags = [
+        "score_9",
+        "score_8_up",
+        "score_7_up",
+        "semi-realistic",
+        "detailed painterly rendering",
+        "realistic anatomy",
+        "cinematic lighting",
+        "sharp focus",
+    ]
+
+    assert sanitise_keywords(list(style_tags)) == style_tags
+
+
+def test_sanitise_drops_category_words_observed_in_live_output():
+    """Second-wave tuning: the LLM names the category instead of the detail."""
+    from talemate.agents.visual.style import sanitise_keywords
+
+    kept = sanitise_keywords(
+        [
+            "posture",
+            "expression",
+            "movement",
+            "lighting",
+            "painterly",
+            "frustration",
+            "specific moment",
+            "shoulders hunched",
+            "lit from below",
+            "harsh shadows",
+        ]
     )
 
-    await styling_agent.apply_styles(prompt, VIS_TYPE.SCENE_ILLUSTRATION)
-    positive = prompt.positive_prompt
-
-    assert KAIRA_ANCHOR.split(",")[0] in positive
-    assert "filler keyword 39" not in positive
-
-
-async def test_budget_never_drops_the_first_character_anchor(
-    styling_agent, monkeypatch
-):
-    """Even at an absurd budget the subject keeps its identity tokens. An image of the
-    wrong person is a worse failure than an over-long prompt."""
-    from talemate.agents.visual import style as style_module
-    from talemate.agents.visual.schema import VIS_TYPE
-
-    monkeypatch.setattr(style_module, "DEFAULT_MAX_PROMPT_TOKENS", 1)
-
-    prompt = _prompt_with_descriptive(
-        "Kaira watches the console while Elmer leans over it.",
-        keywords=["sterile control room"],
-    )
-
-    await styling_agent.apply_styles(prompt, VIS_TYPE.SCENE_ILLUSTRATION)
-    positive = prompt.positive_prompt
-
-    assert KAIRA_ANCHOR in positive
-    assert ELMER_ANCHOR not in positive, "second anchor should have been dropped"
-    assert SCENE_ANCHOR not in positive, "scene anchor should have been dropped"
-
-
-async def test_budget_leaves_a_prompt_under_budget_alone(styling_agent):
-    from talemate.agents.visual.schema import VIS_TYPE
-
-    prompt = _prompt_with_descriptive(
-        "Kaira watches the console while Elmer leans over it.",
-        keywords=["sterile control room", "flickering displays"],
-    )
-
-    await styling_agent.apply_styles(prompt, VIS_TYPE.SCENE_ILLUSTRATION)
-    positive = prompt.positive_prompt
-
-    assert "sterile control room" in positive
-    assert "flickering displays" in positive
-    assert KAIRA_ANCHOR in positive
-    assert ELMER_ANCHOR in positive
-    assert SCENE_ANCHOR in positive
+    assert kept == ["shoulders hunched", "lit from below", "harsh shadows"]

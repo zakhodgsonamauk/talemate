@@ -26,10 +26,14 @@ VIS_TYPES_WITHOUT_CAST = {
 }
 
 
-# SDXL's text encoder attends to 77 tokens per chunk. A1111 will happily send more, but
-# attention falls off sharply past the first chunk or two, so tokens beyond this are
-# spent rather than used. Two chunks' worth, minus room for the BOS/EOS pair.
-DEFAULT_MAX_PROMPT_TOKENS = 150
+# SDXL's text encoder works in 77-token chunks; A1111 concatenates the embeddings of
+# several, with attention thinning as they go.
+#
+# Started at 150 (two chunks). Real derived anchors are wordier than the template's
+# "10-14 keywords" suggests - phrases like "indigo hair pulled back in a secure style" -
+# and three of them plus the style tags hit ~155 on their own, leaving nothing for the
+# action. 250 fits the anchors plus a real description of the moment.
+DEFAULT_MAX_PROMPT_TOKENS = 250
 
 _WORD_RE = re.compile(r"[\w'-]+")
 
@@ -141,6 +145,32 @@ BANNED_ABSTRACT_KEYWORDS = {
     "narrative",
     "storytelling",
     "visual storytelling",
+    # Second wave, observed in live generations after the first pass shipped. The LLM
+    # names the *category* of a visual detail instead of the detail: "posture" where it
+    # should say "shoulders hunched", "lighting" where it should say "lit from below".
+    "posture",
+    "expression",
+    "expressions",
+    "movement",
+    "physical actions",
+    "lighting",
+    "specific moment",
+    "frustration",
+    "realization",
+    "determination",
+    "concentration",
+    "concern",
+    "urgency",
+    "unease",
+    "dread",
+    "awe",
+    # Rendering words the LLM adds on its own. Deliberately only ones the style
+    # templates do not themselves emit - the sanitiser runs over the whole assembled
+    # prompt, so banning "semi-realistic" or "masterpiece" here would strip the
+    # configured art style's own tags.
+    "painterly",
+    "rendered finish",
+    "painterly finish",
 }
 
 BANNED_KEYWORDS = BANNED_FORMAT_KEYWORDS | BANNED_ABSTRACT_KEYWORDS
@@ -320,16 +350,15 @@ class StyleMixin:
         Async because anchor derivation may need one LLM call the first time a subject
         is seen. Every call after that is cached and does no I/O.
         """
-        # Snapshot before we insert anything. These are the LLM's parts, and knowing
-        # exactly which they are is what lets the sanitiser (T7) touch only them.
-        llm_parts = list(prompt.parts)
+        # Parts already present, if any. In the shipped node graph there are none: the
+        # Prompt node is constructed empty and the LLM's keywords are appended to the
+        # part list *after* this runs. Sanitising and budget enforcement therefore
+        # cannot happen here - they run in GenerationMixin._finalize_prompt, once the
+        # prompt is actually complete. Verified against a live generation, not read off
+        # the graph.
+        existing_parts = list(prompt.parts)
 
-        # Only the LLM's keyword lists get filtered. positive_descriptive is left alone
-        # - the in-frame matcher reads it, and a DESCRIPTIVE backend ships it verbatim.
-        for part in llm_parts:
-            part.positive_keywords_raw = sanitise_keywords(part.positive_keywords_raw)
-
-        anchor_parts = await self._insert_anchors(prompt, vis_type, llm_parts)
+        anchor_parts = await self._insert_anchors(prompt, vis_type, existing_parts)
 
         template_art_style: VisualStyle | None = self.style_template(
             VIS_TYPE.UNSPECIFIED
@@ -366,60 +395,9 @@ class StyleMixin:
                 ),
             )
 
-        self._enforce_prompt_budget(prompt, llm_parts, anchor_parts)
+        log.debug("apply_styles.anchors", count=len(anchor_parts.ordered))
 
         return prompt
-
-    def _enforce_prompt_budget(
-        self,
-        prompt: VisualPrompt,
-        llm_parts: list[VisualPromptPart],
-        anchor_parts: "AnchorParts",
-    ) -> None:
-        """
-        Trim the positive prompt back to the configured token budget.
-
-        Drop order, cheapest loss first:
-
-        1. the LLM's action keywords - a vaguer action still renders
-        2. character anchors past the first - fewer right-looking people beats several
-           wrong-looking ones
-        3. the scene anchor
-
-        The style parts and the first character anchor are never trimmed. An image of
-        the wrong person in the wrong style is not a smaller failure than a long prompt.
-        """
-        budget = self._max_prompt_tokens()
-        if estimate_prompt_tokens(prompt.positive_prompt) <= budget:
-            return
-
-        scene_part = anchor_parts.scene
-        character_parts = anchor_parts.characters
-
-        # 1. LLM keywords
-        for part in llm_parts:
-            while part.positive_keywords_raw and (
-                estimate_prompt_tokens(prompt.positive_prompt) > budget
-            ):
-                part.positive_keywords_raw = part.positive_keywords_raw[:-1]
-
-        # 2. extra character anchors, last first - character_parts[0] is protected
-        for part in reversed(character_parts[1:]):
-            if estimate_prompt_tokens(prompt.positive_prompt) <= budget:
-                break
-            part.positive_keywords_raw = []
-
-        # 3. the scene anchor
-        if scene_part and estimate_prompt_tokens(prompt.positive_prompt) > budget:
-            scene_part.positive_keywords_raw = []
-
-        remaining = estimate_prompt_tokens(prompt.positive_prompt)
-        log.debug(
-            "prompt_budget.enforced",
-            budget=budget,
-            tokens=remaining,
-            over_budget=remaining > budget,
-        )
 
     def _max_prompt_tokens(self) -> int:
         """

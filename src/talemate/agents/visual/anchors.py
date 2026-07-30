@@ -19,6 +19,7 @@ import re
 
 import structlog
 
+from talemate.agents.base import set_processing
 from talemate.prompts import Prompt
 from talemate.prompts.response import AnchorExtractor, ResponseSpec
 
@@ -181,7 +182,16 @@ class AnchorMixin:
     Mixed into the visual agent, which supplies `self.client`.
     """
 
+    @set_processing
     async def _derive_anchor(self, anchor_mode: str, **vars) -> str | None:
+        """
+        Ask the LLM for an anchor.
+
+        set_processing is not decoration for its own sake: it establishes the
+        ActiveAgent context that the prompt machinery reads. Without it this raises
+        AttributeError on a None context when called from a websocket handler, where no
+        agent context exists yet.
+        """
         _, extracted = await Prompt.request(
             "visual.derive-visual-anchor",
             self.client,
