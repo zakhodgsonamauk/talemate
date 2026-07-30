@@ -262,6 +262,70 @@ def strip_wardrobe_tokens(anchor: str | None) -> str | None:
     return ", ".join(kept)
 
 
+# A leading clause that talks about the character as a game entity rather than as a thing
+# to draw. "The user controlled character - always has..." reached SDXL verbatim.
+_RULE_META_PREFIX = re.compile(
+    r"^[^-–—:]{0,80}\b(character|player|user|npc|controlled|protagonist)\b"
+    r"[^-–—:]{0,80}[-–—:]\s*",
+    re.IGNORECASE,
+)
+
+# Words that add nothing to an image prompt. Negations are deliberately absent - see
+# condense_visual_rule.
+_RULE_FILLER = {
+    "always",
+    "must",
+    "should",
+    "will",
+    "is",
+    "are",
+    "has",
+    "have",
+    "be",
+    "being",
+    "the",
+    "a",
+    "an",
+    "their",
+    "its",
+    "rendered",
+    "depicted",
+    "drawn",
+    "shown",
+    "completely",
+    "entirely",
+    "fully",
+    "totally",
+    "in",
+}
+
+_NEGATION_WORDS = ("never", "not", "no ", "without", "avoid", "don't", "cannot")
+
+
+def condense_visual_rule(rule: str | None) -> str | None:
+    """
+    Reduce an authored visual rule to something a diffusion model can use.
+
+    `visual_rules` is free prose a user typed, and it went to SDXL untouched - meta
+    language, filler and all. That is both noise and expensive: one observed rule spent
+    13 of a 77-token budget saying almost nothing.
+
+    Negated rules are returned with only the meta prefix removed. Dropping filler from
+    "never show her left hand" risks inverting it, and an inverted rule is a much worse
+    failure than a long one.
+    """
+    if not rule or not rule.strip():
+        return rule
+
+    text = _RULE_META_PREFIX.sub("", rule.strip()).strip()
+
+    if any(word in text.lower() for word in _NEGATION_WORDS):
+        return text
+
+    words = [w for w in text.split() if w.lower().strip(",") not in _RULE_FILLER]
+    return " ".join(words) if words else text
+
+
 def normalize_location_key(location: str | None) -> str | None:
     """
     Cache key for a location.

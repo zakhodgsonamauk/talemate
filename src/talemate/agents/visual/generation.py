@@ -1,4 +1,5 @@
 import asyncio
+import re
 import structlog
 from typing import Callable
 
@@ -200,6 +201,7 @@ class GenerationMixin:
         keywords = sanitise_keywords(keywords)
         keywords = await self._drop_absent_character_anchors(keywords, request)
         keywords = await self._suppress_stale_wardrobe(keywords, request)
+        keywords = await self._drop_duplicate_setting(keywords, request)
         keywords = await self._trim_to_budget(keywords, request)
 
         request.prompt = ", ".join(dict.fromkeys(keywords))
@@ -309,6 +311,64 @@ class GenerationMixin:
                 dropped=len(keywords) - len(kept),
                 reason="scene supplied its own clothing or state",
             )
+        return kept
+
+    async def _drop_duplicate_setting(
+        self, keywords: list[str], request: GenerationRequest
+    ) -> list[str]:
+        """
+        Drop the LLM's own setting keywords once a location anchor has supplied them.
+
+        The setting was being described twice - "control room, spaceship interior, ..."
+        from the anchor and "Starship bridge, viewport, sterile metal" from the LLM - in
+        words that were not duplicates, so dedupe never caught them, and that sometimes
+        disagreed outright. The anchor is the stable version, so it wins.
+
+        Only removes tokens that are *about* the setting. Anything describing the action
+        or the moment survives, since that is what the LLM is actually for.
+        """
+        scene = active_scene.get()
+        if not scene:
+            return keywords
+
+        scene_tokens, _ = await self._anchor_token_sets(request)
+        if not scene_tokens:
+            return keywords
+
+        # Distinctive words the anchor already established. A later keyword built from
+        # the same vocabulary is re-describing the same place.
+        anchor_words = {
+            word
+            for token in scene_tokens
+            for word in re.findall(r"[\w'-]+", token.lower())
+            if len(word) > 3
+        }
+        if not anchor_words:
+            return keywords
+
+        kept, dropped = [], []
+        for keyword in keywords:
+            lowered = keyword.strip().lower()
+            if lowered in scene_tokens:
+                kept.append(keyword)
+                continue
+            words = {w for w in re.findall(r"[\w'-]+", lowered) if len(w) > 3}
+            if not words:
+                kept.append(keyword)
+                continue
+
+            # Majority overlap rather than a strict subset. "Starship bridge" against an
+            # anchor holding "starship interior" is the same place named again, and a
+            # subset test misses it because "bridge" is a new word. An action phrase like
+            # "hand gripping console edge" only glances off the anchor and survives.
+            overlap = len(words & anchor_words) / len(words)
+            if overlap >= 0.5:
+                dropped.append(keyword)
+            else:
+                kept.append(keyword)
+
+        if dropped:
+            log.debug("drop_duplicate_setting", dropped=dropped)
         return kept
 
     async def _anchor_token_sets(

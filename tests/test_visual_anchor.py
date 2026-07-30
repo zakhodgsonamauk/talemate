@@ -357,9 +357,10 @@ async def test_apply_styles_inserts_anchors_before_llm_keywords(styling_agent):
     await styling_agent.apply_styles(prompt, VIS_TYPE.SCENE_ILLUSTRATION)
     positive = prompt.positive_prompt
 
+    # Only the primary subject is described - see the single-subject tests. What this
+    # asserts is ordering: setting, then subject, then the LLM's action keywords.
     assert positive.index(SCENE_ANCHOR) < positive.index(KAIRA_ANCHOR)
     assert positive.index(KAIRA_ANCHOR) < positive.index("sterile control room")
-    assert positive.index(ELMER_ANCHOR) < positive.index("sterile control room")
 
 
 async def test_apply_styles_is_byte_stable_across_calls(styling_agent):
@@ -388,7 +389,12 @@ async def test_apply_styles_carries_visual_rules(styling_agent):
 
     await styling_agent.apply_styles(prompt, VIS_TYPE.SCENE_ILLUSTRATION)
 
-    assert "head and face rendered completely in shadow" in prompt.positive_prompt
+    # Condensed, not verbatim: "rendered completely" is filler a diffusion model cannot
+    # use. What must survive is the instruction itself.
+    positive = prompt.positive_prompt
+    assert "shadow" in positive
+    assert "face" in positive
+    assert "rendered completely" not in positive
 
 
 async def test_apply_styles_omits_off_screen_characters(styling_agent):
@@ -1334,3 +1340,101 @@ async def test_scene_anchor_prefers_location_entry_over_the_legacy_field(anchor_
 
     assert result == "red desert, dust storm, alien sky"
     assert stub.call_count == 1
+
+
+# ===========================================================================
+# Prompt legibility
+#
+# The anchors were stable but the prompt was not something SDXL could parse: two full
+# character descriptions in one flat prompt have no way to bind attributes to subjects,
+# so "human male" and "alien woman" blend. Observed live at 45 keywords / ~155 tokens,
+# with the setting stated twice and authored prose reaching the model verbatim.
+# ===========================================================================
+
+
+def test_condense_visual_rule_strips_meta_prose():
+    """"The user controlled character" is meaningless to a diffusion model and cost 13
+    tokens of a 77-token budget."""
+    from talemate.agents.visual.anchors import condense_visual_rule
+
+    result = condense_visual_rule(
+        "The user controlled character - always has the head / face rendered completely in shadows"
+    )
+
+    assert "user controlled character" not in result
+    assert "always" not in result
+    assert "shadow" in result
+    assert len(result.split()) <= 6
+
+
+def test_condense_visual_rule_preserves_negations_verbatim():
+    """Stripping filler from a negated rule could invert it. Left alone instead - a
+    slightly long rule is survivable, an inverted one is not."""
+    from talemate.agents.visual.anchors import condense_visual_rule
+
+    rule = "Never show her left hand, it is always gloved"
+    result = condense_visual_rule(rule)
+
+    assert "never" in result.lower()
+    assert "left hand" in result
+
+
+def test_condense_visual_rule_leaves_keyword_style_rules_alone():
+    from talemate.agents.visual.anchors import condense_visual_rule
+
+    assert condense_visual_rule("cybernetic left arm") == "cybernetic left arm"
+
+
+async def test_only_the_primary_character_gets_a_full_anchor(styling_agent):
+    """
+    A flat prompt cannot bind attributes to two subjects. One full identity, and the
+    others counted rather than described, so the model is told there are two people
+    without being told two contradictory things about one.
+    """
+    from talemate.agents.visual.schema import VIS_TYPE
+
+    prompt = _prompt_with_descriptive(
+        "Kaira watches the console while Elmer leans over it.",
+        keywords=["control room"],
+    )
+    await styling_agent.apply_styles(prompt, VIS_TYPE.SCENE_ILLUSTRATION)
+    positive = prompt.positive_prompt
+
+    anchored = [a for a in (KAIRA_ANCHOR, ELMER_ANCHOR) if a.split(",")[0] in positive]
+    assert len(anchored) == 1, f"expected one anchored subject, got {anchored}"
+    assert "second figure" in positive
+
+
+async def test_single_character_scene_gets_no_extra_figure_token(styling_agent):
+    from talemate.agents.visual.schema import VIS_TYPE
+
+    prompt = _prompt_with_descriptive(
+        "Kaira stands alone on the darkened bridge.", keywords=["control room"]
+    )
+    await styling_agent.apply_styles(prompt, VIS_TYPE.SCENE_ILLUSTRATION)
+
+    assert "second figure" not in prompt.positive_prompt
+
+
+async def test_llm_setting_keywords_are_dropped_when_an_anchor_supplied_them(
+    styling_agent,
+):
+    """The setting was being described twice - once by the anchor, once by the LLM, in
+    words that disagreed ("control room" against "Starship bridge")."""
+    from talemate.context import active_scene
+
+    prompt = ", ".join(
+        [SCENE_ANCHOR, KAIRA_ANCHOR, "Kaira", "starship bridge", "viewport",
+         "hand gripping console edge"]
+    )
+    request = _request(prompt)
+
+    token = active_scene.set(styling_agent.scene)
+    try:
+        await styling_agent._finalize_prompt(request)
+    finally:
+        active_scene.reset(token)
+
+    assert "starship bridge" not in request.prompt.lower()
+    assert "hand gripping console edge" in request.prompt
+    assert SCENE_ANCHOR.split(",")[0] in request.prompt

@@ -59,7 +59,8 @@ height, and distinctive anatomy.
 accessories. What someone wears changes between scenes; this list does not. Clothing is
 supplied separately, per image, and a garment named here would contradict it.
 
-Target 8 to 12 keywords.
+Target 5 to 8 keywords. The whole prompt must fit one 77-token chunk, and this
+is only one part of it - prefer the traits that make them recognisable over completeness.
 {% elif anchor_mode == "wardrobe" %}
 Extract a compact, comma-delimited keyword list describing what {{ character.name }} is
 wearing right now, and any visible physical condition they are in.
@@ -73,7 +74,7 @@ anatomy. Those are supplied separately and would be duplicated here.
 
 If the source material says they are undressed, say so plainly and list nothing else.
 
-Target 4 to 10 keywords.
+Target 3 to 6 keywords.
 {% else %}
 Extract a compact, comma-delimited keyword list describing where this story takes
 place. This list is reused unchanged in every image of the scene, so it must describe
@@ -82,7 +83,8 @@ only what is permanently true of the setting.
 Include: the concrete location type, the genre, the dominant materials or architecture,
 and the dominant colour or lighting palette.
 
-Target 8 to 10 keywords.
+Target 4 to 6 keywords. The whole prompt must fit one 77-token chunk. Name the place
+and its genre; do not inventory its contents.
 {% endif %}
 
 Rules:

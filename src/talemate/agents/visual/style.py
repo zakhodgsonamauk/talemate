@@ -3,7 +3,7 @@ import re
 
 import structlog
 
-from .anchors import characters_in_frame
+from .anchors import characters_in_frame, condense_visual_rule
 from .schema import VIS_TYPE, VisualPrompt, VisualPromptPart
 
 from talemate.agents.base import AgentAction, AgentActionConfig, AgentActionNote
@@ -29,11 +29,11 @@ VIS_TYPES_WITHOUT_CAST = {
 # SDXL's text encoder works in 77-token chunks; A1111 concatenates the embeddings of
 # several, with attention thinning as they go.
 #
-# Started at 150 (two chunks). Real derived anchors are wordier than the template's
-# "10-14 keywords" suggests - phrases like "indigo hair pulled back in a secure style" -
-# and three of them plus the style tags hit ~155 on their own, leaving nothing for the
-# action. 250 fits the anchors plus a real description of the moment.
-DEFAULT_MAX_PROMPT_TOKENS = 250
+# One chunk. Went 150 -> 250 to stop anchors starving the action, then back to 77 once a
+# real prompt was read end to end: at 155 tokens roughly half of it was past the point
+# where the encoder meaningfully attends, so the extra length bought nothing and made the
+# prompt harder to reason about. Fitting one chunk means the prompt means what it says.
+DEFAULT_MAX_PROMPT_TOKENS = 77
 
 _WORD_RE = re.compile(r"[\w'-]+")
 
@@ -142,6 +142,10 @@ BANNED_ABSTRACT_KEYWORDS = {
     "drama",
     "dramatic",
     "mood",
+    "environment",
+    "setting",
+    "surroundings",
+    "background",
     "narrative",
     "storytelling",
     "visual storytelling",
@@ -455,7 +459,14 @@ class StyleMixin:
 
         if vis_type not in VIS_TYPES_WITHOUT_CAST:
             characters = list(getattr(self, "characters", None) or scene.characters)
-            for character in characters_in_frame(prompt, characters):
+            in_frame = characters_in_frame(prompt, characters)
+
+            # Only the primary subject is described. A flat prompt has no way to bind
+            # attributes to separate people, so "human male" and "alien woman" together
+            # do not produce two characters - they produce one blended one. The others
+            # are counted instead, which tells the model how many people are present
+            # without telling it contradictory things about any of them.
+            for character in in_frame[:1]:
                 keywords = []
 
                 # Before reading the anchor, not after: if the story has stated a lasting
@@ -474,14 +485,27 @@ class StyleMixin:
                     keywords.extend(split_anchor(wardrobe))
 
                 # RC4: a rule labelled HARD was being handed to the prompt-writing LLM
-                # and silently dropped in the keyword compression. Emit it directly.
+                # and silently dropped in the keyword compression. Emit it directly,
+                # condensed - it is authored prose, not keywords.
                 if character.visual_rules:
-                    keywords.extend(split_anchor(character.visual_rules))
+                    condensed = condense_visual_rule(character.visual_rules)
+                    if condensed:
+                        keywords.extend(split_anchor(condensed))
 
                 if keywords:
                     result.characters.append(
                         VisualPromptPart(positive_keywords_raw=keywords)
                     )
+
+            extra = len(in_frame) - 1
+            if extra > 0:
+                result.characters.append(
+                    VisualPromptPart(
+                        positive_keywords_raw=[
+                            "a second figure" if extra == 1 else f"{extra} other figures"
+                        ]
+                    )
+                )
 
         ordered = result.ordered
         if not ordered:
