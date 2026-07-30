@@ -90,7 +90,13 @@ curl.exe -L -o "$dir\koboldcpp.exe" `
 
 ## 2. Get an image model
 
-**SDXL Turbo** is the recommended default: it generates usable images in ~6 steps
+!!! info "Current setup uses CyberRealisticPony V9, not SDXL Turbo"
+    The active configuration is the **uncensored** stack — see
+    [Uncensored model stack](uncensored-models.md). The SDXL Turbo instructions
+    below still work and remain the fastest option; keep them as the fallback and
+    as the reference for a *censored* baseline.
+
+**SDXL Turbo** is the fast default: it generates usable images in ~6 steps
 instead of ~40, which is what makes inline generation tolerable mid-story.
 
 ```powershell

@@ -58,6 +58,13 @@ These do not conflict — but they can be *orphaned* by upstream refactors, so t
 
 - `.git/info/exclude` — holds `.idea/`. Upstream's `.gitignore` doesn't cover it,
   and we don't want to modify a tracked file just for editor noise.
+- `templates/world-state/fork-styles.yaml` — our visual-style group, currently the
+  `Photoreal (Pony)` style that supplies the Pony `score_*` tags. A **new** file in
+  that directory is genuinely gitignored; see the warning below before touching an
+  existing one.
+- `templates/llm-prompt/user/hf.co__TheDrummer__Rocinante-X-12B-v1-GGUF_Q4_K_M.jinja2`
+  — copy of `std/Mistral.jinja2`, which is how Talemate pins a prompt template to a
+  model. Without it the client silently falls back to `default.jinja2`.
 - `.venv/Lib/site-packages/zzz_torchcodec_dll_fix.pth` — adds `torch/lib` and
   `.venv/Scripts` to the Windows DLL search path at interpreter startup. Without
   it `sentence_transformers` fails to import (torchcodec cannot resolve its
@@ -116,6 +123,28 @@ git checkout -- scenes/ tests/
 ```
 
 Worth remembering when reviewing a diff — image test-runs look like source changes.
+
+## Gitignore does not mean untracked
+
+`.gitignore:23` lists `templates/world-state/*.yaml`, which reads as "all user data".
+It isn't — these were committed by upstream *before* that rule was added, and
+gitignore never untracks an existing file:
+
+```
+templates/world-state/visual-styles.yaml      # TRACKED - editing = upstream diff
+templates/world-state/talemate/default.yaml   # TRACKED
+templates/world-state/talemate/human.yaml     # TRACKED
+```
+
+**New** `.yaml` files in that directory *are* ignored, so add a new group file rather
+than editing `visual-styles.yaml`. Always check first:
+
+```bash
+git ls-files templates/world-state/
+git check-ignore -v <path>
+```
+
+The same caution applies anywhere a broad ignore pattern overlaps committed files.
 
 ## Do not touch
 
