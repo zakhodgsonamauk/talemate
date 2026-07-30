@@ -1438,3 +1438,72 @@ async def test_llm_setting_keywords_are_dropped_when_an_anchor_supplied_them(
     assert "starship bridge" not in request.prompt.lower()
     assert "hand gripping console edge" in request.prompt
     assert SCENE_ANCHOR.split(",")[0] in request.prompt
+
+
+def test_configured_budget_matches_the_module_default():
+    """
+    The config value is what applies; the module constant is only a fallback. They drifted
+    once - the default was lowered to 77 while config still said 250, so the change did
+    nothing and a 104-token prompt shipped.
+    """
+    from talemate.agents.visual.agent import VisualAgent
+    from talemate.agents.visual.style import DEFAULT_MAX_PROMPT_TOKENS
+
+    actions = VisualAgent.init_actions()
+    configured = actions["prompt_generation"].config["image_max_tokens"].value
+
+    assert configured == DEFAULT_MAX_PROMPT_TOKENS
+
+
+def test_normalize_keyword_separators_splits_underscore_tokens():
+    """
+    The LLM sometimes emits "starship_bridge, naked_violet_skin, moment_of_tension".
+    Underscores are word characters, so every comparison in the pipeline - blocklist,
+    name matching, duplicate-setting overlap - silently fails on them.
+    """
+    from talemate.agents.visual.style import normalize_keyword
+
+    assert normalize_keyword("starship_bridge") == "starship bridge"
+    assert normalize_keyword("moment_of_tension") == "moment of tension"
+    assert normalize_keyword("score_9") == "score_9"
+    assert normalize_keyword("score_8_up") == "score_8_up"
+    assert normalize_keyword("deep violet skin") == "deep violet skin"
+
+
+async def test_absent_character_pruning_is_skipped_when_no_name_appears(styling_agent):
+    """
+    Regression for a bad failure mode: the LLM produced keywords naming nobody, every
+    character read as off-screen, and both identity anchors were stripped - leaving a
+    prompt with no subject at all. Absent evidence is not evidence of absence.
+    """
+    from talemate.context import active_scene
+
+    prompt = ", ".join(
+        [SCENE_ANCHOR, KAIRA_ANCHOR, "console", "red glow", "leaning forward"]
+    )
+    request = _request(prompt)
+
+    token = active_scene.set(styling_agent.scene)
+    try:
+        await styling_agent._finalize_prompt(request)
+    finally:
+        active_scene.reset(token)
+
+    assert "alien woman" in request.prompt
+
+
+async def test_prompt_is_trimmed_to_the_configured_budget(styling_agent):
+    from talemate.context import active_scene
+    from talemate.agents.visual.style import estimate_prompt_tokens
+
+    filler = [f"filler detail {n}" for n in range(40)]
+    request = _request(", ".join([SCENE_ANCHOR, KAIRA_ANCHOR, "Kaira"] + filler))
+
+    token = active_scene.set(styling_agent.scene)
+    try:
+        await styling_agent._finalize_prompt(request)
+    finally:
+        active_scene.reset(token)
+
+    budget = styling_agent.actions["prompt_generation"].config["image_max_tokens"].value
+    assert estimate_prompt_tokens(request.prompt) <= budget

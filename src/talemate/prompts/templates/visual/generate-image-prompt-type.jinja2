@@ -5,7 +5,14 @@ You will provde two versions of the prompt:
 
 For the keyword prompt, every keyword must name something a camera could photograph - an object, a material, a surface, a light source, a posture, a physical action. Keywords naming plot points, mental states, emotions as bare nouns, image format, or art style will be discarded before generation, so spending keywords on them wastes the prompt.
 
-Aim for 20 to 30 keywords. The image model's text encoder stops attending part-way through a long prompt, so keywords past that point have no effect on the image.
+Write keywords as ordinary words separated by spaces - "starship bridge", not
+"starship_bridge". Underscore-joined keywords are treated as single unknown words.
+
+Do not describe the setting or any character's appearance. Both are supplied
+automatically and repeating them in different words contradicts what is already there.
+Describe what is happening: posture, gesture, where people are, what the light is doing.
+
+Aim for 12 to 18 keywords. The image model's text encoder stops attending part-way through a long prompt, so keywords past that point have no effect on the image.
 
 You must provide the keyword prompt inside <KEYWORDS></KEYWORDS> tags.
 You must provide the descriptive prompt insice <DESCRIPTIVE></DESCRIPTIVE> tags.

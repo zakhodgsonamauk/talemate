@@ -52,6 +52,21 @@ def estimate_prompt_tokens(text: str) -> int:
     return len(_WORD_RE.findall(text)) + text.count(",")
 
 
+# Underscore-joined keywords the LLM sometimes produces: "starship_bridge",
+# "moment_of_tension". Underscores are word characters, so every comparison downstream -
+# blocklist, character-name matching, duplicate-setting overlap - silently misses them.
+# Booru-style score tags are the deliberate exception; those must stay as written.
+_KEEP_UNDERSCORES = re.compile(r"^(score_\d+(_up)?|source_\w+|rating_\w+)$", re.I)
+
+
+def normalize_keyword(keyword: str) -> str:
+    """Turn underscore-joined keywords into ordinary words, leaving score tags alone."""
+    stripped = keyword.strip()
+    if "_" not in stripped or _KEEP_UNDERSCORES.match(stripped):
+        return stripped
+    return stripped.replace("_", " ")
+
+
 def split_anchor(anchor: str) -> list[str]:
     """Comma-delimited anchor string to keyword list, blanks dropped."""
     return [token.strip() for token in anchor.split(",") if token.strip()]

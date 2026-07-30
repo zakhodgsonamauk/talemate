@@ -244,7 +244,10 @@ class VisualAgent(
                     ),
                     "image_max_tokens": AgentActionConfig(
                         type="number",
-                        value=250,
+                        # Must match DEFAULT_MAX_PROMPT_TOKENS in style.py. This value is
+                        # what actually applies - the module constant is only the fallback
+                        # when config cannot be resolved.
+                        value=77,
                         label="Max. Image Prompt Length",
                         description="Token budget for the assembled image prompt itself. Distinct from the setting above, which limits how much the LLM may write while composing it. An SDXL text encoder works in 77-token chunks and attends less to each successive one, so very long prompts spend tokens without using them.",
                         note="Over budget, action keywords go first - but a share is always held back so the image still depicts something happening. After that, extra character appearances, then the setting. The style and the first character's appearance are never dropped.",

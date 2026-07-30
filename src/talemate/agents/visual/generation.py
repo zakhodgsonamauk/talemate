@@ -29,6 +29,7 @@ from .schema import (
 from .style import (
     VIS_TYPES_WITHOUT_CAST,
     estimate_prompt_tokens,
+    normalize_keyword,
     sanitise_keywords,
 )
 from .exceptions import ImageEditNotAvailableError, TextToImageNotAvailableError
@@ -196,7 +197,9 @@ class GenerationMixin:
             return
 
         original = request.prompt
-        keywords = [kw.strip() for kw in original.split(",") if kw.strip()]
+        keywords = [
+            normalize_keyword(kw) for kw in original.split(",") if kw.strip()
+        ]
 
         keywords = sanitise_keywords(keywords)
         keywords = await self._drop_absent_character_anchors(keywords, request)
@@ -236,6 +239,14 @@ class GenerationMixin:
             return keywords
 
         haystack = ", ".join(keywords)
+
+        # If the prompt names nobody at all, there is no evidence to act on. Pruning here
+        # would strip every anchor and leave an image with no subject - which is what
+        # happened when the LLM returned keywords mentioning no names.
+        if not any(_mention_count(haystack, c.name) for c in characters):
+            log.debug("drop_absent_character_anchors.no_names_in_prompt")
+            return keywords
+
         surviving = list(keywords)
 
         for character in characters:
