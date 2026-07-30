@@ -1,6 +1,7 @@
 import pydantic
 import structlog
 
+import talemate.instance as instance
 from talemate.util.strings import normalize_name
 
 log = structlog.get_logger("talemate.server.world_state_manager.character")
@@ -24,6 +25,19 @@ class UpdateCharacterVisualRulesPayload(pydantic.BaseModel):
 
     name: str
     visual_rules: str | None = None
+
+
+class UpdateCharacterVisualAnchorPayload(pydantic.BaseModel):
+    """Payload for updating a character visual anchor."""
+
+    name: str
+    visual_anchor: str | None = None
+
+
+class DeriveCharacterVisualAnchorPayload(pydantic.BaseModel):
+    """Payload for (re)deriving a character visual anchor from their appearance."""
+
+    name: str
 
 
 class UpdateCharacterSharedPayload(pydantic.BaseModel):
@@ -139,6 +153,88 @@ class CharacterMixin:
             )
             await self.signal_operation_failed(
                 "Failed to update character visual rules"
+            )
+            return
+
+        await self.handle_get_character_details({"name": payload.name})
+        await self.signal_operation_done()
+        self.scene.emit_status()
+
+    async def handle_update_character_visual_anchor(self, data: dict):
+        """Update a character visual anchor."""
+        try:
+            payload = UpdateCharacterVisualAnchorPayload(**data)
+        except pydantic.ValidationError as e:
+            log.error("Invalid payload for update_character_visual_anchor", error=e)
+            await self.signal_operation_failed(str(e))
+            return
+
+        try:
+            await self.world_state_manager.update_character_visual_anchor(
+                payload.name, payload.visual_anchor
+            )
+        except Exception as e:
+            log.error(
+                "Failed to update character visual anchor",
+                character=payload.name,
+                error=e,
+            )
+            await self.signal_operation_failed(
+                "Failed to update character visual anchor"
+            )
+            return
+
+        await self.handle_get_character_details({"name": payload.name})
+        await self.signal_operation_done()
+        self.scene.emit_status()
+
+    async def handle_derive_character_visual_anchor(self, data: dict):
+        """
+        Re-derive a character's visual anchor from their appearance prose.
+
+        Clears the stored value first, because character_anchor returns the cache when
+        one exists - that is the whole point of it, and this handler is the one place
+        that wants to bypass it.
+        """
+        try:
+            payload = DeriveCharacterVisualAnchorPayload(**data)
+        except pydantic.ValidationError as e:
+            log.error("Invalid payload for derive_character_visual_anchor", error=e)
+            await self.signal_operation_failed(str(e))
+            return
+
+        character = self.scene.get_character(payload.name)
+        if not character:
+            await self.signal_operation_failed("Character not found")
+            return
+
+        visual = instance.get_agent("visual")
+        if not visual:
+            await self.signal_operation_failed("Visual agent unavailable")
+            return
+
+        previous = character.visual_anchor
+        character.visual_anchor = None
+        try:
+            anchor = await visual.character_anchor(character)
+        except Exception as e:
+            character.visual_anchor = previous
+            log.error(
+                "Failed to derive character visual anchor",
+                character=payload.name,
+                error=e,
+            )
+            await self.signal_operation_failed(
+                "Failed to derive character visual anchor"
+            )
+            return
+
+        if not anchor:
+            # Nothing to work from, or the LLM returned nothing usable. Keep what the
+            # user had rather than silently blanking it.
+            character.visual_anchor = previous
+            await self.signal_operation_failed(
+                "Could not derive an appearance - no appearance attribute or description to work from"
             )
             return
 

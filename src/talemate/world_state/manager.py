@@ -74,6 +74,7 @@ class CharacterDetails(pydantic.BaseModel):
     avatar: Union[str, None] = None  # default avatar
     current_avatar: Union[str, None] = None  # current avatar
     visual_rules: Union[str, None] = None
+    visual_anchor: Union[str, None] = None
     color: Union[str, None] = None
     voice: Union[Voice, None] = None
     shared: bool = False
@@ -205,6 +206,7 @@ class WorldStateManager:
             avatar=character.avatar,
             current_avatar=character.current_avatar,
             visual_rules=character.visual_rules,
+            visual_anchor=character.visual_anchor,
             color=character.color,
             voice=character.voice,
             shared=character.shared,

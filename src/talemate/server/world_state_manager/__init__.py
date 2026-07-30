@@ -183,6 +183,7 @@ class SceneSettingsPayload(pydantic.BaseModel):
     writing_style_template: str | None = None
     agent_persona_templates: dict[str, str | None] | None = None
     visual_style_template: str | None = None
+    visual_anchor: str | None = None
     restore_from: str | None = None
     # Presence-aware via `model_fields_set` — see handler. None = opt out;
     # string = link to that file; unset (caller omits the key) = leave the
@@ -1156,6 +1157,47 @@ class WorldStateManagerPlugin(
         )
 
         await self.signal_operation_done(allow_auto_save=False)
+
+    async def handle_derive_scene_visual_anchor(self, data):
+        """
+        Re-derive the scene's visual anchor from its premise.
+
+        Clears the stored value first - scene_anchor returns the cache when one exists,
+        and this handler is the one place that wants to bypass it.
+        """
+        visual = get_agent("visual")
+        if not visual:
+            await self.signal_operation_failed("Visual agent unavailable")
+            return
+
+        previous = self.scene.visual_anchor
+        self.scene.visual_anchor = None
+        try:
+            anchor = await visual.scene_anchor(self.scene)
+        except Exception as exc:
+            self.scene.visual_anchor = previous
+            log.error("Failed to derive scene visual anchor", error=str(exc))
+            await self.signal_operation_failed("Failed to derive scene visual anchor")
+            return
+
+        if not anchor:
+            # Keep whatever the user had rather than silently blanking it.
+            self.scene.visual_anchor = previous
+            await self.signal_operation_failed(
+                "Could not derive a setting - no scene premise to work from"
+            )
+            return
+
+        self.websocket_handler.queue_put(
+            {
+                "type": "world_state_manager",
+                "action": "scene_settings_updated",
+                "data": {"visual_anchor": anchor},
+            }
+        )
+
+        await self.signal_operation_done(allow_auto_save=False)
+        self.scene.emit_status()
 
     async def handle_export_scene(self, data):
         payload = ExportOptions(**data)

@@ -40,7 +40,33 @@
                         ></v-select>
                     </v-col>
                 </v-row>
-        
+
+                <v-row>
+                    <v-col cols="12" lg="12">
+                        <v-textarea
+                            v-model="scene.data.visual_anchor"
+                            label="Setting Keywords"
+                            messages="Comma-delimited. Goes into every image prompt for this scene, so the location and genre never get lost. Left empty, it is generated from the scene premise the first time an image needs it."
+                            rows="2"
+                            auto-grow
+                            @blur="update()"
+                        >
+                            <template v-slot:append-inner>
+                                <v-btn
+                                    icon="mdi-auto-fix"
+                                    size="small"
+                                    variant="text"
+                                    density="comfortable"
+                                    :loading="isDerivingAnchor"
+                                    title="Generate from the scene premise"
+                                    @mousedown.prevent
+                                    @click="deriveVisualAnchor"
+                                ></v-btn>
+                            </template>
+                        </v-textarea>
+                    </v-col>
+                </v-row>
+
                 <v-row>
                     <v-col cols="12" lg="6">
                         <v-checkbox 
@@ -242,6 +268,7 @@ export default {
             MAX_CONTENT_WIDTH,
             scene: null,
             contentContext: [],
+            isDerivingAnchor: false,
         }
     },
     inject: [
@@ -275,6 +302,7 @@ export default {
                 writing_style_template: this.scene.data.writing_style_template,
                 agent_persona_templates: this.scene.data.agent_persona_templates || {},
                 visual_style_template: this.scene.data.visual_style_template,
+                visual_anchor: this.scene.data.visual_anchor,
                 restore_from: this.scene.data.restore_from,
             }));
         },
@@ -291,6 +319,7 @@ export default {
                 writing_style_template: this.scene.data.writing_style_template,
                 agent_persona_templates: this.scene.data.agent_persona_templates || {},
                 visual_style_template: this.scene.data.visual_style_template,
+                visual_anchor: this.scene.data.visual_anchor,
                 restore_from: this.scene.data.restore_from,
             };
 
@@ -304,9 +333,33 @@ export default {
 
             this.getWebsocket().send(JSON.stringify(payload));
         },
+        deriveVisualAnchor() {
+            this.isDerivingAnchor = true;
+            this.getWebsocket().send(JSON.stringify({
+                type: 'world_state_manager',
+                action: 'derive_scene_visual_anchor',
+            }));
+
+            // A failed derive leaves the anchor untouched, so no scene_settings_updated
+            // arrives and the spinner would run forever. The backend reports its own
+            // error separately.
+            clearTimeout(this.deriveAnchorTimeout);
+            this.deriveAnchorTimeout = setTimeout(() => {
+                this.isDerivingAnchor = false;
+            }, 30000);
+        },
         handleMessage(message) {
             if (message.type !== 'world_state_manager') {
                 return;
+            }
+
+            if (message.action === 'scene_settings_updated' && this.scene?.data) {
+                // Only the derive path broadcasts an anchor; a plain settings save
+                // echoes back what we already sent.
+                if (message.data?.visual_anchor !== undefined) {
+                    this.scene.data.visual_anchor = message.data.visual_anchor;
+                    this.isDerivingAnchor = false;
+                }
             }
         }
     },
