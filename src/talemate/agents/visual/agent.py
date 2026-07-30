@@ -194,6 +194,28 @@ class VisualAgent(
                         max=100,
                         step=1,
                     ),
+                    "permanent_change_enabled": AgentActionConfig(
+                        type="bool",
+                        value=True,
+                        label="Detect permanent appearance changes",
+                        description="Watches for lasting changes - a scar, a lost eye, cut hair - and re-derives that character's permanent appearance when one is stated.",
+                        note_on_value={
+                            True: AgentActionNote(
+                                color="warning",
+                                title="Can discard a good appearance",
+                                text="A false positive throws away a correct cached appearance and re-derives it. Answers that hedge are ignored and invalidations are rate-limited, but if a character's look starts drifting, turn this off first.",
+                            ),
+                        },
+                    ),
+                    "permanent_change_interval": AgentActionConfig(
+                        type="number",
+                        value=25,
+                        label="Check every N turns",
+                        description="Permanent changes are rare, so this is asked less often than clothing.",
+                        min=5,
+                        max=200,
+                        step=5,
+                    ),
                 },
             ),
             "prompt_generation": AgentAction(

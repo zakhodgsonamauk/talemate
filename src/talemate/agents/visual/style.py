@@ -458,6 +458,11 @@ class StyleMixin:
             for character in characters_in_frame(prompt, characters):
                 keywords = []
 
+                # Before reading the anchor, not after: if the story has stated a lasting
+                # change, this clears the cache so character_anchor re-derives it now
+                # rather than one image later.
+                await self.refresh_permanent_change(scene, character)
+
                 character_anchor = await self.character_anchor(character)
                 if character_anchor:
                     keywords.extend(split_anchor(character_anchor))

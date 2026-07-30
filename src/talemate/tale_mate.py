@@ -159,6 +159,10 @@ class Scene(Emitter):
         # scene. Without it the keyword prompt kept losing the setting entirely - a
         # starship control room rendered with mountains outside the windows.
         self.visual_anchor = None
+        # Setting keywords per location, keyed by normalize_location_key. Keyed rather
+        # than invalidated so revisiting a location reuses its anchor. visual_anchor
+        # above stays the fallback for scenes with no known location.
+        self.visual_anchors: dict[str, str] = {}
         self.id = str(uuid.uuid4())[:10]
         self.rev = 0
 
@@ -1428,6 +1432,7 @@ class Scene(Emitter):
                 "agent_persona_templates": self.agent_persona_templates,
                 "visual_style_template": self.visual_style_template,
                 "visual_anchor": self.visual_anchor,
+                "visual_anchors": self.visual_anchors,
                 "agent_persona_names": self.agent_persona_names,
                 "intent": self.intent,
                 "story_intent": self.story_intent,
@@ -2154,6 +2159,7 @@ class Scene(Emitter):
             "agent_persona_templates": scene.agent_persona_templates,
             "visual_style_template": scene.visual_style_template,
             "visual_anchor": scene.visual_anchor,
+            "visual_anchors": scene.visual_anchors,
             "restore_from": scene.restore_from,
             "nodes_filename": scene._nodes_filename,
             "creative_nodes_filename": scene._creative_nodes_filename,

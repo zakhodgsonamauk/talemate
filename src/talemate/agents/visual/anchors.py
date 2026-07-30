@@ -32,6 +32,7 @@ __all__ = [
     "WARDROBE_QUESTION",
     "characters_in_frame",
     "normalize_anchor",
+    "normalize_location_key",
     "strip_wardrobe_tokens",
 ]
 
@@ -50,6 +51,108 @@ WARDROBE_INSTRUCTIONS = (
 )
 
 DEFAULT_WARDROBE_INTERVAL = 10
+
+# The permanent-change reinforcement. Longer interval than wardrobe: this asks about
+# things that happen rarely, and every positive costs an identity re-derivation.
+PERMANENT_CHANGE_QUESTION = (
+    "Has anything permanently changed about this character's physical appearance - "
+    "a scar, a lasting injury, a lost limb or eye, or changed hair?"
+)
+
+PERMANENT_CHANGE_INSTRUCTIONS = (
+    "Answer 'No' unless the story explicitly states a lasting change to how they look. "
+    "Temporary things - dirt, blood, torn clothing, wet hair - are not permanent "
+    "changes. If there is a change, state precisely what it is in one sentence. Do not "
+    "speculate, and do not answer 'possibly'."
+)
+
+DEFAULT_PERMANENT_CHANGE_INTERVAL = 25
+
+# How many invalidations are allowed. One per window, so a chatty detector cannot
+# re-derive identity every few turns - which would be the original drift, restored.
+PERMANENT_CHANGE_COOLDOWN_TURNS = 25
+
+# Phrases that mean "no" however the model dresses them up.
+_NEGATIVE_ANSWER_RE = re.compile(
+    r"^\s*(no|none|nothing|unchanged|not that|no permanent|no lasting|n/a)\b",
+    re.IGNORECASE,
+)
+
+# Hedges. A maybe is a no: acting on one costs a re-derivation and risks identity drift,
+# and the next refresh will say so plainly if it is real.
+_HEDGE_WORDS = (
+    "possibly",
+    "perhaps",
+    "maybe",
+    "might",
+    "may have",
+    "could have",
+    "unclear",
+    "hard to say",
+    "not stated",
+    "not specified",
+    "uncertain",
+    "presumably",
+    "seems",
+    "appears to",
+    "implied",
+)
+
+# A change has to name something. Without this, "Yes." alone would invalidate.
+_CHANGE_NOUNS = (
+    "scar",
+    "scarred",
+    "burn",
+    "wound",
+    "missing",
+    "lost",
+    "severed",
+    "amputat",
+    "prosthetic",
+    "cybernetic",
+    "tattoo",
+    "brand",
+    "dyed",
+    "cut her hair",
+    "cut his hair",
+    "cut their hair",
+    "shaved",
+    "shorn",
+    "greyed",
+    "blinded",
+    "eye",
+    "limb",
+    "hand",
+    "arm",
+    "leg",
+    "hair",
+    "disfigur",
+    "maimed",
+)
+
+
+def asserts_permanent_change(answer: str | None) -> bool:
+    """
+    Whether an answer specifically claims a lasting change to how someone looks.
+
+    Deliberately hard to satisfy. A false positive clears a cached identity anchor and
+    buys a re-derivation, which is the drift this design exists to prevent, so the bar is
+    a named change stated without hedging. Everything else is treated as "no".
+    """
+    if not answer or not answer.strip():
+        return False
+
+    text = answer.strip()
+
+    if _NEGATIVE_ANSWER_RE.match(text):
+        return False
+
+    lowered = text.lower()
+
+    if any(hedge in lowered for hedge in _HEDGE_WORDS):
+        return False
+
+    return any(noun in lowered for noun in _CHANGE_NOUNS)
 
 log = structlog.get_logger("talemate.agents.visual.anchors")
 
@@ -157,6 +260,25 @@ def strip_wardrobe_tokens(anchor: str | None) -> str | None:
         removed=[token for token in tokens if _is_wardrobe_token(token)],
     )
     return ", ".join(kept)
+
+
+def normalize_location_key(location: str | None) -> str | None:
+    """
+    Cache key for a location.
+
+    `world_state.location` is free text an LLM wrote, so "The Control Room", "control
+    room" and "  Control  Room " all mean one place and must not become three cached
+    anchors. Leading articles are dropped for the same reason.
+    """
+    if not location or not location.strip():
+        return None
+
+    key = " ".join(location.lower().split())
+    for article in ("the ", "a ", "an "):
+        if key.startswith(article):
+            key = key[len(article) :]
+            break
+    return key or None
 
 
 def normalize_anchor(raw: str | None) -> str | None:
@@ -414,6 +536,108 @@ class AnchorMixin:
 
         return await self.wardrobe_anchor(character, reinforcement.answer)
 
+    async def refresh_permanent_change(self, scene, character) -> None:
+        """
+        Read the permanent-change reinforcement and invalidate the anchor if it asserts one.
+
+        Separate switch from wardrobe because this is the riskier half: it can throw away
+        a good identity anchor on a false positive, where wardrobe can only be
+        out of date.
+        """
+        if not self._freshness_enabled() or not self._permanent_change_enabled():
+            return
+
+        try:
+            await self.ensure_permanent_change_reinforcement(scene, character)
+            _, reinforcement = await scene.world_state.find_reinforcement(
+                PERMANENT_CHANGE_QUESTION, character.name
+            )
+        except Exception as e:
+            log.warning(
+                "refresh_permanent_change.reinforcement_unavailable",
+                character=character.name,
+                error=str(e),
+            )
+            return
+
+        if not reinforcement or not reinforcement.answer:
+            return
+
+        await self.check_permanent_change(scene, character, reinforcement.answer)
+
+    async def ensure_permanent_change_reinforcement(self, scene, character) -> None:
+        """Idempotent, same reasoning as the wardrobe one."""
+        _, existing = await scene.world_state.find_reinforcement(
+            PERMANENT_CHANGE_QUESTION, character.name
+        )
+        if existing:
+            return
+
+        await scene.world_state.add_reinforcement(
+            PERMANENT_CHANGE_QUESTION,
+            character.name,
+            PERMANENT_CHANGE_INSTRUCTIONS,
+            self._permanent_change_interval(),
+            "",
+            "never",
+            True,
+        )
+        log.info("permanent_change_reinforcement.created", character=character.name)
+
+    def _permanent_change_enabled(self) -> bool:
+        try:
+            value = self.resolve_config("_freshness", "permanent_change_enabled")
+        except Exception:
+            return False
+        return bool(value)
+
+    def _permanent_change_interval(self) -> int:
+        try:
+            configured = self.resolve_config("_freshness", "permanent_change_interval")
+        except Exception:
+            configured = None
+        return configured or DEFAULT_PERMANENT_CHANGE_INTERVAL
+
+    async def check_permanent_change(self, scene, character, answer: str) -> bool:
+        """
+        Clear the identity anchor if the story asserts a lasting appearance change.
+
+        Returns whether an invalidation happened. Rate-limited to one per cooldown window
+        per character: a detector that fires every few turns would re-derive identity
+        constantly, which is the drift this whole design prevents.
+
+        Every invalidation is logged with the answer that caused it, so a false positive
+        is diagnosable rather than a mystery about why a character changed face.
+        """
+        if not asserts_permanent_change(answer):
+            return False
+
+        turn = len(getattr(scene, "history", []) or [])
+        last = getattr(character, "_permanent_change_turn", None)
+        if last is not None and turn - last < PERMANENT_CHANGE_COOLDOWN_TURNS:
+            log.debug(
+                "permanent_change.rate_limited",
+                character=character.name,
+                turns_since=turn - last,
+                answer=answer,
+            )
+            return False
+
+        character._permanent_change_turn = turn
+
+        if not character.visual_anchor:
+            return False
+
+        log.info(
+            "permanent_change.invalidating_anchor",
+            character=character.name,
+            answer=answer,
+            previous_anchor=character.visual_anchor,
+        )
+        character.visual_anchor = None
+        character.memory_dirty = True
+        return True
+
     def _freshness_enabled(self) -> bool:
         try:
             value = self.resolve_config("_freshness", "enabled")
@@ -456,24 +680,44 @@ class AnchorMixin:
 
     async def scene_anchor(self, scene) -> str | None:
         """
-        The setting keywords for `scene`, cached on the scene.
+        The setting keywords for wherever the story currently is.
 
-        Without this the keyword prompt kept losing the setting entirely, which is how a
-        starship control room ended up with mountains outside the windows.
+        Without a setting anchor at all, the keyword prompt kept losing the location
+        entirely - a starship control room came back with mountains outside the windows.
+        Keying by location fixes the sequel to that: a premise-derived anchor kept
+        insisting on "starship interior" after the party had left the ship.
+
+        Cached per location rather than invalidated on movement, so revisiting somewhere
+        costs nothing. `scene.visual_anchor` remains the fallback for scenes with no
+        location known, which is also what scenes saved before this change carry.
         """
-        if scene.visual_anchor:
+        location = normalize_location_key(
+            getattr(getattr(scene, "world_state", None), "location", None)
+        )
+
+        if location:
+            cached = (scene.visual_anchors or {}).get(location)
+            if cached:
+                return cached
+        elif scene.visual_anchor:
             return scene.visual_anchor
 
         if not scene.description:
             log.debug("scene_anchor.no_source_material")
-            return None
+            return scene.visual_anchor
 
-        anchor = await self._derive_anchor("scene", scene=scene)
+        anchor = await self._derive_anchor("scene", scene=scene, location=location)
 
         if not anchor:
-            log.warning("scene_anchor.derivation_empty")
-            return None
+            log.warning("scene_anchor.derivation_empty", location=location)
+            return scene.visual_anchor
 
-        scene.visual_anchor = anchor
-        log.info("scene_anchor.derived", anchor=anchor)
+        if location:
+            if scene.visual_anchors is None:
+                scene.visual_anchors = {}
+            scene.visual_anchors[location] = anchor
+        else:
+            scene.visual_anchor = anchor
+
+        log.info("scene_anchor.derived", anchor=anchor, location=location)
         return anchor

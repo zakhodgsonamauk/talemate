@@ -1160,3 +1160,177 @@ async def test_refresh_wardrobe_creates_the_reinforcement_and_uses_its_answer(
 
     assert result == "undershirt, bare feet"
     assert stub.call_count == 1
+
+
+# --- T8: permanent-change detection, with false-positive containment -----------
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        "No.",
+        "no",
+        "",
+        "   ",
+        "Nothing has changed.",
+        "No permanent changes.",
+        "None that I can see.",
+        "Not that the story states.",
+        "Unchanged.",
+        "Possibly, but it is unclear.",
+        "It's hard to say for certain.",
+        "She might have a new scar, though this is not stated.",
+    ],
+)
+def test_permanent_change_ignores_negative_and_hedged_answers(answer):
+    """
+    AC8, and the whole risk of this task. An LLM asked "did anything change?" will oblige
+    if it can. Anything short of a specific assertion must not clear an anchor.
+    """
+    from talemate.agents.visual.anchors import asserts_permanent_change
+
+    assert asserts_permanent_change(answer) is False
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        "Yes - she now has a livid scar across her jaw.",
+        "Her left hand was severed at the wrist.",
+        "She has cut her hair short and dyed it black.",
+        "He lost his right eye in the blast and wears the socket uncovered.",
+    ],
+)
+def test_permanent_change_accepts_specific_assertions(answer):
+    from talemate.agents.visual.anchors import asserts_permanent_change
+
+    assert asserts_permanent_change(answer) is True
+
+
+async def test_permanent_change_clears_the_identity_anchor(kaira, anchor_agent):
+    scene = Scene()
+    scene.character_data = {"Kaira": kaira}
+    kaira.visual_anchor = "alien woman, deep violet skin"
+
+    await anchor_agent.check_permanent_change(
+        scene, kaira, "Yes - she now has a livid scar across her jaw."
+    )
+
+    assert kaira.visual_anchor is None
+
+
+async def test_permanent_change_leaves_the_anchor_on_a_hedge(kaira, anchor_agent):
+    scene = Scene()
+    scene.character_data = {"Kaira": kaira}
+    kaira.visual_anchor = "alien woman, deep violet skin"
+
+    await anchor_agent.check_permanent_change(
+        scene, kaira, "Possibly, but it is unclear."
+    )
+
+    assert kaira.visual_anchor == "alien woman, deep violet skin"
+
+
+async def test_permanent_change_is_rate_limited(kaira, anchor_agent):
+    """Two assertions inside the window must cause one invalidation, not two. Otherwise a
+    chatty detector re-derives the anchor every few turns and identity drifts again."""
+    scene = Scene()
+    scene.character_data = {"Kaira": kaira}
+    answer = "Yes - a fresh burn scar across her forearm."
+
+    kaira.visual_anchor = "alien woman, deep violet skin"
+    first = await anchor_agent.check_permanent_change(scene, kaira, answer)
+
+    kaira.visual_anchor = "alien woman, deep violet skin, burn scar"
+    second = await anchor_agent.check_permanent_change(
+        scene, kaira, "Yes - and now a split lip too."
+    )
+
+    assert first is True
+    assert second is False
+    assert kaira.visual_anchor == "alien woman, deep violet skin, burn scar"
+
+
+# --- T9/T10: location-keyed scene anchors --------------------------------------
+
+
+def test_normalize_location_key_collapses_variants():
+    from talemate.agents.visual.anchors import normalize_location_key
+
+    assert normalize_location_key("The Control Room") == normalize_location_key(
+        "control room"
+    )
+    assert normalize_location_key("  Bridge   Deck ") == normalize_location_key(
+        "bridge deck"
+    )
+    assert normalize_location_key(None) is None
+    assert normalize_location_key("   ") is None
+
+
+def test_scene_visual_anchors_dict_round_trips():
+    scene = Scene()
+    scene.visual_anchors = {"control room": "starship interior, deep space"}
+
+    assert scene.serialize["visual_anchors"] == scene.visual_anchors
+
+
+async def test_scene_anchor_caches_per_location(anchor_agent):
+    """AC5/AC6. Each location gets its own anchor, and revisiting costs nothing."""
+    scene = Scene()
+    scene.description = "The Starlight Nomad."
+    scene.world_state.location = "The Control Room"
+
+    with _stub_request("starship interior, consoles") as stub:
+        first = await anchor_agent.scene_anchor(scene)
+    assert first == "starship interior, consoles"
+    assert stub.call_count == 1
+
+    # Same location, differently cased - must hit the cache.
+    scene.world_state.location = "control room"
+    with _stub_request("SHOULD NOT BE USED") as stub:
+        again = await anchor_agent.scene_anchor(scene)
+    assert again == "starship interior, consoles"
+    assert stub.call_count == 0
+
+    # New location - derives and caches separately.
+    scene.world_state.location = "The derelict structure's interior"
+    with _stub_request("alien architecture, glowing runes") as stub:
+        second = await anchor_agent.scene_anchor(scene)
+    assert second == "alien architecture, glowing runes"
+    assert stub.call_count == 1
+
+    # Returning to the first location reuses its anchor, not the newest one.
+    scene.world_state.location = "control room"
+    with _stub_request("SHOULD NOT BE USED") as stub:
+        back = await anchor_agent.scene_anchor(scene)
+    assert back == "starship interior, consoles"
+    assert stub.call_count == 0
+
+
+async def test_scene_anchor_falls_back_when_location_unknown(anchor_agent):
+    """No location known - behave exactly as before this change."""
+    scene = Scene()
+    scene.description = "The Starlight Nomad."
+    scene.world_state.location = None
+
+    with _stub_request("starship interior, deep space") as stub:
+        result = await anchor_agent.scene_anchor(scene)
+
+    assert result == "starship interior, deep space"
+    assert scene.visual_anchor == "starship interior, deep space"
+    assert stub.call_count == 1
+
+
+async def test_scene_anchor_prefers_location_entry_over_the_legacy_field(anchor_agent):
+    """A scene saved before this change has visual_anchor set; once a location is known,
+    that location's own anchor governs."""
+    scene = Scene()
+    scene.description = "The Starlight Nomad."
+    scene.visual_anchor = "starship interior, deep space"
+    scene.world_state.location = "planet surface"
+
+    with _stub_request("red desert, dust storm, alien sky") as stub:
+        result = await anchor_agent.scene_anchor(scene)
+
+    assert result == "red desert, dust storm, alien sky"
+    assert stub.call_count == 1

@@ -64,6 +64,11 @@ class Character(pydantic.BaseModel):
     # call per character and cheaper than carrying internal state in the scene file.
     _wardrobe_fingerprint: str | None = pydantic.PrivateAttr(default=None)
 
+    # Turn at which a permanent appearance change last invalidated visual_anchor, used to
+    # rate-limit that. Not persisted, so a reload allows one invalidation immediately -
+    # acceptable, since the alternative is storing detector bookkeeping in the save file.
+    _permanent_change_turn: int | None = pydantic.PrivateAttr(default=None)
+
     # shared context
     shared: bool = False
     shared_attributes: list[str] = pydantic.Field(default_factory=list)
