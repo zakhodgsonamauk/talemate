@@ -46,6 +46,9 @@ ACTION_BUDGET_RESERVE = 0.35
 # overwhelmingly human, so a non-human trait stated only positively comes back diluted.
 SPECIES_NEGATIVES = ("human skin", "human ears", "ordinary skin tone")
 
+# Cost of one emphasis group: the brackets and the weight itself.
+EMPHASIS_TOKEN_OVERHEAD = 4
+
 # Words marking a keyword as about a person or what they are doing, rather than about the
 # room. Setting-duplication filtering must never touch these.
 _BODY_AND_POSE_WORDS = {
@@ -260,10 +263,11 @@ class GenerationMixin:
         keywords = await self._drop_absent_character_anchors(keywords, request)
         keywords = await self._suppress_stale_wardrobe(keywords, request)
         keywords = await self._drop_duplicate_setting(keywords, request)
+        keywords = await self._drop_secondary_traits(keywords, request)
         keywords = await self._trim_to_budget(keywords, request)
 
         keywords = list(dict.fromkeys(keywords))
-        await self._add_species_negatives(request)
+        await self._add_species_negatives(keywords, request)
         request.prompt = await self._render_with_emphasis(keywords, request)
 
         if request.prompt != original:
@@ -333,6 +337,103 @@ class GenerationMixin:
 
         return surviving
 
+    async def _primary_and_secondary(
+        self, keywords: list[str], request: GenerationRequest
+    ) -> tuple[set[str], set[str]]:
+        """
+        Split character anchor tokens into the subject being drawn and everyone else.
+
+        Only the primary subject's anchor was inserted, so whichever character has the
+        most of its anchor present in the prompt is the one being drawn. Deriving it from
+        the prompt rather than recomputing keeps this consistent with what was actually
+        inserted, even if the in-frame decision would come out differently now.
+        """
+        scene = active_scene.get()
+        if not scene or request.vis_type in VIS_TYPES_WITHOUT_CAST:
+            return set(), set()
+
+        characters = list(getattr(self, "characters", None) or scene.characters)
+        present = {kw.strip().lower() for kw in keywords}
+
+        scored: list[tuple[int, set[str], object]] = []
+        for character in characters:
+            tokens = set()
+            anchor = await self.character_anchor(character)
+            if anchor:
+                tokens.update(t.strip().lower() for t in anchor.split(","))
+            if not tokens:
+                continue
+            scored.append((len(tokens & present), tokens, character))
+
+        if not scored:
+            return set(), set()
+
+        scored.sort(key=lambda row: row[0], reverse=True)
+        primary_hits, primary_tokens, primary = scored[0]
+
+        if not primary_hits:
+            # Nobody's anchor is in the prompt - nothing to emphasise or strip.
+            return set(), set()
+
+        secondary: set[str] = set()
+        for _, tokens, _character in scored[1:]:
+            secondary |= tokens
+        # A trait shared by both characters belongs to the one being drawn.
+        secondary -= primary_tokens
+
+        self._primary_character = primary
+        return primary_tokens, secondary
+
+    async def _drop_secondary_traits(
+        self, keywords: list[str], request: GenerationRequest
+    ) -> list[str]:
+        """
+        Remove other characters' identity traits written by the LLM.
+
+        The single-subject rule governs the anchors we insert, but the LLM describes
+        everyone present. Observed live: Elmer as the subject, with "violet skin" - a
+        trait belonging to Kaira - sitting in the same prompt. To a diffusion model that
+        is not a second character, it is a contradictory adjective on the first.
+        """
+        primary, secondary = await self._primary_and_secondary(keywords, request)
+        if not secondary:
+            return keywords
+
+        def words_of(tokens: set[str]) -> set[str]:
+            return {
+                word
+                for token in tokens
+                for word in re.findall(r"[\w'-]+", token.lower())
+                if len(word) > 3
+            }
+
+        # Word-level, not exact-token. The LLM writes "violet skin" where the anchor says
+        # "deep violet skin with geometric facial markings" - an exact match would have
+        # let the live case straight through.
+        secondary_words = words_of(secondary)
+        primary_words = words_of(primary)
+        exclusive = secondary_words - primary_words
+        if not exclusive:
+            return keywords
+
+        kept, dropped = [], []
+        for keyword in keywords:
+            lowered = keyword.strip().lower()
+            if lowered in primary:
+                kept.append(keyword)
+                continue
+            words = {w for w in re.findall(r"[\w'-]+", lowered) if len(w) > 3}
+            # Every significant word belongs to the other character, and at least one is
+            # theirs alone.
+            if words and words <= secondary_words and words & exclusive:
+                dropped.append(keyword)
+            else:
+                kept.append(keyword)
+
+        if dropped:
+            log.debug("drop_secondary_traits", dropped=dropped)
+        return kept
+
     async def _render_with_emphasis(
         self, keywords: list[str], request: GenerationRequest
     ) -> str:
@@ -347,8 +448,9 @@ class GenerationMixin:
         if abs(weight - 1.0) < 0.01:
             return ", ".join(keywords)
 
-        _, character_tokens = await self._anchor_token_sets(request)
-        identity = set().union(*character_tokens) if character_tokens else set()
+        # Primary only. Weighting every character's vocabulary emphasises a trait
+        # belonging to someone who is not being drawn.
+        identity, _secondary = await self._primary_and_secondary(keywords, request)
         if not identity:
             return ", ".join(keywords)
 
@@ -377,7 +479,9 @@ class GenerationMixin:
             configured = None
         return float(configured) if configured else 1.0
 
-    async def _add_species_negatives(self, request: GenerationRequest) -> None:
+    async def _add_species_negatives(
+        self, keywords: list[str], request: GenerationRequest
+    ) -> None:
         """
         Push back against the checkpoint's human prior for a non-human subject.
 
@@ -389,13 +493,14 @@ class GenerationMixin:
         if not scene or request.vis_type in VIS_TYPES_WITHOUT_CAST:
             return
 
-        characters = list(getattr(self, "characters", None) or scene.characters)
-        if not characters:
+        # The subject actually being drawn, not simply the first in the cast. Negatives
+        # from a second character would fight the one on screen.
+        await self._primary_and_secondary(keywords, request)
+        primary = getattr(self, "_primary_character", None)
+        if not primary:
             return
 
-        # Only the primary subject is described in the prompt, so only its species is
-        # relevant - negatives from a second character would fight the one being drawn.
-        species = (characters[0].base_attributes or {}).get("species", "")
+        species = (primary.base_attributes or {}).get("species", "")
         if not species or species.strip().lower().rstrip("s") in ("human", "man"):
             return
 
@@ -408,7 +513,7 @@ class GenerationMixin:
         log.debug(
             "species_negatives.added",
             species=species,
-            character=characters[0].name,
+            character=primary.name,
             added=additions,
         )
 
@@ -579,7 +684,12 @@ class GenerationMixin:
         3. the scene anchor
         4. only then, the reserve itself
         """
+        # Emphasis is rendered after this runs, and its brackets and weight cost tokens
+        # the budget check would otherwise miss - observed landing at 81 against 77.
         budget = self._max_prompt_tokens()
+        if abs(self._identity_weight() - 1.0) >= 0.01:
+            budget -= EMPHASIS_TOKEN_OVERHEAD
+
         if estimate_prompt_tokens(", ".join(keywords)) <= budget:
             return keywords
 

@@ -668,7 +668,14 @@ async def test_finalize_drops_the_anchor_of_an_absent_character(styling_agent):
     assert "darkened bridge" in request.prompt
 
 
-async def test_finalize_keeps_both_anchors_when_both_are_named(styling_agent):
+async def test_finalize_keeps_only_the_primary_anchor_when_both_are_named(
+    styling_agent,
+):
+    """
+    Both characters being present no longer means both get described. This test asserted
+    the opposite until a live prompt showed why: two full descriptions in one flat prompt
+    produce one blended person, not two people.
+    """
     from talemate.context import active_scene
 
     prompt = ", ".join(
@@ -682,8 +689,8 @@ async def test_finalize_keeps_both_anchors_when_both_are_named(styling_agent):
     finally:
         active_scene.reset(token)
 
-    assert KAIRA_ANCHOR in request.prompt
-    assert ELMER_ANCHOR in request.prompt
+    surviving = [a for a in (KAIRA_ANCHOR, ELMER_ANCHOR) if a in request.prompt]
+    assert len(surviving) == 1, f"expected one description, got {len(surviving)}"
 
 
 async def test_finalize_never_starves_the_action_keywords(styling_agent):
@@ -1627,3 +1634,66 @@ async def test_finalize_adds_no_species_negatives_for_a_human_subject(styling_ag
         active_scene.reset(token)
 
     assert "human skin" not in request.negative_prompt
+
+
+async def test_emphasis_only_weights_the_primary_subject(styling_agent):
+    """
+    Observed live: Elmer was primary and the prompt still carried "(violet skin:1.3)" -
+    Kaira's trait, emphasised. Weighting every character's vocabulary reintroduces the
+    contradiction the single-subject rule exists to remove.
+    """
+    from talemate.context import active_scene
+
+    styling_agent.actions["prompt_generation"].config["identity_weight"].value = 1.3
+    # An exact token from the other character's anchor, so this cannot pass by accident.
+    kaira_token = KAIRA_ANCHOR.split(", ")[1]
+    request = _request(", ".join([ELMER_ANCHOR, "Elmer", kaira_token, "leaning over"]))
+
+    token = active_scene.set(styling_agent.scene)
+    try:
+        await styling_agent._finalize_prompt(request)
+    finally:
+        active_scene.reset(token)
+
+    assert f"({kaira_token}:1.3)" not in request.prompt
+
+
+async def test_secondary_character_traits_are_dropped_from_llm_keywords(styling_agent):
+    """The LLM writes traits for everyone present. Only the primary subject is being
+    described, so another character's traits are a contradiction, not extra detail."""
+    from talemate.context import active_scene
+
+    request = _request(
+        ", ".join([ELMER_ANCHOR, "Elmer", "violet skin", "indigo hair",
+                   "leaning over console"])
+    )
+
+    token = active_scene.set(styling_agent.scene)
+    try:
+        await styling_agent._finalize_prompt(request)
+    finally:
+        active_scene.reset(token)
+
+    assert "violet skin" not in request.prompt
+    assert "indigo hair" not in request.prompt
+    assert "leaning over console" in request.prompt
+
+
+async def test_budget_accounts_for_emphasis_overhead(styling_agent):
+    """Emphasis is rendered after trimming, so its brackets have to be budgeted for or
+    the prompt lands over the limit - observed at 81 against a 77 budget."""
+    from talemate.context import active_scene
+    from talemate.agents.visual.style import estimate_prompt_tokens
+
+    styling_agent.actions["prompt_generation"].config["identity_weight"].value = 1.3
+    filler = [f"filler detail {n}" for n in range(30)]
+    request = _request(", ".join([SCENE_ANCHOR, KAIRA_ANCHOR, "Kaira"] + filler))
+
+    token = active_scene.set(styling_agent.scene)
+    try:
+        await styling_agent._finalize_prompt(request)
+    finally:
+        active_scene.reset(token)
+
+    budget = styling_agent.actions["prompt_generation"].config["image_max_tokens"].value
+    assert estimate_prompt_tokens(request.prompt) <= budget
