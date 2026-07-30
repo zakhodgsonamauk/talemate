@@ -13,7 +13,7 @@ from talemate.agents.base import (
 import talemate.emit.async_signals as async_signals
 from talemate.emit import emit
 from talemate.context import active_scene
-from .anchors import _mention_count
+from .anchors import _is_wardrobe_token, _mention_count
 from .schema import (
     GEN_TYPE,
     PROMPT_TYPE,
@@ -199,6 +199,7 @@ class GenerationMixin:
 
         keywords = sanitise_keywords(keywords)
         keywords = await self._drop_absent_character_anchors(keywords, request)
+        keywords = await self._suppress_stale_wardrobe(keywords, request)
         keywords = await self._trim_to_budget(keywords, request)
 
         request.prompt = ", ".join(dict.fromkeys(keywords))
@@ -261,6 +262,54 @@ class GenerationMixin:
                 )
 
         return surviving
+
+    async def _suppress_stale_wardrobe(
+        self, keywords: list[str], request: GenerationRequest
+    ) -> list[str]:
+        """
+        Drop a character's cached wardrobe when the scene has already said what they wear.
+
+        The cached wardrobe comes from a reinforcement refreshed every N turns. What the
+        scene says is from this moment. When they disagree the scene wins, and they
+        disagree often - undressing is a single beat, and the reinforcement will not
+        notice for several more.
+
+        Dedupe cannot do this job. "naked" and "utility suit" are not duplicates of each
+        other, they are a contradiction, and first-occurrence-wins would keep the wrong
+        one.
+        """
+        scene = active_scene.get()
+        if not scene or request.vis_type in VIS_TYPES_WITHOUT_CAST:
+            return keywords
+
+        characters = list(getattr(self, "characters", None) or scene.characters)
+        wardrobes = {
+            token.strip().lower()
+            for character in characters
+            if character.visual_wardrobe
+            for token in character.visual_wardrobe.split(",")
+            if token.strip()
+        }
+        if not wardrobes:
+            return keywords
+
+        # Anything the scene itself says about clothing or state. Our own cached wardrobe
+        # tokens are excluded, or they would count as evidence against themselves.
+        scene_says_clothing = any(
+            _is_wardrobe_token(kw) and kw.strip().lower() not in wardrobes
+            for kw in keywords
+        )
+        if not scene_says_clothing:
+            return keywords
+
+        kept = [kw for kw in keywords if kw.strip().lower() not in wardrobes]
+        if len(kept) != len(keywords):
+            log.debug(
+                "suppress_stale_wardrobe",
+                dropped=len(keywords) - len(kept),
+                reason="scene supplied its own clothing or state",
+            )
+        return kept
 
     async def _anchor_token_sets(
         self, request: GenerationRequest

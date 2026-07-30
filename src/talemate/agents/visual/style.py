@@ -462,6 +462,12 @@ class StyleMixin:
                 if character_anchor:
                     keywords.extend(split_anchor(character_anchor))
 
+                # Wardrobe follows the identity anchor, so a scene-supplied garment can
+                # still be suppressed downstream in _suppress_stale_wardrobe.
+                wardrobe = await self.refresh_wardrobe(scene, character)
+                if wardrobe:
+                    keywords.extend(split_anchor(wardrobe))
+
                 # RC4: a rule labelled HARD was being handed to the prompt-writing LLM
                 # and silently dropped in the keyword compression. Emit it directly.
                 if character.visual_rules:

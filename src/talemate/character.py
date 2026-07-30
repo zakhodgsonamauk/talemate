@@ -58,6 +58,12 @@ class Character(pydantic.BaseModel):
     visual_wardrobe: str | None = None
     voice: Voice | None = None
 
+    # Hash of the wardrobe report visual_wardrobe was derived from, so a reinforcement
+    # refresh that returns the same answer costs no derivation. Deliberately not
+    # persisted: after a reload the first refresh re-derives once, which is one bounded
+    # call per character and cheaper than carrying internal state in the scene file.
+    _wardrobe_fingerprint: str | None = pydantic.PrivateAttr(default=None)
+
     # shared context
     shared: bool = False
     shared_attributes: list[str] = pydantic.Field(default_factory=list)

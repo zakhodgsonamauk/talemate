@@ -168,6 +168,34 @@ class VisualAgent(
                     ),
                 },
             ),
+            "_freshness": AgentAction(
+                enabled=True,
+                container=True,
+                label="Appearance Freshness",
+                description="Keeps what characters are wearing current as the story advances, while their permanent appearance stays fixed.",
+                icon="mdi-tshirt-crew-outline",
+                config={
+                    "enabled": AgentActionConfig(
+                        type="bool",
+                        value=True,
+                        label="Track clothing and condition",
+                        description="Maintains a world-state reinforcement per character asking what they are wearing, and uses the answer in image prompts. Turning this off stops new updates but keeps whatever was already learned.",
+                        note=AgentActionNote(
+                            color="warning",
+                            text="Costs one periodic AI query per active character. On a large cast, raise the interval.",
+                        ),
+                    ),
+                    "wardrobe_interval": AgentActionConfig(
+                        type="number",
+                        value=10,
+                        label="Update every N turns",
+                        description="How often the clothing question is re-asked. Only a changed answer costs a second query to convert it to keywords.",
+                        min=1,
+                        max=100,
+                        step=1,
+                    ),
+                },
+            ),
             "prompt_generation": AgentAction(
                 enabled=True,
                 container=True,

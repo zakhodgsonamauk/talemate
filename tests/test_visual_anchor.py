@@ -935,3 +935,228 @@ async def test_setting_another_attribute_leaves_the_anchor_alone(
     await kaira.set_base_attribute("personality", "Warmer than she used to be.")
 
     assert kaira.visual_anchor == "alien woman, deep violet skin"
+
+
+# --- T4/T5: wardrobe derivation and its reinforcement -------------------------
+
+
+WARDROBE_QUESTION = "What is {name} currently wearing, and what visible physical condition are they in?"
+
+
+async def test_wardrobe_anchor_derives_from_a_report(kaira, anchor_agent):
+    derived = "bare feet, sleeveless undershirt, smudged with soot"
+
+    with _stub_request(derived) as stub:
+        result = await anchor_agent.wardrobe_anchor(
+            kaira, "She has stripped off the EVA suit and stands barefoot."
+        )
+
+    assert result == derived
+    assert kaira.visual_wardrobe == derived
+    assert stub.call_count == 1
+
+
+async def test_wardrobe_anchor_reuses_cache_for_an_unchanged_report(kaira, anchor_agent):
+    """AC3's cost control. The reinforcement re-runs on a cadence whether or not the
+    answer moved; only a changed answer should cost a derivation."""
+    report = "Wearing the utility suit."
+
+    with _stub_request("fitted utility suit") as stub:
+        await anchor_agent.wardrobe_anchor(kaira, report)
+        await anchor_agent.wardrobe_anchor(kaira, report)
+
+    assert stub.call_count == 1
+
+
+async def test_wardrobe_anchor_re_derives_when_the_report_changes(kaira, anchor_agent):
+    with _stub_request("fitted utility suit") as stub:
+        await anchor_agent.wardrobe_anchor(kaira, "Wearing the utility suit.")
+    assert stub.call_count == 1
+
+    with _stub_request("bare feet, undershirt") as stub:
+        result = await anchor_agent.wardrobe_anchor(kaira, "She has undressed.")
+
+    assert stub.call_count == 1
+    assert result == "bare feet, undershirt"
+    assert kaira.visual_wardrobe == "bare feet, undershirt"
+
+
+async def test_wardrobe_anchor_ignores_an_empty_report(kaira, anchor_agent):
+    with _stub_request("something") as stub:
+        result = await anchor_agent.wardrobe_anchor(kaira, "")
+
+    assert result is None
+    assert stub.call_count == 0
+
+
+async def test_ensure_wardrobe_reinforcement_is_created_once(kaira, anchor_agent):
+    """Reinforcements persist with the scene, so a reload must not stack duplicates."""
+    scene = Scene()
+    scene.character_data = {"Kaira": kaira}
+
+    await anchor_agent.ensure_wardrobe_reinforcement(scene, kaira)
+    await anchor_agent.ensure_wardrobe_reinforcement(scene, kaira)
+
+    matching = [
+        r for r in scene.world_state.reinforce
+        if r.character == "Kaira" and "wearing" in r.question.lower()
+    ]
+    assert len(matching) == 1
+
+
+async def test_wardrobe_reinforcement_never_enters_story_context(kaira, anchor_agent):
+    """insert="never" - the image prompt consumes the answer, the story does not, and
+    the history-flooding path in update_reinforcement is sequential-only."""
+    scene = Scene()
+    scene.character_data = {"Kaira": kaira}
+
+    await anchor_agent.ensure_wardrobe_reinforcement(scene, kaira)
+
+    reinforcement = next(
+        r for r in scene.world_state.reinforce if r.character == "Kaira"
+    )
+    assert reinforcement.insert == "never"
+
+
+# --- T6: wardrobe is a fallback the scene can suppress ------------------------
+
+
+def _wardrobe_prompt(*, scene_says: list[str]) -> str:
+    """Assembled prompt shape: styles, setting, identity, wardrobe, then the LLM."""
+    return ", ".join(
+        [
+            "score_9",
+            SCENE_ANCHOR,
+            KAIRA_ANCHOR,
+            KAIRA_WARDROBE,
+            "Kaira",
+        ]
+        + scene_says
+    )
+
+
+async def _finalize(agent, prompt: str):
+    from talemate.context import active_scene
+
+    request = _request(prompt)
+    token = active_scene.set(agent.scene)
+    try:
+        await agent._finalize_prompt(request)
+    finally:
+        active_scene.reset(token)
+    return request.prompt
+
+
+async def test_wardrobe_conflict_scene_says_undressed(styling_agent):
+    """
+    AC1. The failure that started this track: a cached "utility suit" and a scene saying
+    "naked" both reached the model, which rendered a compromise garment.
+    """
+    styling_agent.kaira.visual_wardrobe = KAIRA_WARDROBE
+
+    result = await _finalize(
+        styling_agent, _wardrobe_prompt(scene_says=["naked", "bare feet"])
+    )
+
+    assert "utility suit" not in result
+    assert "tool loops on belt" not in result
+    assert "naked" in result
+
+
+async def test_wardrobe_conflict_scene_names_other_clothing(styling_agent):
+    styling_agent.kaira.visual_wardrobe = KAIRA_WARDROBE
+
+    result = await _finalize(
+        styling_agent, _wardrobe_prompt(scene_says=["torn flight jacket", "soaked"])
+    )
+
+    assert "utility suit" not in result
+    assert "torn flight jacket" in result
+
+
+async def test_wardrobe_survives_when_the_scene_is_silent_on_clothing(styling_agent):
+    """Silence is the case wardrobe exists for - the cached outfit is the best guess."""
+    styling_agent.kaira.visual_wardrobe = KAIRA_WARDROBE
+
+    result = await _finalize(
+        styling_agent, _wardrobe_prompt(scene_says=["control room", "harsh shadows"])
+    )
+
+    assert "fitted dark blue-grey utility suit" in result
+
+
+async def test_wardrobe_suppression_never_touches_identity(styling_agent):
+    """AC2. Identity is permanent; a clothing change must not disturb it."""
+    styling_agent.kaira.visual_wardrobe = KAIRA_WARDROBE
+
+    dressed = await _finalize(
+        styling_agent, _wardrobe_prompt(scene_says=["control room"])
+    )
+    undressed = await _finalize(styling_agent, _wardrobe_prompt(scene_says=["naked"]))
+
+    for token in KAIRA_ANCHOR.split(", "):
+        assert token in dressed
+        assert token in undressed
+    assert SCENE_ANCHOR in dressed and SCENE_ANCHOR in undressed
+
+
+async def test_insert_anchors_includes_wardrobe_after_identity(styling_agent):
+    """Wardrobe must sit after identity so suppression can still remove it downstream."""
+    from talemate.agents.visual.schema import VIS_TYPE
+
+    styling_agent.kaira.visual_wardrobe = KAIRA_WARDROBE
+    styling_agent.kaira._wardrobe_fingerprint = None
+    styling_agent.scene.world_state.reinforce = []
+
+    prompt = _prompt_with_descriptive(
+        "Kaira watches the console.", keywords=["control room"]
+    )
+    await styling_agent.apply_styles(prompt, VIS_TYPE.SCENE_ILLUSTRATION)
+    positive = prompt.positive_prompt
+
+    assert KAIRA_WARDROBE.split(",")[0].strip() in positive
+    assert positive.index(KAIRA_ANCHOR.split(",")[0]) < positive.index(
+        KAIRA_WARDROBE.split(",")[0].strip()
+    )
+
+
+async def test_freshness_switch_off_stops_new_derivations(styling_agent):
+    """Off keeps what was already learned but adds no reinforcement and no LLM call."""
+    styling_agent.actions["_freshness"].config["enabled"].value = False
+    styling_agent.kaira.visual_wardrobe = KAIRA_WARDROBE
+    styling_agent.scene.world_state.reinforce = []
+
+    with _stub_request("SHOULD NOT BE USED") as stub:
+        result = await styling_agent.refresh_wardrobe(
+            styling_agent.scene, styling_agent.kaira
+        )
+
+    assert result == KAIRA_WARDROBE
+    assert stub.call_count == 0
+    assert styling_agent.scene.world_state.reinforce == []
+
+
+async def test_refresh_wardrobe_creates_the_reinforcement_and_uses_its_answer(
+    styling_agent,
+):
+    from talemate.agents.visual.anchors import WARDROBE_QUESTION
+
+    styling_agent.kaira.visual_wardrobe = None
+    styling_agent.kaira._wardrobe_fingerprint = None
+    styling_agent.scene.world_state.reinforce = []
+
+    await styling_agent.refresh_wardrobe(styling_agent.scene, styling_agent.kaira)
+
+    _, reinforcement = await styling_agent.scene.world_state.find_reinforcement(
+        WARDROBE_QUESTION, "Kaira"
+    )
+    assert reinforcement is not None
+    reinforcement.answer = "She has stripped to an undershirt and bare feet."
+
+    with _stub_request("undershirt, bare feet") as stub:
+        result = await styling_agent.refresh_wardrobe(
+            styling_agent.scene, styling_agent.kaira
+        )
+
+    assert result == "undershirt, bare feet"
+    assert stub.call_count == 1

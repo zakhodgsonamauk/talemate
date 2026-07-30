@@ -15,6 +15,7 @@ Derivation happens here, in Python, rather than in the generation node graph, be
 runs once per subject rather than once per image.
 """
 
+import hashlib
 import re
 
 import structlog
@@ -28,10 +29,27 @@ __all__ = [
     "ANCHOR_SPEC",
     "MAX_CHARACTERS_IN_FRAME",
     "WARDROBE_MARKERS",
+    "WARDROBE_QUESTION",
     "characters_in_frame",
     "normalize_anchor",
     "strip_wardrobe_tokens",
 ]
+
+# The reinforcement that keeps wardrobe current. Phrased as one question because
+# reinforcements are keyed by question text - changing this string orphans existing ones.
+WARDROBE_QUESTION = (
+    "What is this character currently wearing, and what visible physical condition "
+    "are they in?"
+)
+
+WARDROBE_INSTRUCTIONS = (
+    "Answer in one or two plain sentences describing only clothing, footwear, visible "
+    "equipment, and visible physical condition such as dirt, blood, injuries or "
+    "dishevelment. If they are undressed, say so. Do not describe their permanent "
+    "appearance, personality, or what they are doing."
+)
+
+DEFAULT_WARDROBE_INTERVAL = 10
 
 log = structlog.get_logger("talemate.agents.visual.anchors")
 
@@ -328,6 +346,113 @@ class AnchorMixin:
             "character_anchor.derived", character=character.name, anchor=anchor
         )
         return anchor
+
+    async def wardrobe_anchor(self, character, report: str | None) -> str | None:
+        """
+        Keywords for what `character` is wearing right now, cached on the character.
+
+        `report` is the world-state reinforcement's answer. It is re-queried on a cadence
+        whether or not anything changed, so the report is hashed and a derivation only
+        runs when it actually moved - otherwise every refresh would cost an LLM call for
+        an identical result.
+        """
+        if not report or not report.strip():
+            return character.visual_wardrobe
+
+        fingerprint = hashlib.sha256(report.strip().encode("utf-8")).hexdigest()[:16]
+
+        if character.visual_wardrobe and fingerprint == getattr(
+            character, "_wardrobe_fingerprint", None
+        ):
+            return character.visual_wardrobe
+
+        wardrobe = await self._derive_anchor(
+            "wardrobe", character=character, wardrobe_report=report
+        )
+
+        if not wardrobe:
+            log.warning("wardrobe_anchor.derivation_empty", character=character.name)
+            return character.visual_wardrobe
+
+        character.visual_wardrobe = wardrobe
+        character._wardrobe_fingerprint = fingerprint
+        character.memory_dirty = True
+        log.info("wardrobe_anchor.derived", character=character.name, wardrobe=wardrobe)
+        return wardrobe
+
+    async def refresh_wardrobe(self, scene, character) -> str | None:
+        """
+        Current wardrobe keywords for `character`, refreshing from the reinforcement.
+
+        Called while assembling an image prompt. Lazy on purpose: the reinforcement is
+        kept current by the world-state agent on the story's own cadence, and this only
+        reads whatever answer exists and converts it when it has changed. No background
+        work, no LLM call in the common case.
+
+        Returns the cached wardrobe unchanged when the feature is off, so switching it off
+        stops new derivations without discarding what was already learned.
+        """
+        if not self._freshness_enabled():
+            return character.visual_wardrobe
+
+        try:
+            await self.ensure_wardrobe_reinforcement(scene, character)
+            _, reinforcement = await scene.world_state.find_reinforcement(
+                WARDROBE_QUESTION, character.name
+            )
+        except Exception as e:
+            # Never fail an image because world state misbehaved.
+            log.warning(
+                "refresh_wardrobe.reinforcement_unavailable",
+                character=character.name,
+                error=str(e),
+            )
+            return character.visual_wardrobe
+
+        if not reinforcement or not reinforcement.answer:
+            return character.visual_wardrobe
+
+        return await self.wardrobe_anchor(character, reinforcement.answer)
+
+    def _freshness_enabled(self) -> bool:
+        try:
+            value = self.resolve_config("_freshness", "enabled")
+        except Exception:
+            return True
+        return True if value is None else bool(value)
+
+    async def ensure_wardrobe_reinforcement(self, scene, character) -> None:
+        """
+        Make sure the wardrobe reinforcement exists for this character.
+
+        Idempotent: reinforcements persist with the scene, so this must not stack
+        duplicates across reloads. `insert="never"` keeps the answer out of story
+        context - the image prompt consumes it, the narrative does not - which also
+        avoids the history churn that the sequential insert mode causes.
+        """
+        _, existing = await scene.world_state.find_reinforcement(
+            WARDROBE_QUESTION, character.name
+        )
+        if existing:
+            return
+
+        await scene.world_state.add_reinforcement(
+            WARDROBE_QUESTION,
+            character.name,
+            WARDROBE_INSTRUCTIONS,
+            self._wardrobe_interval(),
+            "",
+            "never",
+            True,
+        )
+        log.info("wardrobe_reinforcement.created", character=character.name)
+
+    def _wardrobe_interval(self) -> int:
+        try:
+            configured = self.resolve_config("_freshness", "wardrobe_interval")
+        except Exception:
+            configured = None
+        return configured or DEFAULT_WARDROBE_INTERVAL
 
     async def scene_anchor(self, scene) -> str | None:
         """
