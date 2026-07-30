@@ -33,6 +33,8 @@ The system prompts (visual.system, visual.system-no-decensor) are tested implici
 through the system_prompts module which handles their rendering.
 """
 
+from pathlib import Path
+
 import pytest
 
 from talemate.character import Character
@@ -124,3 +126,70 @@ def test_derive_anchor_scene_mode_includes_premise(mock_scene):
     assert "The Starlight Nomad, a deep-space survey vessel." in rendered
     assert "science fiction" in rendered
     assert "concrete location type" in rendered
+
+
+# ---------------------------------------------------------------------------
+# generate-image-SCENE_ILLUSTRATION - source-level assertions
+#
+# The template needs batch_query_scene, which needs a live scene and agents. These
+# assertions read the template source instead: they are guarding against the exact
+# wording being reintroduced, which is a source-level property.
+# ---------------------------------------------------------------------------
+
+SCENE_ILLUSTRATION_TEMPLATE = (
+    Path(__file__).resolve().parents[2]
+    / "src"
+    / "talemate"
+    / "prompts"
+    / "templates"
+    / "visual"
+    / "generate-image-SCENE_ILLUSTRATION.jinja2"
+)
+
+PROMPT_TYPE_TEMPLATE = (
+    SCENE_ILLUSTRATION_TEMPLATE.parent / "generate-image-prompt-type.jinja2"
+)
+
+
+def test_scene_illustration_no_longer_queries_appearance():
+    """The per-character appearance query is what made every image a different person,
+    and it cost one LLM call per character per image."""
+    source = SCENE_ILLUSTRATION_TEMPLATE.read_text(encoding="utf-8")
+
+    assert "physical appearance" not in source
+    assert "what clothes" not in source
+    assert 'queries.append({"id": "char_' not in source
+
+
+def test_scene_illustration_no_longer_asks_the_llm_to_emphasise_format():
+    """RC3. This instruction is why "horizontal, landscape, cinematic, dynamic" kept
+    landing in the image prompt, where the resolution had already settled it."""
+    source = SCENE_ILLUSTRATION_TEMPLATE.read_text(encoding="utf-8")
+
+    assert "emphasizes the horizontal/landscape format" not in source
+    assert "Portrait orientation (must be horizontal/landscape)" not in source
+    assert "Square format compositions" not in source
+
+
+def test_scene_illustration_demands_the_setting_be_named():
+    """RC2. The sampled prompt contained no setting token at all, so a starship control
+    room was rendered with mountains outside the windows."""
+    source = SCENE_ILLUSTRATION_TEMPLATE.read_text(encoding="utf-8")
+
+    assert "Name the setting" in source
+    assert "concrete location and its genre" in source
+
+
+def test_scene_illustration_bans_the_observed_junk_vocabulary():
+    source = SCENE_ILLUSTRATION_TEMPLATE.read_text(encoding="utf-8")
+
+    assert "Plot or state words" in source
+    assert "render as nothing at all" in source
+    assert "Character appearance" in source
+
+
+def test_prompt_type_requires_photographable_keywords():
+    source = PROMPT_TYPE_TEMPLATE.read_text(encoding="utf-8")
+
+    assert "a camera could photograph" in source
+    assert "will be discarded before generation" in source

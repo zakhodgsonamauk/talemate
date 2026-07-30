@@ -1,54 +1,52 @@
 <|SECTION:VISUAL CONTEXT|>
 {% set queries = [] %}
+{#
+Appearance is NOT queried here. It comes from cached visual anchors, injected
+after this prompt runs (agents/visual/style.py). Asking the LLM to re-describe
+each character on every generation is what made the same character arrive as a
+different person in every image, and it cost one query per character per image.
+See docs/fork/visual-consistency-design.md.
+#}
 {% if not instructions %}
 {% set _ = queries.append({"id": "scene", "query": "What is happening in the current scene? Include details about the moment, actions, interactions between characters, and the environment.", "at_the_end": True}) %}
-{% for character in scene.characters %}
-{% set _ = queries.append({"id": "char_" ~ loop.index, "query": "What is " ~ character.name ~ "'s age, race, physical appearance, and what clothes are they currently wearing? Provide detailed descriptions. Also describe " ~ character.name ~ "'s current scene description and where they are currently at (including the environment and genre context).", "at_the_end": True}) %}
-{% endfor %}
 {% else %}
 {% set _ = queries.append({"id": "scene", "query": "What is happening in the current scene? Include details about the moment, actions, interactions between characters, and the environment. Answer in the context of the following instructions: " ~ instructions, "at_the_end": True}) %}
-{% for character in scene.characters %}
-{% set _ = queries.append({"id": "char_" ~ loop.index, "query": "What is " ~ character.name ~ "'s age, race, physical appearance, and what clothes do they generally wear? Provide detailed descriptions. Also provide any relevant visual details about " ~ character.name ~ " or the environment relevant to the following instructions: " ~ instructions, "at_the_end": False}) %}
-{% endfor %}
 {% endif %}
 {% set results = batch_query_scene(queries, characters=scene.characters) %}
 
 {% capture_context %}
 {{ results["scene"] }}
-
-{% for character in scene.characters %}
-### {{ character.name }}
-{{ results["char_" ~ loop.index] }}
-{% if character.visual_rules %}
-HARD rules for rendering depictions of {{ character.name }}: {{ character.visual_rules|condensed }}
-{% endif %}
-{% endfor %}
 {% end_capture_context %}
 
 <|CLOSE_SECTION|>
 
 <|SECTION:REQUIREMENTS|>
-A horizontal illustration that captures a dynamic moment in the scene. The key requirements are:
+An illustration that captures a dynamic moment in the scene. The key requirements are:
 
 1. **Primary Focus**: The image captures a specific moment, action, or interaction happening in the scene - like a screen cap from a movie at an exciting or pivotal moment
-2. **Framing**: Horizontal/landscape orientation (wider than tall) - optimized for cinematic framing
-3. **Composition**: The image should convey action, emotion, tension, or a key moment unfolding - think of it as freezing a frame from an ongoing scene
-4. **Character Inclusion**: Characters may be prominently featured as they interact with each other, the environment, or engage in actions. The moment can focus on character interactions, reactions, or environmental moments
-5. **Presentation**: Think of this like a movie still, cinematic screen cap, or storyboard frame - the kind of image that captures "what's happening right now" with dynamic composition and visual storytelling
+2. **Composition**: The image should convey action, emotion, tension, or a key moment unfolding - think of it as freezing a frame from an ongoing scene
+3. **Character Inclusion**: Characters may be prominently featured as they interact with each other, the environment, or engage in actions. The moment can focus on character interactions, reactions, or environmental moments
+4. **Presentation**: Think of this like a movie still, cinematic screen cap, or storyboard frame - the kind of image that captures "what's happening right now" with dynamic composition and visual storytelling
 
 **What to avoid:**
 - Static poses without context or action
-- Portrait orientation (must be horizontal/landscape)
 - Graphical overlays, borders, frames, labels, or UI elements
 - Images that feel like posed portraits rather than captured moments
-- Square format compositions
 <|CLOSE_SECTION|>
 
 <|SECTION:TASK|>
-Your task is to generate an image generation prompt that will be used to generate a horizontal illustration capturing a moment in the scene. Think of it like a screen cap from a movie at an exciting or pivotal moment - capturing action, emotion, or a key interaction.
+Your task is to generate an image generation prompt for an illustration capturing a moment in the scene. Think of it like a screen cap from a movie at an exciting or pivotal moment - capturing action, emotion, or a key interaction.
 
 {% if instructions %}Specific instructions for the requested image: {{ instructions }}{% endif %}
 
-Make sure your prompt emphasizes the horizontal/landscape format and the dynamic, moment-capturing nature of the image.
+**Name the setting.** State the concrete location and its genre - "starship bridge", "science fiction", "rain-slick alley", "high fantasy". Never assume the setting is obvious from the action. A prompt that describes people doing things in an unnamed room will be rendered in whatever room the model feels like, and it will be the wrong one.
 
+**Describe only what a camera would see.** Physical, visible things: objects, materials, surfaces, light, weather, posture, expression, what people are physically doing.
+
+**Do not include:**
+- Plot or state words. "Corruption", "diagnostic", "emergency protocols", "waiting", "watching", "focused" describe the story, not the picture. They render as nothing at all.
+- Emotions as bare nouns. "Tension", "emotion", "drama". Show it instead - clenched hands, a turned back, a face lit from below.
+- Format, orientation, framing or aspect ratio. The image dimensions are set by configuration before your prompt is used. Words like "horizontal", "landscape", "cinematic framing" or "dynamic composition" consume prompt budget and change nothing.
+- Art style, medium, or quality tags. Those are applied separately from a style template.
+- Character appearance. Each character's appearance is injected automatically from a stored description. Name them and describe what they are doing; do not describe what they look like.
 <|CLOSE_SECTION|>
