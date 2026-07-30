@@ -265,3 +265,21 @@ def test_derive_anchor_scene_mode_includes_location_when_known(mock_scene):
     )
 
     assert "the derelict structure's interior" in rendered
+
+
+def test_prompt_type_demands_both_formats_unambiguously():
+    """
+    Regression: keyword-only rules were added between the format list and the output
+    instructions, and the LLM responded with keywords alone. The graph requires both
+    anchors, so a missing DESCRIPTIVE raises ExtractionError and the visualise action
+    fails outright.
+    """
+    source = PROMPT_TYPE_TEMPLATE.read_text(encoding="utf-8")
+
+    assert "<KEYWORDS></KEYWORDS>" in source
+    assert "<DESCRIPTIVE></DESCRIPTIVE>" in source
+    assert "Both are required, every time." in source
+    assert "only one of them is invalid" in source
+    # The keyword-only rules must be scoped, or they read as rules for both.
+    assert "Rules for the keyword list only" in source
+    assert "the rules above do not apply to it" in source

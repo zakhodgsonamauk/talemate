@@ -1,19 +1,18 @@
-You will provde two versions of the prompt:
+You will provde two versions of the prompt. Both are required, every time.
 
-1. A comma delimited list of keywords (stable-diffusion prompt). Negative keywords (things to avoid) can be prefixed with "no " - so for example "no text".
-2. Descriptive text, explaining the visual style and content of the image in long form.
+**1. Keywords** - a comma delimited list (stable-diffusion prompt). Negative keywords (things to avoid) can be prefixed with "no " - so for example "no text".
 
-For the keyword prompt, every keyword must name something a camera could photograph - an object, a material, a surface, a light source, a posture, a physical action. Keywords naming plot points, mental states, emotions as bare nouns, image format, or art style will be discarded before generation, so spending keywords on them wastes the prompt.
+Rules for the keyword list only:
 
-Write keywords as ordinary words separated by spaces - "starship bridge", not
-"starship_bridge". Underscore-joined keywords are treated as single unknown words.
+- Every keyword must name something a camera could photograph - an object, a material, a surface, a light source, a posture, a physical action. Keywords naming plot points, mental states, emotions as bare nouns, image format, or art style will be discarded before generation, so spending keywords on them wastes the prompt.
+- Write keywords as ordinary words separated by spaces - "starship bridge", not "starship_bridge". Underscore-joined keywords are treated as single unknown words.
+- Do not spend keywords on the setting or on any character's permanent appearance. Both are supplied automatically, and repeating them in different words contradicts what is already there. Spend them on what is happening: posture, gesture, where people are, what the light is doing.
+- Aim for 12 to 18 keywords. The image model's text encoder stops attending part-way through a long prompt, so keywords past that point have no effect on the image.
 
-Do not describe the setting or any character's appearance. Both are supplied
-automatically and repeating them in different words contradicts what is already there.
-Describe what is happening: posture, gesture, where people are, what the light is doing.
+**2. Descriptive** - the same image described in long form prose, covering visual style and content.
 
-Aim for 12 to 18 keywords. The image model's text encoder stops attending part-way through a long prompt, so keywords past that point have no effect on the image.
+The two are used by different image backends, so the descriptive version is not optional and the rules above do not apply to it. Describe the scene fully in prose, including the setting and the characters.
 
 You must provide the keyword prompt inside <KEYWORDS></KEYWORDS> tags.
 You must provide the descriptive prompt insice <DESCRIPTIVE></DESCRIPTIVE> tags.
-You must provide both formats.
+You must provide both formats. A response containing only one of them is invalid.
