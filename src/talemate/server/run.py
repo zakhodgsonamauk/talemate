@@ -1,6 +1,7 @@
 print("Talemate starting.")
 print("Startup may take a moment to initialize some dependencies, please be patient...")
 import time
+import datetime
 
 t_import_start = time.perf_counter()
 import os
@@ -156,12 +157,51 @@ async def cancel_all_tasks(loop):
     await asyncio.gather(*tasks, return_exceptions=True)
 
 
+def log_running_revision():
+    """
+    Log the git revision this process started from.
+
+    The backend does not reload, so editing Python and not restarting leaves a server
+    running code that no longer exists on disk - and nothing in the log says so. This
+    line makes "is my change actually live?" answerable with one grep instead of a guess.
+    Best effort: a missing git, or a tarball install, must not stop the server.
+    """
+    try:
+        import subprocess
+
+        rev = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            cwd=os.path.dirname(os.path.abspath(__file__)),
+        ).stdout.strip()
+        dirty = subprocess.run(
+            ["git", "status", "--porcelain", "--untracked-files=no"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            cwd=os.path.dirname(os.path.abspath(__file__)),
+        ).stdout.strip()
+        if rev:
+            log.info(
+                "running revision",
+                commit=rev,
+                uncommitted_changes=bool(dirty),
+                started=datetime.datetime.now().isoformat(timespec="seconds"),
+            )
+    except Exception as e:
+        log.debug("running revision unavailable", error=str(e))
+
+
 def run_server(args):
     """
     Run the talemate web server using the provided arguments.
 
     :param args: command line arguments parsed by argparse
     """
+
+    log_running_revision()
 
     import talemate.client.registry
     import talemate.agents.custom
