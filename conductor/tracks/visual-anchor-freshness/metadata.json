@@ -1,0 +1,57 @@
+{
+  "version": 3,
+  "track_id": "visual-anchor-freshness",
+  "name": "Visual anchors follow the story",
+  "type": "feature",
+  "created": "2026-07-30",
+  "status": "planned",
+  "design_doc": "docs/fork/visual-anchor-freshness-design.md",
+  "follows": "visual-consistency",
+  "loop_state": {
+    "current_step": "EVALUATE_PLAN",
+    "step_status": "NOT_STARTED",
+    "fix_cycle_count": 0,
+    "max_fix_cycles": 5,
+    "superpower_enhanced": true,
+    "checkpoints": {
+      "PLAN": { "status": "PASSED" }
+    }
+  },
+  "tasks": [
+    { "id": "T1", "name": "Identity anchor stops carrying clothing", "status": "pending", "deps": [] },
+    { "id": "T2", "name": "One-time migration: strip wardrobe from cached anchors", "status": "pending", "deps": ["T1"] },
+    { "id": "T3", "name": "Character.visual_wardrobe field + setter", "status": "pending", "deps": [] },
+    { "id": "T4", "name": "Wardrobe derivation mode in the anchor template", "status": "pending", "deps": ["T3"] },
+    { "id": "T5", "name": "Managed wardrobe reinforcement + config", "status": "pending", "deps": ["T4"] },
+    { "id": "T6", "name": "Wardrobe as suppressible fallback in _finalize_prompt", "status": "pending", "deps": ["T5"] },
+    { "id": "T7", "name": "Appearance edit clears the identity anchor", "status": "pending", "deps": [] },
+    { "id": "T8", "name": "Permanent-change reinforcement with false-positive guards", "status": "pending", "deps": [] },
+    { "id": "T9", "name": "Scene.visual_anchors keyed by normalised location", "status": "pending", "deps": [] },
+    { "id": "T10", "name": "Assembly uses the location anchor", "status": "pending", "deps": ["T9"] },
+    { "id": "T11", "name": "UI: wardrobe field, per-location anchors, intervals, off switch", "status": "pending", "deps": ["T6", "T10"] },
+    { "id": "T12", "name": "Playwright E2E - AC1-AC9", "status": "pending", "deps": ["T11", "T7", "T8"] },
+    { "id": "T13", "name": "FORK.md, design doc amendments, decision log", "status": "pending", "deps": ["T12"] }
+  ],
+  "problems": {
+    "P1": "Clothing baked into the identity anchor, contradicting the scene - a live prompt held both 'fitted dark blue-grey utility suit' and 'naked'",
+    "P2": "Editing base_attributes['appearance'] does not invalidate the cached anchor",
+    "P3": "Scene anchor is premise-level, so 'starship interior' persists after the party leaves the ship"
+  },
+  "decisions": [
+    "Identity stays pinned; only state refreshes. Re-deriving identity on a cadence is the previous track's bug on a slower clock.",
+    "Wardrobe and permanent-change detection both ride the existing Reinforcement mechanism - no bespoke detectors. auto_update_reinforcments already refreshes on a cadence.",
+    "Scene anchors keyed by world_state.location (LLM-maintained via the world-state snapshot), not invalidated, so revisiting a location reuses its anchor.",
+    "scene.environment is a mode ('scene'/'creative'), not a place - it is not the location.",
+    "Wardrobe is a fallback suppressed by scene-supplied clothing or state. First-occurrence dedupe cannot resolve 'naked' against 'utility suit' - that is a contradiction, not a duplicate.",
+    "Migration strips clothing tokens from cached anchors in place rather than blanking and re-deriving: no LLM cost, idempotent, less surprising."
+  ],
+  "constraints": {
+    "new_npm_dependencies": 0,
+    "note": "Two reinforcements per character means eight extra periodic LLM queries on a four-character scene. Intervals must be configurable and the feature switchable off."
+  },
+  "risks": [
+    "T8 is the risky task. An LLM asked 'did anything change?' will sometimes oblige. Guards: require a specific assertion, log every invalidation with its cause, rate-limit. Degrades to manual without taking the track with it.",
+    "T6's clothing vocabulary is the ongoing maintenance cost, exactly as the sanitiser blocklist proved to be."
+  ],
+  "open_gaps": []
+}
