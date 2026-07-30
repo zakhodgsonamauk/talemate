@@ -1809,3 +1809,77 @@ async def test_emphasis_follows_the_chosen_subject(styling_agent):
     assert "alien woman" in request.prompt
     assert ":1.3)" in request.prompt
     assert "human man" not in request.prompt
+
+
+async def test_secondary_characters_visual_rules_do_not_follow_the_subject(
+    styling_agent,
+):
+    """
+    Observed live on a card of Kaira: "head / face shadows" - Elmer's HARD rule - was
+    still present. The token sets used for pruning were built from anchors alone, so
+    rules belonging to other characters were invisible to it.
+    """
+    from talemate.context import active_scene
+    from talemate.agents.visual.anchors import condense_visual_rule
+
+    # Derived, not hand-written: production emits the condensed form on both sides, so a
+    # literal here would test a string the pipeline never produces.
+    elmer_rule = condense_visual_rule(styling_agent.elmer.visual_rules)
+    request = _request(
+        ", ".join([ELMER_ANCHOR, elmer_rule, KAIRA_ANCHOR, "control room"])
+    )
+    request.character_name = "Kaira"
+
+    token = active_scene.set(styling_agent.scene)
+    try:
+        await styling_agent._finalize_prompt(request)
+    finally:
+        active_scene.reset(token)
+
+    assert "alien woman" in request.prompt
+    assert elmer_rule not in request.prompt
+
+
+async def test_the_subjects_own_visual_rules_are_kept(styling_agent):
+    from talemate.context import active_scene
+    from talemate.agents.visual.anchors import condense_visual_rule
+
+    elmer_rule = condense_visual_rule(styling_agent.elmer.visual_rules)
+    request = _request(
+        ", ".join([ELMER_ANCHOR, elmer_rule, KAIRA_ANCHOR, "control room"])
+    )
+    request.character_name = "Elmer"
+
+    token = active_scene.set(styling_agent.scene)
+    try:
+        await styling_agent._finalize_prompt(request)
+    finally:
+        active_scene.reset(token)
+
+    assert elmer_rule in request.prompt
+
+
+async def test_character_card_is_solo(styling_agent):
+    """A card says "solo, looking at viewer". Telling it there is a second figure in the
+    same breath is a contradiction we introduced."""
+    from talemate.agents.visual.schema import VIS_TYPE
+
+    prompt = _prompt_with_descriptive(
+        "Kaira removes her suit while Elmer watches.", keywords=["control room"]
+    )
+
+    await styling_agent.apply_styles(prompt, VIS_TYPE.CHARACTER_CARD)
+
+    assert "second figure" not in prompt.positive_prompt
+
+
+async def test_scene_illustration_still_counts_extra_figures(styling_agent):
+    from talemate.agents.visual.schema import VIS_TYPE
+
+    prompt = _prompt_with_descriptive(
+        "Kaira removes her suit while Elmer watches.", keywords=["control room"]
+    )
+
+    await styling_agent.apply_styles(prompt, VIS_TYPE.SCENE_ILLUSTRATION)
+
+    assert "second figure" in prompt.positive_prompt

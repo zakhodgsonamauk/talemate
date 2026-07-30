@@ -14,7 +14,7 @@ from talemate.agents.base import (
 import talemate.emit.async_signals as async_signals
 from talemate.emit import emit
 from talemate.context import active_scene
-from .anchors import _is_wardrobe_token, _mention_count
+from .anchors import _is_wardrobe_token, _mention_count, condense_visual_rule
 from .schema import (
     GEN_TYPE,
     PROMPT_TYPE,
@@ -406,12 +406,21 @@ class GenerationMixin:
 
         anchors: list[tuple[object, set[str]]] = []
         for character in characters:
+            tokens: set[str] = set()
+
             anchor = await self.character_anchor(character)
-            if not anchor:
-                continue
-            anchors.append(
-                (character, {t.strip().lower() for t in anchor.split(",")})
-            )
+            if anchor:
+                tokens.update(t.strip().lower() for t in anchor.split(","))
+
+            # Rules belong to the character as much as the anchor does. Leaving them out
+            # meant Elmer's "head / face in shadow" survived onto a portrait of Kaira.
+            if character.visual_rules:
+                condensed = condense_visual_rule(character.visual_rules)
+                if condensed:
+                    tokens.update(t.strip().lower() for t in condensed.split(","))
+
+            if tokens:
+                anchors.append((character, tokens))
 
         if not anchors:
             return set(), set()

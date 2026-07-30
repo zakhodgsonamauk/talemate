@@ -25,6 +25,13 @@ VIS_TYPES_WITHOUT_CAST = {
     VIS_TYPE.SCENE_BACKGROUND,
 }
 
+# Portraits of one person. Their style templates already say "solo", so counting other
+# people present contradicts the style in the same prompt.
+VIS_TYPES_SOLO = {
+    VIS_TYPE.CHARACTER_CARD,
+    VIS_TYPE.CHARACTER_PORTRAIT,
+}
+
 
 # SDXL's text encoder works in 77-token chunks; A1111 concatenates the embeddings of
 # several, with attention thinning as they go.
@@ -538,7 +545,7 @@ class StyleMixin:
                         VisualPromptPart(positive_keywords_raw=keywords)
                     )
 
-            extra = len(in_frame) - 1
+            extra = 0 if vis_type in VIS_TYPES_SOLO else len(in_frame) - 1
             if extra > 0:
                 result.characters.append(
                     VisualPromptPart(
