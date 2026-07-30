@@ -188,3 +188,220 @@ async def test_scene_anchor_uses_cached_value(anchor_agent):
 
     assert result == "starship interior, deep space"
     assert stub.call_count == 0
+
+
+# ---------------------------------------------------------------------------
+# T5 — in-frame character matching
+# ---------------------------------------------------------------------------
+
+
+def _prompt_with_descriptive(descriptive: str, keywords: list[str] | None = None):
+    """A VisualPrompt shaped like the one the LLM hands to apply_styles: a single part
+    carrying both the keyword list and the descriptive prose (graph node 8cfcb710)."""
+    from talemate.agents.visual.schema import VisualPrompt, VisualPromptPart
+
+    return VisualPrompt(
+        parts=[
+            VisualPromptPart(
+                positive_keywords_raw=keywords or ["control room"],
+                positive_descriptive=descriptive,
+            )
+        ]
+    )
+
+
+def _characters(*names) -> list[Character]:
+    return [Character(name=name) for name in names]
+
+
+def test_in_frame_matches_full_name():
+    from talemate.agents.visual.anchors import characters_in_frame
+
+    prompt = _prompt_with_descriptive("Kaira watches the console as Elmer works.")
+    matched = characters_in_frame(prompt, _characters("Kaira", "Elmer"))
+
+    assert {c.name for c in matched} == {"Kaira", "Elmer"}
+
+
+def test_in_frame_matches_first_name_only():
+    from talemate.agents.visual.anchors import characters_in_frame
+
+    prompt = _prompt_with_descriptive("Elmer leans over the console.")
+    matched = characters_in_frame(prompt, _characters("Captain Elmer Farstield"))
+
+    assert [c.name for c in matched] == ["Captain Elmer Farstield"]
+
+
+def test_in_frame_excludes_absent_character():
+    """AC5. An off-screen character must not contribute appearance tokens."""
+    from talemate.agents.visual.anchors import characters_in_frame
+
+    prompt = _prompt_with_descriptive("Kaira stands alone on the darkened bridge.")
+    matched = characters_in_frame(prompt, _characters("Kaira", "Elmer"))
+
+    assert [c.name for c in matched] == ["Kaira"]
+
+
+def test_in_frame_handles_spaces_and_apostrophes():
+    from talemate.agents.visual.anchors import characters_in_frame
+
+    prompt = _prompt_with_descriptive("Across the bay, Se'lan O'Hara raises a hand.")
+    matched = characters_in_frame(prompt, _characters("Se'lan O'Hara"))
+
+    assert [c.name for c in matched] == ["Se'lan O'Hara"]
+
+
+def test_in_frame_does_not_match_a_substring():
+    """"Kai" must not match on the word "Kaira"."""
+    from talemate.agents.visual.anchors import characters_in_frame
+
+    prompt = _prompt_with_descriptive("Kaira works the console.")
+    matched = characters_in_frame(prompt, _characters("Kai"))
+
+    assert matched == []
+
+
+def test_in_frame_falls_back_to_all_characters_without_descriptive():
+    from talemate.agents.visual.anchors import characters_in_frame
+
+    prompt = _prompt_with_descriptive("")
+    characters = _characters("Kaira", "Elmer")
+    matched = characters_in_frame(prompt, characters)
+
+    assert [c.name for c in matched] == ["Kaira", "Elmer"]
+
+
+def test_in_frame_caps_at_three_keeping_most_mentioned():
+    """CLIP safety valve. Four anchors would push the action keywords off the end."""
+    from talemate.agents.visual.anchors import characters_in_frame
+
+    prompt = _prompt_with_descriptive(
+        "Kaira and Kaira and Kaira. Elmer and Elmer. Dax speaks. Nel nods."
+    )
+    matched = characters_in_frame(prompt, _characters("Kaira", "Elmer", "Dax", "Nel"))
+
+    assert len(matched) == 3
+    assert [c.name for c in matched[:2]] == ["Kaira", "Elmer"]
+
+
+# ---------------------------------------------------------------------------
+# T6 — anchor insertion in apply_styles
+# ---------------------------------------------------------------------------
+
+
+KAIRA_ANCHOR = "alien woman, deep violet skin, indigo hair pulled back"
+ELMER_ANCHOR = "human man, weathered face, close-cropped greying hair, black EVA suit"
+SCENE_ANCHOR = "starship interior, deep space, science fiction, worn metal panelling"
+
+
+@pytest.fixture
+def styling_agent(kaira):
+    """Agent carrying both mixins, with style templates and derivation stubbed out so
+    the test observes ordering rather than template resolution."""
+    from talemate.agents.visual.anchors import AnchorMixin
+    from talemate.agents.visual.style import StyleMixin
+
+    elmer = Character(
+        name="Elmer",
+        visual_anchor=ELMER_ANCHOR,
+        visual_rules="head and face rendered completely in shadow",
+    )
+    kaira.visual_anchor = KAIRA_ANCHOR
+
+    scene = Scene()
+    scene.visual_anchor = SCENE_ANCHOR
+
+    class _Agent(AnchorMixin, StyleMixin):
+        client = object()
+
+        def __init__(self):
+            self.scene = scene
+            self.characters = [kaira, elmer]
+
+        def style_template(self, vis_type):
+            return None
+
+    agent = _Agent()
+    agent.kaira = kaira
+    agent.elmer = elmer
+    return agent
+
+
+async def test_apply_styles_inserts_anchors_before_llm_keywords(styling_agent):
+    """AC1. Order is load-bearing: _build_prompt dedupes first-occurrence-wins, so the
+    anchors have to precede the LLM part to win position over a duplicate token."""
+    from talemate.agents.visual.schema import VIS_TYPE
+
+    prompt = _prompt_with_descriptive(
+        "Kaira watches the console while Elmer leans over it.",
+        keywords=["sterile control room", "flickering displays"],
+    )
+
+    await styling_agent.apply_styles(prompt, VIS_TYPE.SCENE_ILLUSTRATION)
+    positive = prompt.positive_prompt
+
+    assert positive.index(SCENE_ANCHOR) < positive.index(KAIRA_ANCHOR)
+    assert positive.index(KAIRA_ANCHOR) < positive.index("sterile control room")
+    assert positive.index(ELMER_ANCHOR) < positive.index("sterile control room")
+
+
+async def test_apply_styles_is_byte_stable_across_calls(styling_agent):
+    """AC1 proper. Two generations, identical anchor text."""
+    from talemate.agents.visual.schema import VIS_TYPE
+
+    results = []
+    for _ in range(2):
+        prompt = _prompt_with_descriptive(
+            "Kaira watches the console while Elmer leans over it.",
+            keywords=["sterile control room"],
+        )
+        await styling_agent.apply_styles(prompt, VIS_TYPE.SCENE_ILLUSTRATION)
+        results.append(prompt.positive_prompt)
+
+    assert results[0] == results[1]
+
+
+async def test_apply_styles_carries_visual_rules(styling_agent):
+    """AC4. A rule labelled HARD has to actually reach the image prompt."""
+    from talemate.agents.visual.schema import VIS_TYPE
+
+    prompt = _prompt_with_descriptive(
+        "Elmer leans over the console.", keywords=["control room"]
+    )
+
+    await styling_agent.apply_styles(prompt, VIS_TYPE.SCENE_ILLUSTRATION)
+
+    assert "head and face rendered completely in shadow" in prompt.positive_prompt
+
+
+async def test_apply_styles_omits_off_screen_characters(styling_agent):
+    """AC5."""
+    from talemate.agents.visual.schema import VIS_TYPE
+
+    prompt = _prompt_with_descriptive(
+        "Kaira stands alone on the darkened bridge.", keywords=["control room"]
+    )
+
+    await styling_agent.apply_styles(prompt, VIS_TYPE.SCENE_ILLUSTRATION)
+    positive = prompt.positive_prompt
+
+    assert KAIRA_ANCHOR in positive
+    assert ELMER_ANCHOR not in positive
+    assert "head and face rendered completely in shadow" not in positive
+
+
+async def test_apply_styles_skips_character_anchors_for_object_illustration(
+    styling_agent,
+):
+    """An object study has no cast. Anchoring the crew into it would be wrong."""
+    from talemate.agents.visual.schema import VIS_TYPE
+
+    prompt = _prompt_with_descriptive(
+        "Kaira's damaged sidearm on a workbench.", keywords=["sidearm", "workbench"]
+    )
+
+    await styling_agent.apply_styles(prompt, VIS_TYPE.OBJECT_ILLUSTRATION)
+    positive = prompt.positive_prompt
+
+    assert KAIRA_ANCHOR not in positive
+    assert "sidearm" in positive

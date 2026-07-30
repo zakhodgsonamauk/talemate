@@ -347,7 +347,9 @@ class ApplyStyles(AgentNode):
     async def run(self, state: GraphState):
         prompt = self.normalized_input_value("prompt")
         vis_type = self.normalized_input_value("vis_type")
-        _prompt: VisualPrompt = self.agent.apply_styles(prompt, VIS_TYPE(vis_type))
+        _prompt: VisualPrompt = await self.agent.apply_styles(
+            prompt, VIS_TYPE(vis_type)
+        )
         self.set_output_values(
             {
                 "state": self.get_input_value("state"),

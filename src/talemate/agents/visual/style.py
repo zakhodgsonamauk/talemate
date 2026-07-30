@@ -1,5 +1,6 @@
 import structlog
 
+from .anchors import characters_in_frame
 from .schema import VIS_TYPE, VisualPrompt, VisualPromptPart
 
 from talemate.agents.base import AgentAction, AgentActionConfig, AgentActionNote
@@ -12,6 +13,19 @@ __all__ = [
 ]
 
 log = structlog.get_logger("talemate.agents.visual.style")
+
+# Vis types depicting a thing rather than a cast. Character anchors are meaningless
+# here and actively harmful - anchoring the crew into an object study would put people
+# in a picture of a sidearm.
+VIS_TYPES_WITHOUT_CAST = {
+    VIS_TYPE.OBJECT_ILLUSTRATION,
+    VIS_TYPE.SCENE_BACKGROUND,
+}
+
+
+def split_anchor(anchor: str) -> list[str]:
+    """Comma-delimited anchor string to keyword list, blanks dropped."""
+    return [token.strip() for token in anchor.split(",") if token.strip()]
 
 
 class StyleMixin:
@@ -157,7 +171,21 @@ class StyleMixin:
             prompt.parts.insert(0, part)
         return part
 
-    def apply_styles(self, prompt: VisualPrompt, vis_type: VIS_TYPE) -> VisualPrompt:
+    async def apply_styles(
+        self, prompt: VisualPrompt, vis_type: VIS_TYPE
+    ) -> VisualPrompt:
+        """
+        Assemble the final prompt: styles, then anchors, then whatever the LLM said.
+
+        Async because anchor derivation may need one LLM call the first time a subject
+        is seen. Every call after that is cached and does no I/O.
+        """
+        # Snapshot before we insert anything. These are the LLM's parts, and knowing
+        # exactly which they are is what lets the sanitiser (T7) touch only them.
+        llm_parts = list(prompt.parts)
+
+        await self._insert_anchors(prompt, vis_type, llm_parts)
+
         template_art_style: VisualStyle | None = self.style_template(
             VIS_TYPE.UNSPECIFIED
         )
@@ -194,3 +222,59 @@ class StyleMixin:
             )
 
         return prompt
+
+    async def _insert_anchors(
+        self,
+        prompt: VisualPrompt,
+        vis_type: VIS_TYPE,
+        llm_parts: list[VisualPromptPart],
+    ) -> None:
+        """
+        Insert the scene anchor, then one anchor per in-frame character.
+
+        Inserted ahead of the LLM's parts on purpose. `VisualPrompt._build_prompt`
+        dedupes with `dict.fromkeys`, which keeps the first occurrence, so position is
+        what makes the anchor's wording win over a vaguer duplicate from the LLM.
+
+        Character anchors are skipped for vis types that have no cast - an object study
+        should not carry the crew's appearance.
+        """
+        scene = getattr(self, "scene", None)
+        if not scene:
+            return
+
+        # Index 0 for now; the style parts are inserted at 0 afterwards and push these
+        # down, which lands everything in the intended order.
+        anchor_parts: list[VisualPromptPart] = []
+
+        scene_anchor = await self.scene_anchor(scene)
+        if scene_anchor:
+            anchor_parts.append(
+                VisualPromptPart(positive_keywords_raw=split_anchor(scene_anchor))
+            )
+
+        if vis_type not in VIS_TYPES_WITHOUT_CAST:
+            characters = list(getattr(self, "characters", None) or scene.characters)
+            for character in characters_in_frame(prompt, characters):
+                keywords = []
+
+                character_anchor = await self.character_anchor(character)
+                if character_anchor:
+                    keywords.extend(split_anchor(character_anchor))
+
+                # RC4: a rule labelled HARD was being handed to the prompt-writing LLM
+                # and silently dropped in the keyword compression. Emit it directly.
+                if character.visual_rules:
+                    keywords.extend(split_anchor(character.visual_rules))
+
+                if keywords:
+                    anchor_parts.append(
+                        VisualPromptPart(positive_keywords_raw=keywords)
+                    )
+
+        if not anchor_parts:
+            return
+
+        insert_at = prompt.parts.index(llm_parts[0]) if llm_parts else len(prompt.parts)
+        for offset, part in enumerate(anchor_parts):
+            prompt.parts.insert(insert_at + offset, part)
