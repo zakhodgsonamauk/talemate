@@ -1883,3 +1883,24 @@ async def test_scene_illustration_still_counts_extra_figures(styling_agent):
     await styling_agent.apply_styles(prompt, VIS_TYPE.SCENE_ILLUSTRATION)
 
     assert "second figure" in prompt.positive_prompt
+
+
+def test_sanitise_drops_orientation_and_subject_count_phrasings():
+    """Fourth wave, from a live character card. Same instructions as entries already in
+    the list, worded differently - orientation is set by the resolution, and the card
+    style template supplies "solo" itself."""
+    from talemate.agents.visual.style import sanitise_keywords
+
+    kept = sanitise_keywords(
+        [
+            "portrait orientation",
+            "single subject",
+            "orientation",
+            "solo",
+            "harsh overhead lighting",
+            "violet skin",
+        ]
+    )
+
+    # "solo" is the style template's own tag and must survive.
+    assert kept == ["solo", "harsh overhead lighting", "violet skin"]

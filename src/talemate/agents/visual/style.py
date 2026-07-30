@@ -135,6 +135,15 @@ BANNED_FORMAT_KEYWORDS = {
     "portrait",
     "portrait format",
     "landscape format",
+    # Observed after the earlier entries shipped - the same instruction, differently
+    # worded. Orientation comes from the configured resolution, and "solo" already comes
+    # from the character-card style template.
+    "portrait orientation",
+    "landscape orientation",
+    "orientation",
+    "single subject",
+    "one subject",
+    "solo subject",
     "horizontal/landscape",
     "horizontal composition",
     "square",
