@@ -31,6 +31,7 @@ from .style import (
     estimate_prompt_tokens,
     normalize_keyword,
     sanitise_keywords,
+    weight_group,
 )
 from .exceptions import ImageEditNotAvailableError, TextToImageNotAvailableError
 
@@ -40,6 +41,10 @@ log = structlog.get_logger("talemate.agents.visual.generation")
 # reserve, three derived character anchors fill the whole budget and the image ends up
 # depicting nobody doing anything.
 ACTION_BUDGET_RESERVE = 0.35
+
+# Added to the negative prompt when the subject is not human. The checkpoint's prior is
+# overwhelmingly human, so a non-human trait stated only positively comes back diluted.
+SPECIES_NEGATIVES = ("human skin", "human ears", "ordinary skin tone")
 
 # Words marking a keyword as about a person or what they are doing, rather than about the
 # room. Setting-duplication filtering must never touch these.
@@ -257,7 +262,9 @@ class GenerationMixin:
         keywords = await self._drop_duplicate_setting(keywords, request)
         keywords = await self._trim_to_budget(keywords, request)
 
-        request.prompt = ", ".join(dict.fromkeys(keywords))
+        keywords = list(dict.fromkeys(keywords))
+        await self._add_species_negatives(request)
+        request.prompt = await self._render_with_emphasis(keywords, request)
 
         if request.prompt != original:
             log.debug(
@@ -325,6 +332,85 @@ class GenerationMixin:
                 )
 
         return surviving
+
+    async def _render_with_emphasis(
+        self, keywords: list[str], request: GenerationRequest
+    ) -> str:
+        """
+        Join the keywords, weighting the identity group.
+
+        Runs last, after every filter. Emphasis brackets would break the string
+        comparisons that dedupe, suppression and budgeting all rely on, so nothing
+        upstream may see them.
+        """
+        weight = self._identity_weight()
+        if abs(weight - 1.0) < 0.01:
+            return ", ".join(keywords)
+
+        _, character_tokens = await self._anchor_token_sets(request)
+        identity = set().union(*character_tokens) if character_tokens else set()
+        if not identity:
+            return ", ".join(keywords)
+
+        rendered: list[str] = []
+        group: list[str] = []
+
+        def flush():
+            if group:
+                rendered.append(weight_group(group, weight))
+                group.clear()
+
+        for keyword in keywords:
+            if keyword.strip().lower() in identity:
+                group.append(keyword)
+            else:
+                flush()
+                rendered.append(keyword)
+        flush()
+
+        return ", ".join(rendered)
+
+    def _identity_weight(self) -> float:
+        try:
+            configured = self.resolve_config("prompt_generation", "identity_weight")
+        except Exception:
+            configured = None
+        return float(configured) if configured else 1.0
+
+    async def _add_species_negatives(self, request: GenerationRequest) -> None:
+        """
+        Push back against the checkpoint's human prior for a non-human subject.
+
+        A model trained overwhelmingly on humans renders "deep violet skin" as a human
+        with a faint tint. Saying so in the positive prompt is not enough; the negative
+        prompt is the other half of the same instruction.
+        """
+        scene = active_scene.get()
+        if not scene or request.vis_type in VIS_TYPES_WITHOUT_CAST:
+            return
+
+        characters = list(getattr(self, "characters", None) or scene.characters)
+        if not characters:
+            return
+
+        # Only the primary subject is described in the prompt, so only its species is
+        # relevant - negatives from a second character would fight the one being drawn.
+        species = (characters[0].base_attributes or {}).get("species", "")
+        if not species or species.strip().lower().rstrip("s") in ("human", "man"):
+            return
+
+        additions = [n for n in SPECIES_NEGATIVES if n not in (request.negative_prompt or "")]
+        if not additions:
+            return
+
+        existing = (request.negative_prompt or "").strip().rstrip(",")
+        request.negative_prompt = ", ".join(filter(None, [existing, *additions]))
+        log.debug(
+            "species_negatives.added",
+            species=species,
+            character=characters[0].name,
+            added=additions,
+        )
 
     async def _suppress_stale_wardrobe(
         self, keywords: list[str], request: GenerationRequest

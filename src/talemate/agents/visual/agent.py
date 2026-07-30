@@ -255,6 +255,16 @@ class VisualAgent(
                         max=600,
                         step=1,
                     ),
+                    "identity_weight": AgentActionConfig(
+                        type="number",
+                        value=1.3,
+                        label="Appearance Emphasis",
+                        description="Emphasis applied to a character's appearance keywords, using A1111 (text:weight) syntax. Diffusion models weight a scene's setting far more readily than a specific person's traits, so an unusual trait stated plainly often comes back diluted.",
+                        note="1.0 disables it. Above roughly 1.5 the emphasis starts distorting anatomy.",
+                        min=1.0,
+                        max=1.6,
+                        step=0.05,
+                    ),
                     "automatic_analysis": AgentActionConfig(
                         type="bool",
                         value=False,

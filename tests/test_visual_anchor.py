@@ -1541,3 +1541,89 @@ async def test_setting_filter_never_eats_action_detail(styling_agent):
 
     for kw in action:
         assert kw in request.prompt, f"action detail was eaten: {kw}"
+
+
+# ===========================================================================
+# Prompt adherence
+#
+# Stable, clean prompts turned out to be necessary but not sufficient. Observed: the
+# setting binds correctly while per-subject attributes do not - "deep violet skin" came
+# back near-human, "naked" came back in a tank top, "face in shadow" came back lit. That
+# is SDXL attribute binding, made worse at cfg 5. These are the prompt-level levers.
+# ===========================================================================
+
+
+def test_weight_identity_wraps_the_anchor_group():
+    """A1111 reads (text:1.3) as emphasis. Applied to the identity group as a whole
+    rather than per token, which would cost a bracket pair each."""
+    from talemate.agents.visual.style import weight_group
+
+    assert weight_group(["alien woman", "violet skin"], 1.3) == (
+        "(alien woman, violet skin:1.3)"
+    )
+
+
+def test_weight_identity_is_a_no_op_at_weight_one():
+    from talemate.agents.visual.style import weight_group
+
+    assert weight_group(["alien woman"], 1.0) == "alien woman"
+
+
+def test_weight_identity_escapes_existing_parentheses():
+    """An unescaped bracket in an anchor would change how the whole prompt parses."""
+    from talemate.agents.visual.style import weight_group
+
+    assert weight_group(["scar (old)"], 1.2) == r"(scar \(old\):1.2)"
+
+
+async def test_finalize_weights_the_identity_anchor(styling_agent):
+    from talemate.context import active_scene
+
+    styling_agent.actions["prompt_generation"].config["identity_weight"].value = 1.3
+    request = _request(", ".join([SCENE_ANCHOR, KAIRA_ANCHOR, "Kaira", "leaning over"]))
+
+    token = active_scene.set(styling_agent.scene)
+    try:
+        await styling_agent._finalize_prompt(request)
+    finally:
+        active_scene.reset(token)
+
+    assert f"({KAIRA_ANCHOR}:1.3)" in request.prompt
+    # Setting and action are left unweighted.
+    assert SCENE_ANCHOR in request.prompt
+    assert "leaning over" in request.prompt
+
+
+async def test_finalize_adds_species_negatives_for_a_non_human_subject(styling_agent):
+    """The checkpoint's prior is overwhelmingly human, which is why violet skin comes
+    back muted. Push back in the negative prompt as well as the positive."""
+    from talemate.context import active_scene
+
+    styling_agent.kaira.base_attributes["species"] = "Altrusian"
+    request = _request(", ".join([KAIRA_ANCHOR, "Kaira"]))
+    request.negative_prompt = "text, watermark"
+
+    token = active_scene.set(styling_agent.scene)
+    try:
+        await styling_agent._finalize_prompt(request)
+    finally:
+        active_scene.reset(token)
+
+    assert "human skin" in request.negative_prompt
+    assert "text, watermark" in request.negative_prompt
+
+
+async def test_finalize_adds_no_species_negatives_for_a_human_subject(styling_agent):
+    from talemate.context import active_scene
+
+    styling_agent.kaira.base_attributes["species"] = "Human"
+    request = _request(", ".join([KAIRA_ANCHOR, "Kaira"]))
+    request.negative_prompt = "text, watermark"
+
+    token = active_scene.set(styling_agent.scene)
+    try:
+        await styling_agent._finalize_prompt(request)
+    finally:
+        active_scene.reset(token)
+
+    assert "human skin" not in request.negative_prompt

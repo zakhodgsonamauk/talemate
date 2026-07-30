@@ -67,6 +67,29 @@ def normalize_keyword(keyword: str) -> str:
     return stripped.replace("_", " ")
 
 
+def weight_group(keywords: list[str], weight: float) -> str:
+    """
+    Render keywords as an A1111 emphasis group: `(a, b, c:1.3)`.
+
+    Applied to the identity group as a whole rather than per keyword, which would spend a
+    bracket pair on each. Emphasis is the prompt-level answer to the model ignoring a
+    token - "deep violet skin" came back near-human at default weight.
+
+    Existing brackets are escaped; an unescaped one would change how the rest of the
+    prompt parses.
+    """
+    text = ", ".join(keywords)
+    if not text:
+        return text
+
+    text = text.replace("(", r"\(").replace(")", r"\)")
+
+    if abs(weight - 1.0) < 0.01:
+        return ", ".join(keywords)
+
+    return f"({text}:{weight:g})"
+
+
 def split_anchor(anchor: str) -> list[str]:
     """Comma-delimited anchor string to keyword list, blanks dropped."""
     return [token.strip() for token in anchor.split(",") if token.strip()]
