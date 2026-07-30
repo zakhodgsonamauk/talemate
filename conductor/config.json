@@ -1,0 +1,10 @@
+{
+  "mode": "agentic",
+  "max_fix_cycles": 5,
+  "models": {
+    "planning": "inherit",
+    "execution": "sonnet",
+    "overrides": {},
+    "force_session_model": false
+  }
+}

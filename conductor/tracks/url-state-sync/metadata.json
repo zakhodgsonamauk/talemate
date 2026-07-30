@@ -1,0 +1,55 @@
+{
+  "version": 3,
+  "track_id": "url-state-sync",
+  "name": "URL reflects app state",
+  "type": "ui",
+  "created": "2026-07-30",
+  "status": "implemented-tested-pending-review",
+  "design_doc": "docs/fork/url-state-design.md",
+  "loop_state": {
+    "current_step": "EVALUATE_EXECUTION",
+    "step_status": "PASSED",
+    "fix_cycle_count": 1,
+    "max_fix_cycles": 5,
+    "superpower_enhanced": true
+  },
+  "tasks": [
+    { "id": "T1", "name": "urlState.js pure parse/stringify", "status": "done", "deps": [], "note": "29 ad-hoc round-trip checks pass; no committed test runner exists" },
+    { "id": "T2", "name": "urlStateSlices.js registry", "status": "done", "deps": ["T1"] },
+    { "id": "T3", "name": "UrlStateMixin.js", "status": "done", "deps": ["T1"] },
+    { "id": "T5", "name": "WorldStateManagerMenu slice", "status": "not-needed", "deps": ["T2"], "note": "no expose block; WSM is the source of truth. Zero diff." },
+    { "id": "T6", "name": "WorldStateManager slice", "status": "not-needed", "deps": ["T2"], "note": "no expose block; tab + show() readable as-is. Zero diff." },
+    { "id": "T7", "name": "VisualLibrary slice", "status": "done", "deps": ["T2"], "note": "only file needing an expose change" },
+    { "id": "T8", "name": "AppConfig + DebugTools slices", "status": "not-needed", "deps": ["T2"], "note": "no expose blocks. Zero diff." },
+    { "id": "T9", "name": "TalemateApp wiring + restore", "status": "done", "deps": ["T2", "T3", "T7"] },
+    { "id": "T10", "name": "Playwright e2e", "status": "done", "deps": ["T9"], "note": "All 14 cases pass; cases 3/7/14 re-run with the full stack (KoboldCpp up)" },
+    { "id": "T11", "name": "FORK.md divergence tables", "status": "done", "deps": ["T10"] },
+    { "id": "T12", "name": "Story image viewer + edit prompt URLs (?img=, ?edit=, &del=1)", "status": "done", "deps": ["T10"], "note": "Required hoisting per-message viewer state into SceneMessages; edit prompt needed zero component changes" }
+  ],
+  "constraints": {
+    "max_upstream_files_modified": 6,
+    "max_upstream_lines": 70,
+    "new_npm_dependencies": 0
+  },
+  "actuals": {
+    "upstream_files_modified": 4,
+    "upstream_lines": "+64 / -11",
+    "new_files": 3,
+    "new_file_lines": 861,
+    "new_npm_dependencies": 0,
+    "note": "Insertions now near the 70-line ceiling; a further slice this size needs the budget revisited, not quietly exceeded."
+  },
+  "decisions": [
+    "Hash routing, not real paths — avoids a frontend_wsgi.py diff",
+    "No vue-router — no route components exist to route to",
+    "Auto-load scene on restore, with a banner; refresh already destroys server-side scene state",
+    "Shareable links out of scope — backend permits one websocket",
+    "Writer is a 300ms poll, not a reactive watcher: a computed reading child state via $refs registers no dependency, so the hash silently stopped tracking the world editor. Found in the browser, not by review.",
+    "Banner carries no timestamp — recent_scenes[].date is a last-opened stamp, not a save time"
+  ],
+  "open_gaps": [
+    "Visual library opened from the toolbar with no asset selected is not URL-addressable",
+    "?img= / ?edit= do not resolve for assets outside the loaded (max_backscroll-windowed) message list",
+    "urlState.js round-trip checks (38 cases) are not committed; talemate_frontend has no test runner"
+  ]
+}
