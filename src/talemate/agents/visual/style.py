@@ -1,3 +1,6 @@
+import dataclasses
+import re
+
 import structlog
 
 from .anchors import characters_in_frame
@@ -23,9 +26,146 @@ VIS_TYPES_WITHOUT_CAST = {
 }
 
 
+# SDXL's text encoder attends to 77 tokens per chunk. A1111 will happily send more, but
+# attention falls off sharply past the first chunk or two, so tokens beyond this are
+# spent rather than used. Two chunks' worth, minus room for the BOS/EOS pair.
+DEFAULT_MAX_PROMPT_TOKENS = 150
+
+_WORD_RE = re.compile(r"[\w'-]+")
+
+
+def estimate_prompt_tokens(text: str) -> int:
+    """
+    Rough CLIP token count.
+
+    An estimate, not a tokenizer: one token per word plus one per comma separator.
+    CLIP's BPE splits some words into several tokens, so this reads low on unusual
+    vocabulary. Good enough to decide when to start trimming, and it avoids dragging a
+    tokenizer dependency into the prompt path.
+    """
+    if not text:
+        return 0
+    return len(_WORD_RE.findall(text)) + text.count(",")
+
+
 def split_anchor(anchor: str) -> list[str]:
     """Comma-delimited anchor string to keyword list, blanks dropped."""
     return [token.strip() for token in anchor.split(",") if token.strip()]
+
+
+@dataclasses.dataclass
+class AnchorParts:
+    """
+    The prompt parts _insert_anchors created, kept apart by role.
+
+    The budget enforcer needs to know which part is which to drop them in the right
+    order, and a flat list cannot tell a scene anchor from a character one.
+    """
+
+    scene: VisualPromptPart | None = None
+    characters: list[VisualPromptPart] = dataclasses.field(default_factory=list)
+
+    @property
+    def ordered(self) -> list[VisualPromptPart]:
+        """Insertion order: scene anchor first, then one part per character."""
+        parts = [self.scene] if self.scene else []
+        return parts + self.characters
+
+
+# Keywords the prompt-writing LLM emits that a diffusion model cannot act on. Matched
+# whole-token and case-insensitively, so "traction control" survives while "action" does
+# not.
+#
+# Format and camera meta. The LLM produces these because our own templates used to ask
+# it to "emphasize the horizontal/landscape format". Orientation is decided by the
+# resolution, so restating it in the prompt only spends tokens.
+BANNED_FORMAT_KEYWORDS = {
+    "horizontal",
+    "vertical",
+    "landscape",
+    "portrait",
+    "portrait format",
+    "landscape format",
+    "horizontal/landscape",
+    "horizontal composition",
+    "square",
+    "square format",
+    "cinematic",
+    "cinematic framing",
+    "cinematic composition",
+    "dynamic",
+    "dynamic composition",
+    "dynamic moment",
+    "dynamic space scene",
+    "composition",
+    "framing",
+    "moment-capturing",
+    "screen cap",
+    "screencap",
+    "movie still",
+    "storyboard",
+    "storyboard frame",
+    "wide shot",
+    "aspect ratio",
+}
+
+# Plot, state and mood words. They read as meaningful to a person and render as nothing:
+# "corruption" and "diagnostic" contributed exactly zero pixels to the image that
+# started this track.
+BANNED_ABSTRACT_KEYWORDS = {
+    "action",
+    "interaction",
+    "characters in action",
+    "emotion",
+    "tension",
+    "tense",
+    "tense moment",
+    "tense atmosphere",
+    "atmosphere",
+    "moment",
+    "key moment",
+    "pivotal moment",
+    "frozen moment",
+    "corruption",
+    "corrupted data",
+    "diagnostic",
+    "diagnostics",
+    "waiting",
+    "watching",
+    "focused",
+    "focus",
+    "emergency protocols",
+    "drama",
+    "dramatic",
+    "mood",
+    "narrative",
+    "storytelling",
+    "visual storytelling",
+}
+
+BANNED_KEYWORDS = BANNED_FORMAT_KEYWORDS | BANNED_ABSTRACT_KEYWORDS
+
+
+def sanitise_keywords(keywords: list[str]) -> list[str]:
+    """
+    Drop keywords a diffusion model cannot render.
+
+    Whole-token matching only. Applied to the LLM's keyword list and never to anchors or
+    style templates, which we author and which are already clean.
+    """
+    kept: list[str] = []
+    dropped: list[str] = []
+
+    for keyword in keywords:
+        if keyword.strip().lower() in BANNED_KEYWORDS:
+            dropped.append(keyword)
+        else:
+            kept.append(keyword)
+
+    if dropped:
+        log.debug("sanitise_keywords.dropped", keywords=dropped)
+
+    return kept
 
 
 class StyleMixin:
@@ -184,7 +324,12 @@ class StyleMixin:
         # exactly which they are is what lets the sanitiser (T7) touch only them.
         llm_parts = list(prompt.parts)
 
-        await self._insert_anchors(prompt, vis_type, llm_parts)
+        # Only the LLM's keyword lists get filtered. positive_descriptive is left alone
+        # - the in-frame matcher reads it, and a DESCRIPTIVE backend ships it verbatim.
+        for part in llm_parts:
+            part.positive_keywords_raw = sanitise_keywords(part.positive_keywords_raw)
+
+        anchor_parts = await self._insert_anchors(prompt, vis_type, llm_parts)
 
         template_art_style: VisualStyle | None = self.style_template(
             VIS_TYPE.UNSPECIFIED
@@ -221,14 +366,80 @@ class StyleMixin:
                 ),
             )
 
+        self._enforce_prompt_budget(prompt, llm_parts, anchor_parts)
+
         return prompt
+
+    def _enforce_prompt_budget(
+        self,
+        prompt: VisualPrompt,
+        llm_parts: list[VisualPromptPart],
+        anchor_parts: "AnchorParts",
+    ) -> None:
+        """
+        Trim the positive prompt back to the configured token budget.
+
+        Drop order, cheapest loss first:
+
+        1. the LLM's action keywords - a vaguer action still renders
+        2. character anchors past the first - fewer right-looking people beats several
+           wrong-looking ones
+        3. the scene anchor
+
+        The style parts and the first character anchor are never trimmed. An image of
+        the wrong person in the wrong style is not a smaller failure than a long prompt.
+        """
+        budget = self._max_prompt_tokens()
+        if estimate_prompt_tokens(prompt.positive_prompt) <= budget:
+            return
+
+        scene_part = anchor_parts.scene
+        character_parts = anchor_parts.characters
+
+        # 1. LLM keywords
+        for part in llm_parts:
+            while part.positive_keywords_raw and (
+                estimate_prompt_tokens(prompt.positive_prompt) > budget
+            ):
+                part.positive_keywords_raw = part.positive_keywords_raw[:-1]
+
+        # 2. extra character anchors, last first - character_parts[0] is protected
+        for part in reversed(character_parts[1:]):
+            if estimate_prompt_tokens(prompt.positive_prompt) <= budget:
+                break
+            part.positive_keywords_raw = []
+
+        # 3. the scene anchor
+        if scene_part and estimate_prompt_tokens(prompt.positive_prompt) > budget:
+            scene_part.positive_keywords_raw = []
+
+        remaining = estimate_prompt_tokens(prompt.positive_prompt)
+        log.debug(
+            "prompt_budget.enforced",
+            budget=budget,
+            tokens=remaining,
+            over_budget=remaining > budget,
+        )
+
+    def _max_prompt_tokens(self) -> int:
+        """
+        The image-prompt token budget.
+
+        Deliberately not prompt_generation.max_length - that is how many tokens the LLM
+        may generate while writing the prompt, which is a different number entirely.
+        """
+        try:
+            configured = self.resolve_config("prompt_generation", "image_max_tokens")
+        except Exception:
+            configured = None
+        return configured or DEFAULT_MAX_PROMPT_TOKENS
 
     async def _insert_anchors(
         self,
         prompt: VisualPrompt,
         vis_type: VIS_TYPE,
         llm_parts: list[VisualPromptPart],
-    ) -> None:
+    ) -> "AnchorParts":
         """
         Insert the scene anchor, then one anchor per in-frame character.
 
@@ -239,18 +450,16 @@ class StyleMixin:
         Character anchors are skipped for vis types that have no cast - an object study
         should not carry the crew's appearance.
         """
+        result = AnchorParts()
+
         scene = getattr(self, "scene", None)
         if not scene:
-            return
-
-        # Index 0 for now; the style parts are inserted at 0 afterwards and push these
-        # down, which lands everything in the intended order.
-        anchor_parts: list[VisualPromptPart] = []
+            return result
 
         scene_anchor = await self.scene_anchor(scene)
         if scene_anchor:
-            anchor_parts.append(
-                VisualPromptPart(positive_keywords_raw=split_anchor(scene_anchor))
+            result.scene = VisualPromptPart(
+                positive_keywords_raw=split_anchor(scene_anchor)
             )
 
         if vis_type not in VIS_TYPES_WITHOUT_CAST:
@@ -268,13 +477,16 @@ class StyleMixin:
                     keywords.extend(split_anchor(character.visual_rules))
 
                 if keywords:
-                    anchor_parts.append(
+                    result.characters.append(
                         VisualPromptPart(positive_keywords_raw=keywords)
                     )
 
-        if not anchor_parts:
-            return
+        ordered = result.ordered
+        if not ordered:
+            return result
 
         insert_at = prompt.parts.index(llm_parts[0]) if llm_parts else len(prompt.parts)
-        for offset, part in enumerate(anchor_parts):
+        for offset, part in enumerate(ordered):
             prompt.parts.insert(insert_at + offset, part)
+
+        return result

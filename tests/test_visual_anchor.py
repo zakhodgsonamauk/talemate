@@ -405,3 +405,185 @@ async def test_apply_styles_skips_character_anchors_for_object_illustration(
 
     assert KAIRA_ANCHOR not in positive
     assert "sidearm" in positive
+
+
+# ---------------------------------------------------------------------------
+# T7 — sanitising the LLM keyword part
+# ---------------------------------------------------------------------------
+
+
+# Verbatim from the failing generation that opened this track (request 77ae2130).
+OBSERVED_BAD_PROMPT = [
+    "horizontal",
+    "landscape",
+    "cinematic",
+    "dynamic",
+    "action",
+    "interaction",
+    "sterile control room",
+    "flickering displays",
+    "exhausted captain",
+    "alert alien officer",
+    "corruption",
+    "diagnostic",
+    "waiting",
+    "watching",
+    "tense moment",
+    "geometric patterns",
+    "violet skin",
+    "dark circles",
+    "focused",
+]
+
+
+def test_sanitise_drops_format_meta():
+    from talemate.agents.visual.style import sanitise_keywords
+
+    kept = sanitise_keywords(
+        ["horizontal", "landscape", "cinematic framing", "sterile control room"]
+    )
+
+    assert kept == ["sterile control room"]
+
+
+def test_sanitise_drops_non_visual_abstractions():
+    from talemate.agents.visual.style import sanitise_keywords
+
+    kept = sanitise_keywords(
+        ["corruption", "diagnostic", "waiting", "watching", "flickering displays"]
+    )
+
+    assert kept == ["flickering displays"]
+
+
+def test_sanitise_keeps_the_renderable_half_of_the_observed_prompt():
+    """AC3, against the real prompt that produced a lit-faced policeman in a room with
+    mountains outside the windows."""
+    from talemate.agents.visual.style import sanitise_keywords
+
+    kept = sanitise_keywords(OBSERVED_BAD_PROMPT)
+
+    assert "sterile control room" in kept
+    assert "flickering displays" in kept
+    assert "violet skin" in kept
+    assert "geometric patterns" in kept
+
+    for dropped in ["horizontal", "landscape", "corruption", "waiting", "focused"]:
+        assert dropped not in kept
+
+
+def test_sanitise_does_not_touch_substrings_of_kept_tokens():
+    """"action" is banned; "reaction shot of a chain reaction" is not what we mean, but
+    neither is butchering "traction control" into "tration control"."""
+    from talemate.agents.visual.style import sanitise_keywords
+
+    kept = sanitise_keywords(["traction control", "action"])
+
+    assert kept == ["traction control"]
+
+
+def test_sanitise_is_case_insensitive():
+    from talemate.agents.visual.style import sanitise_keywords
+
+    assert sanitise_keywords(["Horizontal", "TENSION", "brass railing"]) == [
+        "brass railing"
+    ]
+
+
+async def test_apply_styles_sanitises_only_the_llm_part(styling_agent):
+    """The anchors and styles are ours and are already clean. Only the LLM's list gets
+    filtered - and its descriptive prose must survive, because the in-frame matcher
+    reads it and a DESCRIPTIVE backend would ship it."""
+    from talemate.agents.visual.schema import VIS_TYPE
+
+    prompt = _prompt_with_descriptive(
+        "Kaira watches the console. The composition is horizontal and cinematic.",
+        keywords=OBSERVED_BAD_PROMPT,
+    )
+
+    await styling_agent.apply_styles(prompt, VIS_TYPE.SCENE_ILLUSTRATION)
+    positive = prompt.positive_prompt
+
+    assert "horizontal" not in positive
+    assert "corruption" not in positive
+    assert KAIRA_ANCHOR in positive
+    assert SCENE_ANCHOR in positive
+
+    surviving_descriptive = " ".join(
+        part.positive_descriptive for part in prompt.parts if part.positive_descriptive
+    )
+    assert "horizontal and cinematic" in surviving_descriptive
+
+
+# ---------------------------------------------------------------------------
+# T8 — prompt budget
+# ---------------------------------------------------------------------------
+
+
+def test_estimate_prompt_tokens_counts_words_and_separators():
+    from talemate.agents.visual.style import estimate_prompt_tokens
+
+    assert estimate_prompt_tokens("") == 0
+    # 3 words + 1 comma separator
+    assert estimate_prompt_tokens("violet skin, tall") == 4
+
+
+async def test_budget_drops_llm_keywords_first(styling_agent, monkeypatch):
+    """AC6. When something has to go, the LLM's action keywords go before the anchors -
+    a wrong-looking character is worse than a vaguer action."""
+    from talemate.agents.visual import style as style_module
+    from talemate.agents.visual.schema import VIS_TYPE
+
+    monkeypatch.setattr(style_module, "DEFAULT_MAX_PROMPT_TOKENS", 20)
+
+    prompt = _prompt_with_descriptive(
+        "Kaira watches the console while Elmer leans over it.",
+        keywords=[f"filler keyword {n}" for n in range(40)],
+    )
+
+    await styling_agent.apply_styles(prompt, VIS_TYPE.SCENE_ILLUSTRATION)
+    positive = prompt.positive_prompt
+
+    assert KAIRA_ANCHOR.split(",")[0] in positive
+    assert "filler keyword 39" not in positive
+
+
+async def test_budget_never_drops_the_first_character_anchor(
+    styling_agent, monkeypatch
+):
+    """Even at an absurd budget the subject keeps its identity tokens. An image of the
+    wrong person is a worse failure than an over-long prompt."""
+    from talemate.agents.visual import style as style_module
+    from talemate.agents.visual.schema import VIS_TYPE
+
+    monkeypatch.setattr(style_module, "DEFAULT_MAX_PROMPT_TOKENS", 1)
+
+    prompt = _prompt_with_descriptive(
+        "Kaira watches the console while Elmer leans over it.",
+        keywords=["sterile control room"],
+    )
+
+    await styling_agent.apply_styles(prompt, VIS_TYPE.SCENE_ILLUSTRATION)
+    positive = prompt.positive_prompt
+
+    assert KAIRA_ANCHOR in positive
+    assert ELMER_ANCHOR not in positive, "second anchor should have been dropped"
+    assert SCENE_ANCHOR not in positive, "scene anchor should have been dropped"
+
+
+async def test_budget_leaves_a_prompt_under_budget_alone(styling_agent):
+    from talemate.agents.visual.schema import VIS_TYPE
+
+    prompt = _prompt_with_descriptive(
+        "Kaira watches the console while Elmer leans over it.",
+        keywords=["sterile control room", "flickering displays"],
+    )
+
+    await styling_agent.apply_styles(prompt, VIS_TYPE.SCENE_ILLUSTRATION)
+    positive = prompt.positive_prompt
+
+    assert "sterile control room" in positive
+    assert "flickering displays" in positive
+    assert KAIRA_ANCHOR in positive
+    assert ELMER_ANCHOR in positive
+    assert SCENE_ANCHOR in positive
