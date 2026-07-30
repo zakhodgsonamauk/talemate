@@ -14,10 +14,23 @@ Everything here runs locally. Nothing leaves the machine.
 | Role | Model | Size | Served by |
 |---|---|---|---|
 | **Text** | `hf.co/TheDrummer/Rocinante-X-12B-v1-GGUF:Q4_K_M` | 6.96 GB | Ollama `:11434` |
-| **Images** | `CyberRealisticPony_V9.0_FP16.safetensors` | 6.94 GB | KoboldCpp `:5001` |
+| **Images** | `CyberRealistic_PonySemi_V5.safetensors` | 6.62 GB | KoboldCpp `:5001` |
 | Embeddings | `all-MiniLM-L6-v2` (CPU) | 90 MB | sentence-transformers, in-process |
 
 Replaced `qwen3:8b-q4_K_M` (text) and `sd_xl_turbo_1.0_fp16` (images).
+`CyberRealisticPony_V9.0_FP16` (fully photoreal) is also downloaded and available —
+see [Alternative image checkpoints](#alternative-image-checkpoints).
+
+**Art style must match the checkpoint.** Each image model has a paired visual style
+in `templates/world-state/fork-styles.yaml`:
+
+| Checkpoint | Art style | Why |
+|---|---|---|
+| `CyberRealistic_PonySemi_V5` | `fork_styles__semireal_pony` | No illustration/painting negatives — those fight the model's own painterly finish |
+| `CyberRealisticPony_V9.0_FP16` | `fork_styles__photoreal_pony` | Negative-prompts illustration/painting to push toward photography |
+
+Using the photoreal style with the semi-real checkpoint half-cancels the model's
+aesthetic. Switch both together.
 
 ---
 
@@ -210,6 +223,54 @@ Only ~6 s slower per image than Turbo despite 5× the steps — much better than
 
 ---
 
+## Sampler settings — required for Mistral-Nemo
+
+Talemate's `narrate` prompts map to the **`creative`** inference preset, which is a
+bare `InferenceParameters()`: `temperature 1.0, top_p 1.0, top_k 0`, with only
+`min_p 0.1` constraining it (`src/talemate/config/schema.py:362, 402`).
+
+Mistral-Nemo is unusually temperature-sensitive — its own model card recommends
+0.3. At 1.0 it degenerates. Observed in a real session: the narrator returned
+
+```
+后汉书后汉书后汉书后汉书后汉书后汉书后汉书…
+```
+
+repeated ~30 times instead of prose. Same template, same model, a different
+generation moments earlier was fine — so it's intermittent, which makes it easy to
+dismiss as a fluke. It isn't.
+
+Fixed in `config.yaml` under `presets.inference.creative`:
+
+| Parameter | Default | Set to |
+|---|---|---|
+| `temperature` | 1.0 | **0.8** |
+| `repetition_penalty` | 1.0 | **1.05** |
+
+`changed: true` is required or `save_config()` drops the preset on write
+(`config/state.py:103-105` only persists presets flagged as changed).
+
+Verify what a given prompt kind will actually use:
+
+```powershell
+.venv\Scripts\python.exe -c "import sys; sys.path.insert(0,'src'); from talemate.config import get_config; from talemate.client.presets import preset_for_kind
+class F: preset_group=''
+get_config(); print(preset_for_kind('narrate_512', F()))"
+# -> temperature 0.8 ... repetition_penalty 1.05
+```
+
+If narration still degenerates, drop `creative` to 0.7 before suspecting anything
+else.
+
+!!! danger "Edit config.yaml only while the backend is stopped"
+    `get_config()` caches the config in a module-level global and **never re-reads
+    the file** (`src/talemate/config/state.py:33-37`). The backend also calls
+    `save_config()` during normal play — including on autosave — which writes its
+    in-memory state over the file.
+
+    So editing `config.yaml` against a running backend achieves nothing and gets
+    silently reverted the next time it saves. Stop the backend, edit, restart.
+
 ## Practical notes
 
 **The image model leans explicit.** A test prompt describing only *"a weathered
@@ -224,3 +285,57 @@ active `KCPP_MODEL` with the alternative commented out directly above it.
 
 **A restart is required to change image model.** KoboldCpp takes one `--sdmodel`
 per launch. The text model, by contrast, is a live config change in Talemate.
+
+**Don't put model files in a synced folder.** `OLLAMA_MODELS` points into Dropbox,
+so every `ollama pull` triggers a multi-GB upload. Pulling the 7.5 GB Rocinante blob
+left Dropbox uploading at ~1.5 MB/s, which starved a concurrent HuggingFace download
+down to ~0.4 MB/s — a 6.6 GB checkpoint went from ~30 min to an estimated ~130 min.
+Diagnose with:
+
+```powershell
+Get-Counter '\Network Interface(*)\Bytes Sent/sec','\Network Interface(*)\Bytes Received/sec' -SampleInterval 2 -MaxSamples 2
+```
+
+Sustained upload with starved download means sync contention, not a slow mirror.
+Excluding the Ollama model directory from Dropbox selective sync would fix this
+permanently — 254 GB of GGUF blobs has no business being synced.
+
+**Use `hf_transfer` for multi-GB checkpoints.** HuggingFace throttles per
+connection, so a single-stream `curl` is slow regardless of your link. Measured on
+the same 6.6 GB file, same session:
+
+| Method | Rate | Wall time |
+|---|---|---|
+| `curl -L -o …` | 0.9 MB/s | ~130 min (est.) |
+| `hf_hub_download` + `hf_transfer` | **11.0 MB/s** | **10.3 min** |
+
+```powershell
+.venv\Scripts\python.exe -m pip install hf_transfer   # one-off, ~1 MB
+$env:HF_HUB_ENABLE_HF_TRANSFER='1'
+.venv\Scripts\python.exe -c "import os; os.environ['HF_HUB_ENABLE_HF_TRANSFER']='1'
+from huggingface_hub import hf_hub_download
+print(hf_hub_download(repo_id='cyberdelia/CyberRealisticSemiRealPony',
+                      filename='CyberRealistic_PonySemi_V5.safetensors',
+                      local_dir='.'))"
+```
+
+`ollama pull` already parallelises, which is why the 7.5 GB text model came down
+quickly while the curl'd checkpoint crawled.
+
+## Alternative image checkpoints
+
+Same uploader, same repo layout (single-file `.safetensors` at the repo root, no
+auth), so these are drop-in — only `KCPP_MODEL` changes:
+
+| Model | Style | Repo | Paired art style |
+|---|---|---|---|
+| `CyberRealistic_PonySemi_V5` | Semi-realistic *(active)* | `cyberdelia/CyberRealisticSemiRealPony` | `fork_styles__semireal_pony` |
+| `CyberRealisticPony_V9.0_FP16` | Photoreal | `cyberdelia/CyberRealisticPony` | `fork_styles__photoreal_pony` |
+
+Both are Pony-based, so the score tags and sampler settings carry over unchanged —
+only the checkpoint and its paired art style change. Anime-style alternatives that
+also ship a root-level single file
+include `Ine007/waiIllustriousSDXL_v160` and
+`LyliaEngine/autismmixSDXL_autismmixConfetti` — but those are Illustrious/NoobAI
+family and want booru-style tags rather than Pony `score_*` tags, so they'd need
+their own visual style.
