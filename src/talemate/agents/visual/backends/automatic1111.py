@@ -122,9 +122,7 @@ class Backend(backends.Backend):
                 type=backends.BackendStatusType.ERROR, message=str(e)
             )
 
-    async def generate(
-        self, request: GenerationRequest, response: GenerationResponse
-    ) -> GenerationResponse:
+    def build_payload(self, request: GenerationRequest) -> dict:
         steps = request.agent_config.get("steps") or request.sampler_settings.steps
         cfg_scale = request.agent_config.get("cfg_scale") or 7
         sampler_name = request.agent_config.get("sampler_name") or "DPM++ 2M"
@@ -140,6 +138,18 @@ class Backend(backends.Backend):
             "sampler_name": sampler_name,
             "scheduler": scheduler,
         }
+
+        # Omitted rather than sent as -1, so the backend's own default governs and this
+        # stays a no-op for anyone who never touches the seed setting.
+        if request.sampler_settings.seed is not None:
+            payload["seed"] = request.sampler_settings.seed
+
+        return payload
+
+    async def generate(
+        self, request: GenerationRequest, response: GenerationResponse
+    ) -> GenerationResponse:
+        payload = self.build_payload(request)
 
         log.info(
             "automatic1111.Backend.generate",

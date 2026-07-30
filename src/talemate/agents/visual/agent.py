@@ -18,7 +18,7 @@ from talemate.client.base import ClientBase
 from .backends import BACKENDS, NONE_BACKEND, Backend, BackendStatus
 from .commands import *  # noqa
 from .websocket_handler import VisualWebsocketHandler
-from .schema import ReadyCheckResult, BackendStatusType, PROMPT_TYPE
+from .schema import ReadyCheckResult, BackendStatusType, PROMPT_TYPE, SEED_MODE
 import talemate.agents.visual.nodes  # noqa: F401
 
 from .anchors import AnchorMixin
@@ -148,6 +148,23 @@ class VisualAgent(
                         value=False,
                         label="Automatic Generation",
                         description="Allow automatic generation of visual content",
+                    ),
+                    "seed_mode": AgentActionConfig(
+                        type="text",
+                        value=SEED_MODE.RANDOM,
+                        label="Seed",
+                        description="Random reseeds every image. Per scene derives one stable seed from the scene, holding palette and rendering style steady across its illustrations. Fixed uses the value below.",
+                        note="A seed applies to the whole image, so it steadies the look of a scene. It does not keep a character's face consistent - that comes from their stored appearance.",
+                        choices=SEED_MODE.choices(),
+                    ),
+                    "seed": AgentActionConfig(
+                        type="number",
+                        value=0,
+                        label="Fixed Seed",
+                        description="The seed to use when Seed is set to Fixed.",
+                        min=0,
+                        max=2**32 - 1,
+                        step=1,
                     ),
                 },
             ),

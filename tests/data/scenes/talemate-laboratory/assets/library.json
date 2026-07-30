@@ -17,7 +17,8 @@
           "height": 1024
         },
         "sampler_settings": {
-          "steps": 40
+          "steps": 40,
+          "seed": null
         },
         "reference_assets": [],
         "tags": [],
@@ -50,7 +51,8 @@
           "height": 1024
         },
         "sampler_settings": {
-          "steps": 40
+          "steps": 40,
+          "seed": null
         },
         "reference_assets": [],
         "tags": [
@@ -86,7 +88,8 @@
           "height": 1024
         },
         "sampler_settings": {
-          "steps": 40
+          "steps": 40,
+          "seed": null
         },
         "reference_assets": [],
         "tags": [
@@ -123,7 +126,8 @@
           "height": 1024
         },
         "sampler_settings": {
-          "steps": 40
+          "steps": 40,
+          "seed": null
         },
         "reference_assets": [],
         "tags": [
@@ -157,7 +161,8 @@
           "height": 1344
         },
         "sampler_settings": {
-          "steps": 40
+          "steps": 40,
+          "seed": null
         },
         "reference_assets": [
           "c26509ac97028c2ec0b696dc321dcb4883f4b3be1e3cfaf08d58b85154f4845d"

@@ -13,7 +13,8 @@
             "height": 1024
         },
         "sampler_settings": {
-            "steps": 40
+            "steps": 40,
+            "seed": null
         },
         "reference_assets": [],
         "tags": [],

@@ -15,11 +15,13 @@ from talemate.emit import emit
 from talemate.context import active_scene
 from .schema import (
     GEN_TYPE,
+    SEED_MODE,
     GenerationResponse,
     BackendStatusType,
     GenerationRequest,
     Resolution,
     FORMAT_TYPE,
+    resolve_seed,
 )
 from .exceptions import ImageEditNotAvailableError, TextToImageNotAvailableError
 
@@ -128,8 +130,33 @@ class GenerationMixin:
 
         task.add_done_callback(remove_task)
 
+    def _apply_seed(self, request: GenerationRequest) -> None:
+        """
+        Fill in the seed from configuration, unless the caller already set one.
+
+        A pinned seed holds palette and rendering style steady across a scene's images.
+        It does not hold character identity steady - visual anchors do that. Default mode
+        is RANDOM, so this is a no-op until someone opts in.
+        """
+        if request.sampler_settings.seed is not None:
+            return
+
+        try:
+            mode = self.resolve_config("_config", "seed_mode") or SEED_MODE.RANDOM
+            fixed_seed = self.resolve_config("_config", "seed")
+        except Exception as e:
+            log.debug("apply_seed.config_unavailable", error=str(e))
+            return
+
+        seed = resolve_seed(mode, scene=active_scene.get(), fixed_seed=fixed_seed)
+        if seed is not None:
+            request.sampler_settings.seed = seed
+            log.debug("apply_seed", mode=str(mode), seed=seed)
+
     @set_processing
     async def generate(self, request: GenerationRequest) -> GenerationResponse:
+        self._apply_seed(request)
+
         response = GenerationResponse(
             request=request,
             id=request.id,

@@ -2,6 +2,7 @@ from typing import Any, ClassVar, TYPE_CHECKING, Callable
 import pydantic
 import enum
 import base64
+import hashlib
 import uuid
 import re
 from talemate.context import active_scene
@@ -235,8 +236,52 @@ RESOLUTION_MAP["sd15"] = {
 }
 
 
+class SEED_MODE(ChoiceMixin, enum.StrEnum):
+    RANDOM = "RANDOM"
+    SCENE = "SCENE"
+    FIXED = "FIXED"
+
+
+# A1111 and most SD backends take a 32-bit unsigned seed.
+MAX_SEED = 2**32 - 1
+
+
+def resolve_seed(
+    mode: "SEED_MODE | str",
+    scene=None,
+    fixed_seed: int | None = None,
+) -> int | None:
+    """
+    The seed to send, or None to let the backend pick a fresh one.
+
+    Scoped deliberately: in txt2img the seed applies to the whole image, so pinning it
+    holds palette and rendering style steady across a scene's illustrations. It does not
+    hold a character's identity steady - visual anchors do that. See
+    docs/fork/visual-consistency-design.md.
+
+    Falls back to random whenever the requested mode has nothing to work with, because
+    a reseeded image is a far smaller surprise than a silently wrong one.
+    """
+    mode = SEED_MODE(mode) if mode else SEED_MODE.RANDOM
+
+    if mode == SEED_MODE.FIXED:
+        return fixed_seed if fixed_seed is not None else None
+
+    if mode == SEED_MODE.SCENE:
+        if not scene or not getattr(scene, "id", None):
+            return None
+        # Python's hash() is salted per process, which would break stability across
+        # restarts - the one property this mode exists to provide.
+        digest = hashlib.sha256(str(scene.id).encode("utf-8")).digest()
+        return int.from_bytes(digest[:4], "big")
+
+    return None
+
+
 class SamplerSettings(pydantic.BaseModel):
     steps: int = 40
+    # None means "backend picks". See resolve_seed.
+    seed: int | None = None
 
 
 class AssetAttachmentContext(pydantic.BaseModel):
