@@ -256,7 +256,9 @@ export default {
     mediaType: { type: String, required: false, default: 'image/png' },
   },
   inject: ['getWebsocket', 'registerMessageHandler', 'unregisterMessageHandler'],
-  emits: ['save-meta', 'set-scene-cover-image', 'set-character-cover-image'],
+  // `update:active-tab` lets an ancestor own which sub-tab is showing, which URL
+  // state sync needs in order to read it (src/utils/urlStateSlices.js).
+  emits: ['save-meta', 'set-scene-cover-image', 'set-character-cover-image', 'update:active-tab'],
   data() {
     return {
       form: this.createFormFromMeta(this.meta),
@@ -271,6 +273,12 @@ export default {
   watch: {
     initialTab(newTab) {
       this.activeTab = newTab;
+    },
+    activeTab(newTab) {
+      // Report tab changes upward so the open sub-tab has a single owner. Emitted
+      // for every change, including the ones this component makes itself (see the
+      // jumps to 'reference' during analysis), so the URL never goes stale.
+      this.$emit('update:active-tab', newTab);
     },
     meta: {
       deep: true,

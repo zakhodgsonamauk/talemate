@@ -326,6 +326,156 @@ URL state.
    pure `urlState.js` round-trip deserves unit tests; adding vitest is a separate
    decision, not smuggled into this track.
 
+## Increment 2 — Visual Library state
+
+Status: **implemented and e2e tested**, 2026-07-30.
+
+Test results, run against the full local stack:
+
+| # | Case | Result |
+|---|---|---|
+| 15 | Open library from the toolbar, nothing selected | **PASS** — `&visual=review`. This is the gap the first pass left. |
+| 16 | Switch library tabs | **PASS** — `visual=review` / `pending` / `scene` |
+| 17 | Expand a top-level tree folder | **PASS** — `&vlopen=CHARACTER_CARD` |
+| 18 | Expand a nested character folder | **PASS** — `vlopen=CHARACTER_CARD,CHARACTER_CARD::Kaira`, colons left readable |
+| 19 | Select an asset in the tree | **PASS** — asset id replaces the tab token, expansion retained |
+| 20 | Click Reference / Cover crop sub-tabs | **PASS** — `visual=<id>/reference`, `.../cover_crop`, live |
+| 21 | Click back to Info | **PASS** — sub-tab segment dropped, so the URL returns to the legacy form |
+| 22 | Cold load of the full deep link | **PASS** — library open, Scene tab, Reference sub-tab, all three folders expanded (including one that is *not* an ancestor of the selection, proving `vlopen` is real state and not the auto-derived set) |
+| 23 | Expansion must not flood history | **PASS** — after a sub-tab change then a folder expansion, a single back-press undid the *sub-tab* and collapsed the folder, i.e. expansion used `replaceState` |
+| 24 | Tab-only deep link | **PASS** — `?visual=pending` restores via `open()` with no asset |
+| 25 | Legacy bare-id link | **PASS** — `?visual=<assetId>` opens Scene/Info, hash left untouched |
+
+Zero console errors throughout. The pure layer is covered by 55 ad-hoc checks,
+including the comma/slash/apostrophe folder-name cases below.
+
+The first pass gave the Visual Library a single key, `?visual=<assetId>`, written
+only when an asset happened to be selected. Opening the library from the toolbar, or
+sitting on the Review Queue, put nothing in the hash at all — the modal was
+effectively invisible to the address bar. This increment addresses the library's own
+navigation.
+
+### What is in the modal
+
+| State | Where | Durable? |
+|---|---|---|
+| `activeTab` — `review_queue` / `pending_queue` / `scene` | `VisualLibrary.vue:102-106` | yes |
+| `sceneSelectedId` — selected asset | `VisualLibrary.vue:151` | yes (already `?visual=`) |
+| detail sub-tab — `info` / `reference` / `cover_crop` | `VisualImageView.vue:82-86` | yes |
+| `sceneOpenNodes` — expanded tree folders | `VisualLibrary.vue:149` | yes |
+| `sceneActiveNodes` | `VisualLibrary.vue:150` | redundant — equals `[sceneSelectedId]` |
+| `selectedIndex` — Review Queue selection | `VisualLibrary.vue:116` | **no** |
+| `pendingSelectedIndex` — Pending Queue selection | `VisualLibrary.vue:135` | **no** |
+
+The two queue selections are indices into arrays that only exist in the browser:
+`items` holds freshly generated, not-yet-saved images pushed over the websocket, and
+`pendingItems` holds queued generation requests. Both initialise empty, so after a
+reload an index either resolves to nothing or — once generation refills the list — to
+a *different* image than the one linked. They are therefore excluded: the tab
+restores, the selection within it does not. Recording them would produce links that
+silently lie.
+
+### Grammar
+
+```
+?visual=review                       library open, Review Queue
+?visual=pending                      library open, Pending Queue
+?visual=scene                        library open, Scene Assets, nothing selected
+?visual=<assetId>                    asset selected, Info tab
+?visual=<assetId>/reference          asset + detail sub-tab
+?visual=<assetId>/cover_crop
+&vlopen=CHARACTER_PORTRAIT,CHARACTER_PORTRAIT::Kaira,SCENE_CARD
+```
+
+- `review` / `pending` / `scene` are reserved tokens; any other value is an asset id
+  (they are 64-char hex, so no collision is possible).
+- An asset id implies the Scene Assets tab.
+- The detail tab is omitted when it is `info`, so a bare `?visual=<assetId>` keeps
+  the exact meaning it has today. **Links already in this document and in the commit
+  history stay valid.**
+- `vlopen` carries the *full* set of open folder ids, not a delta against what
+  selecting an asset would auto-open (`VisualLibraryScene.vue:473`). A delta would be
+  shorter — usually empty — but only by replicating upstream's derivation in our
+  code, which is exactly the kind of coupling `FORK.md` warns gets orphaned by a
+  merge. Full state is longer and self-contained.
+- Folder ids are `VIS_TYPE` at the top level and `VIS_TYPE::CharacterName` nested
+  (`VisualAssetsTree.vue:63,74`). Leaf (asset-id) nodes are excluded from `vlopen`.
+- `sceneActiveNodes` is not encoded; it mirrors the selected asset.
+
+### Push vs replace
+
+Library tab, asset selection and detail tab are navigation — they get `pushState`, so
+back undoes them. Tree expansion is incidental and gets `replaceState`, so expanding
+four folders does not cost four back-presses. This extends the existing
+`onlyDrawersDiffer` check in `UrlStateMixin.js` into a general "incidental keys" test
+covering drawers and `vlopen`.
+
+### The delimiter bug this exposed
+
+`urlState.js:210` currently does `params.toString().replace(/%2C/g, ",")` (and the
+same for `%2F`) to keep the hash readable. That is safe today because no value can
+contain a comma or slash. `vlopen` breaks that assumption: folder ids embed
+**character names**, so a character called `Smith, John` yields
+`CHARACTER_PORTRAIT::Smith%2C%20John`, the blanket replace turns the encoded comma
+into a real one, and parsing then splits one folder into two. A name containing `/`
+corrupts the same way.
+
+The fix is to stop blanket-unescaping and instead assemble the query so that only the
+delimiters *we* introduce between list items are literal, while each item stays
+percent-encoded. This is a latent bug in shipped code, not merely a constraint on the
+new work.
+
+**As built.** `stringify` no longer uses `URLSearchParams.toString()`; it builds the
+query by hand, encoding each value with `encodeQueryValue()` and inserting only its
+own delimiters literally. That helper relaxes exactly two escapes — `%20` to `+`
+(reversible, since a literal plus is `%2B`) and `%3A` to `:` (so
+`CHARACTER_PORTRAIT::Kaira` stays readable) — and deliberately leaves `,` and `/`
+encoded so they can never be mistaken for delimiters.
+
+Parsing needed the mirror-image fix: `URLSearchParams.get()` decodes the whole value,
+so reading `vlopen` through it would have re-created the same bug one layer down —
+a `%2C` inside a name would become a comma *before* the split. List values are
+therefore read from the raw query via `rawParam()` and decoded per item. Verified:
+a folder named `CHARACTER_PORTRAIT::Smith, John` round-trips intact, as do names
+containing `/` and `'`. `save=Infinity+Quest+1.json` still round-trips unchanged, and
+legacy `+`-for-space links still parse.
+
+### Upstream edits
+
+The detail sub-tab is the only piece that cannot be observed as things stand:
+`VisualImageView` does not emit tab changes (`emits:` at :259) and does not expose
+`activeTab` (`expose:` at :524), and `VisualLibrary`'s own `expose` list prevents
+reaching into it through `$refs`.
+
+The fix follows the pattern already used for the story image viewer — give the state
+a single owner and let the child derive from it:
+
+| File | Work | As built |
+|---|---|---|
+| `VisualImageView.vue` | emit `update:active-tab` when the tab changes | +9 / -1 |
+| `VisualLibraryScene.vue` | re-emit it upward as `update:detail-tab` | +2 / -1 |
+| `VisualLibrary.vue` | own it in `sceneInitialTab`; expose `activeTab`, `sceneOpenNodes`, `sceneInitialTab`, `open` | +23 / -5 |
+
+`open` had to join the `expose` list as well: a tab-only deep link has no asset, so
+`openWithAsset` is not applicable and the dialog is opened directly.
+
+Emitting from a watcher on `activeTab` rather than from the tab click means the
+component's *own* jumps to the Reference tab (which it performs during image analysis)
+also reach the URL, so the hash cannot silently drift out of date.
+
+Applying is already supported: `openWithAsset(id, initialTab)` exists
+(`VisualLibrary.vue:398`), and `VisualImageView` watches `initialTab` and syncs its
+own tab (`:272-274`).
+
+### On the diff budget
+
+Dropped as a constraint for this increment, deliberately. The ceiling only ever
+estimated the cost of merging future upstream releases; it was never about
+permission, and this is our fork. Upstream sync is now treated as possible but
+unlikely, so `FORK.md` rows stay (cheap, useful documentation of what we changed and
+why) while the insertion ceiling no longer shapes design decisions. Correctness wins;
+merge risk is noted per hunk where a change is genuinely fragile.
+
 ## Known limitations
 
 - **The visual library only appears in the URL when an asset is selected.** `?visual=`

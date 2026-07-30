@@ -14,12 +14,33 @@
  * Overlays ride in the query, because several can be open at once while the
  * path describes exactly one location:
  *
- *   ?visual=<assetId>  ?config=<tab>[/<page>]  ?debug=<tab>
+ *   ?config=<tab>[/<page>]  ?debug=<tab>
  *   ?d=scene,settings,debug,director            ?save=<filename>
  *   ?p=<promptsTab>
  *   ?img=<assetId>     a story image open in the full-size asset viewer
  *   ?edit=<assetId>    the image-editing instructions prompt for that image
  *   ?del=1             that edit will discard the old image ("Edit and Delete")
+ *
+ * The Visual Library rides in one key, because its tab and its selection are one
+ * location rather than two independent overlays:
+ *
+ *   ?visual=review                      open on the Review Queue
+ *   ?visual=pending                     open on the Pending Queue
+ *   ?visual=scene                       open on Scene Assets, nothing selected
+ *   ?visual=<assetId>                   asset selected, Info sub-tab
+ *   ?visual=<assetId>/reference         asset + sub-tab
+ *   ?visual=<assetId>/cover_crop
+ *   ?vlopen=CHARACTER_PORTRAIT,CHARACTER_PORTRAIT::Kaira
+ *
+ * `review`/`pending`/`scene` are reserved; anything else is an asset id (they are
+ * 64-char hex, so nothing can collide). The sub-tab is omitted when it is `info`,
+ * which is what keeps a bare `?visual=<assetId>` meaning exactly what it meant
+ * before the Visual Library gained its own state.
+ *
+ * The Review/Pending queue *selections* are deliberately absent: they are indices
+ * into arrays that only exist in this browser tab (unsaved generations, queued
+ * requests), so after a reload an index resolves to nothing or to a different
+ * image. The tab restores; the selection inside it cannot.
  *
  * The path segment for the package-manager tab is `mods`, matching its UI label;
  * the internal tab value is `package_manager`.
@@ -47,7 +68,25 @@ export const DRAWERS = ["scene", "settings", "director"];
 // Query keys this module owns. Anything else found in the query is preserved
 // verbatim in `extra` and re-emitted, so an unrecognised key from a newer build
 // survives a round trip instead of being silently dropped.
-const OWNED_QUERY_KEYS = ["save", "p", "visual", "config", "debug", "d", "img", "edit", "del"];
+const OWNED_QUERY_KEYS = [
+    "save",
+    "p",
+    "visual",
+    "vlopen",
+    "config",
+    "debug",
+    "d",
+    "img",
+    "edit",
+    "del",
+];
+
+// Reserved `visual` values that name a library tab rather than an asset.
+const VISUAL_TABS = ["review", "pending", "scene"];
+
+// Sub-tabs of the asset detail panel (VisualImageView.vue:82-86). `info` is the
+// default and is never emitted, so `?visual=<id>` keeps its original meaning.
+const VISUAL_DETAIL_TABS = ["info", "reference", "cover_crop"];
 
 export function emptyState() {
     return {
@@ -56,7 +95,14 @@ export function emptyState() {
         tab: "home",
         wsm: [],
         promptsTab: null,
+        // Visual Library. `visualTab` is which of its three tabs is open;
+        // `visual` is the selected scene asset (which implies the `scene` tab);
+        // `visualDetailTab` is the asset panel's sub-tab, null meaning `info`;
+        // `vlopen` is the set of expanded tree folders.
+        visualTab: null,
         visual: null,
+        visualDetailTab: null,
+        vlopen: [],
         config: null,
         debug: null,
         // A story image open in the full-size viewer.
@@ -78,6 +124,45 @@ function decode(segment) {
         // raw text over losing the whole restore.
         return segment;
     }
+}
+
+/**
+ * Decode one query *value*. Unlike a path segment, `+` means space here (that is
+ * what `encodeQueryValue` emits, and what URLSearchParams would decode), while a
+ * literal plus arrives as %2B and so is unaffected.
+ */
+function decodeValue(value) {
+    return decode(String(value).replace(/\+/g, "%20"));
+}
+
+/**
+ * Pull one parameter out of a query string *without* decoding it.
+ *
+ * Needed for list-valued keys: the delimiter between items is a literal comma we
+ * wrote ourselves, while a comma inside an item is still %2C. Decoding before the
+ * split would erase that distinction.
+ */
+function rawParam(query, key) {
+    for (const pair of String(query).split("&")) {
+        const eq = pair.indexOf("=");
+        const k = eq === -1 ? pair : pair.slice(0, eq);
+        if (k === key) {
+            return eq === -1 ? "" : pair.slice(eq + 1);
+        }
+    }
+    return null;
+}
+
+/**
+ * Encode one query value, then relax the escapes that are legal unencoded in a
+ * fragment and that we never use as delimiters. This is what keeps the hash
+ * readable without the correctness hole the old blanket un-escaping had:
+ * `,` and `/` stay encoded, so they can never be mistaken for our delimiters.
+ */
+function encodeQueryValue(value) {
+    return encodeURIComponent(String(value))
+        .replace(/%20/g, "+") // spaces; a literal plus is %2B, so this is reversible
+        .replace(/%3A/g, ":"); // colons, as in CHARACTER_PORTRAIT::Kaira
 }
 
 /**
@@ -127,7 +212,33 @@ export function parse(hash) {
         const params = new URLSearchParams(query);
         state.save = params.get("save");
         state.promptsTab = params.get("p");
-        state.visual = params.get("visual");
+        const visual = params.get("visual");
+        if (visual) {
+            const [head, sub] = visual.split("/");
+            if (VISUAL_TABS.includes(head)) {
+                state.visualTab = head;
+            } else if (head) {
+                // Not a reserved token, so it is an asset id — which lives on the
+                // scene tab by definition.
+                state.visual = head;
+                state.visualTab = "scene";
+                if (sub && VISUAL_DETAIL_TABS.includes(sub) && sub !== "info") {
+                    state.visualDetailTab = sub;
+                }
+            }
+        }
+
+        // Read from the raw query, NOT via URLSearchParams: `get()` decodes the
+        // whole value, which would turn a %2C inside a folder name into a real
+        // comma before the split and tear one folder id into two.
+        const vlopenRaw = rawParam(query, "vlopen");
+        if (vlopenRaw) {
+            state.vlopen = vlopenRaw
+                .split(",")
+                .map((part) => decodeValue(part.trim()))
+                .filter(Boolean);
+        }
+
         state.config = params.get("config");
         state.debug = params.get("debug");
         state.img = params.get("img");
@@ -184,30 +295,56 @@ export function stringify(state) {
         }
     }
 
-    const params = new URLSearchParams();
-    if (s.save) params.set("save", s.save);
-    if (s.promptsTab) params.set("p", s.promptsTab);
-    if (s.visual) params.set("visual", s.visual);
-    if (s.config) params.set("config", s.config);
-    if (s.debug) params.set("debug", s.debug);
-    if (s.img) params.set("img", s.img);
+    // Assembled by hand rather than with URLSearchParams. Its `toString()`
+    // percent-encodes `,`, so the old code un-escaped every %2C in the finished
+    // query to keep the hash readable — which also un-escaped commas that were
+    // *inside* a value. Folder ids embed character names, so `Smith, John` would
+    // have been torn into two folder ids on the way back. Here each value is
+    // encoded individually and only the delimiters we insert are literal.
+    const pairs = [];
+    const push = (key, value) => pairs.push(`${key}=${encodeQueryValue(value)}`);
+
+    if (s.save) push("save", s.save);
+    if (s.promptsTab) push("p", s.promptsTab);
+
+    // Visual Library: an asset id wins over the bare tab, since it is the more
+    // specific description of the same location.
+    if (s.visual) {
+        const detail =
+            s.visualDetailTab && s.visualDetailTab !== "info" ? `/${s.visualDetailTab}` : "";
+        // The id is hex and the sub-tab a known token, so the `/` between them is
+        // safe to leave literal.
+        pairs.push(`visual=${encodeQueryValue(s.visual)}${detail}`);
+    } else if (s.visualTab) {
+        push("visual", s.visualTab);
+    }
+
+    if (Array.isArray(s.vlopen) && s.vlopen.length) {
+        pairs.push(`vlopen=${s.vlopen.map(encodeQueryValue).join(",")}`);
+    }
+
+    if (s.config) {
+        // `<tab>/<page>`, both known tokens — keep the separator literal so the
+        // value stays readable, encoding each half.
+        const parts = String(s.config).split("/").map(encodeQueryValue);
+        pairs.push(`config=${parts.join("/")}`);
+    }
+    if (s.debug) push("debug", s.debug);
+    if (s.img) push("img", s.img);
     if (s.edit) {
-        params.set("edit", s.edit);
+        push("edit", s.edit);
         // Only meaningful alongside `edit`, so never emitted on its own.
-        if (s.editDelete) params.set("del", "1");
+        if (s.editDelete) push("del", "1");
     }
     if (Array.isArray(s.drawers) && s.drawers.length) {
         const ordered = DRAWERS.filter((d) => s.drawers.includes(d));
-        if (ordered.length) params.set("d", ordered.join(","));
+        if (ordered.length) pairs.push(`d=${ordered.join(",")}`);
     }
     for (const [key, value] of Object.entries(s.extra || {})) {
-        if (!OWNED_QUERY_KEYS.includes(key)) params.set(key, value);
+        if (!OWNED_QUERY_KEYS.includes(key)) push(key, value);
     }
 
-    // URLSearchParams percent-encodes `,` and `/`. Both are legal unescaped in a
-    // fragment, and the whole point of this feature is a hash a human can read,
-    // so put them back. Nothing else is touched.
-    const query = params.toString().replace(/%2C/g, ",").replace(/%2F/g, "/");
+    const query = pairs.join("&");
     return `#/${path.join("/")}${query ? `?${query}` : ""}`;
 }
 

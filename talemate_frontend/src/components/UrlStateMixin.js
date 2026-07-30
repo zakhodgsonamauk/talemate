@@ -52,12 +52,18 @@ function filenameFromPath(path) {
 const SYNC_INTERVAL_MS = 300;
 
 /**
- * True when the only difference between two states is which drawers are open.
- * Drawer toggles are incidental — they get replaceState so they don't clutter
- * the back stack.
+ * True when two states differ only in "incidental" ways — state a user would not
+ * expect the back button to undo. Those get replaceState so they don't clutter the
+ * back stack; everything else gets a history entry.
+ *
+ * Incidental: open drawers, and expanded folders in the Visual Library's asset tree.
+ * Expanding four folders to find an image should not cost four back-presses to
+ * escape.
  */
-function onlyDrawersDiffer(a, b) {
-    return stringify({ ...a, drawers: [] }) === stringify({ ...b, drawers: [] });
+const INCIDENTAL = { drawers: [], vlopen: [] };
+
+function onlyIncidentalDiffer(a, b) {
+    return stringify({ ...a, ...INCIDENTAL }) === stringify({ ...b, ...INCIDENTAL });
 }
 
 export default {
@@ -142,9 +148,9 @@ export default {
 
             // Push or replace is decided from what actually changed, not by the
             // caller. Somewhere-else (tab, world-editor page, a modal) earns a
-            // history entry so `back` undoes it. A drawer toggle does not — it
-            // would otherwise take several back-presses to escape a sidebar.
-            const incidental = this._urlLastState && onlyDrawersDiffer(this._urlLastState, next);
+            // history entry so `back` undoes it. Drawer toggles and tree expansion
+            // do not — they would otherwise take several back-presses to escape.
+            const incidental = this._urlLastState && onlyIncidentalDiffer(this._urlLastState, next);
 
             this._urlLastWritten = hash;
             this._urlLastState = next;

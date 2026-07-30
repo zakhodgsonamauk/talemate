@@ -24,7 +24,9 @@ git checkout feature/tell-me-a-story && git rebase main   # or merge
 |---|---|---|---|
 | `docs/.pages` | +1 (after line 5) | Add `- Fork notes: fork` so our `docs/fork/` pages appear in the mkdocs nav. Root `.pages` uses an explicit nav list, so an unlisted directory is invisible. | 2026-07-29 |
 | `talemate_frontend/src/components/TalemateApp.vue` | +16 / -1 (import at 415, `mixins:` at 453, snackbar after 363) | URL state sync: import + register `UrlStateMixin`, and the restore-notice snackbar. All logic lives in the mixin; this is registration only. | 2026-07-30 |
-| `talemate_frontend/src/components/VisualLibrary.vue` | +5 / -1 (`expose:` at 602) | URL state sync: add `dialog`, `sceneSelectedId`, `dialogModel` to `expose` so the slice registry can read the open asset and close via the guarded setter. | 2026-07-30 |
+| `talemate_frontend/src/components/VisualLibrary.vue` | +23 / -5 (`expose:` at 602, `@update:detail-tab` at 156) | URL state sync: `expose` widened to `dialog`, `dialogModel`, `activeTab`, `sceneSelectedId`, `sceneInitialTab`, `sceneOpenNodes`, `open`, so the library's tab, selection, detail sub-tab and tree expansion are all addressable; owns the detail sub-tab reported up from the scene panel. | 2026-07-30 |
+| `talemate_frontend/src/components/VisualImageView.vue` | +9 / -1 (`emits:` at 259, new `activeTab` watcher at ~275) | URL state sync: emit `update:active-tab` so an ancestor can own which asset sub-tab (info/reference/cover_crop) is showing. Emitted from a watcher, so the component's own jumps to Reference during analysis also reach the URL. | 2026-07-30 |
+| `talemate_frontend/src/components/VisualLibraryScene.vue` | +2 / -1 (`emits:` at 167, listener at ~97) | URL state sync: re-emit the child's tab change upward as `update:detail-tab`. Pure pass-through. | 2026-07-30 |
 | `talemate_frontend/src/components/SceneMessages.vue` | +10 (`data()` at 534, `provide()` at 658) | URL state sync for story images: central `viewedAssetId` plus `getViewedAssetId` / `setViewedAssetId` provides. Needed because the viewer state was previously per-message. | 2026-07-30 |
 | `talemate_frontend/src/components/MessageAssetImage.vue` | +33 / -9 (`inject`/`data`/`computed` at 79-118) | URL state sync for story images: `showAssetView` becomes a computed over the provided central id; `inject` switched to object form so the two new keys can default to `null`. | 2026-07-30 |
 
@@ -37,8 +39,13 @@ Conflict risk: **low.**
   merge. Deliberately kept to registration: the mixin hooks itself in via
   `registerMessageHandler` (`TalemateApp.vue:972`) instead of editing
   `handleMessage`, so upstream churn in the dispatcher does not conflict.
-- `VisualLibrary.vue` — one line in an `expose` array. Conflicts only if upstream
-  edits that same array; the merge would be an obvious both-modified list.
+- `VisualLibrary.vue` — an `expose` array plus one event listener. Conflicts only if
+  upstream edits the same array or that component tag; both merge obviously.
+- `VisualImageView.vue` / `VisualLibraryScene.vue` — one emit declaration and one
+  listener each, plus a watcher. Additive and self-contained. The contract they
+  establish (`update:active-tab` → `update:detail-tab` → `sceneInitialTab`) is what
+  makes the asset sub-tab readable; if upstream gives `VisualImageView` a
+  `v-model:active-tab` of its own, delete our chain and bind to theirs.
 - `SceneMessages.vue` — two small additive hunks (one data key, two provides) in a
   2100-line file. Low risk, but it is an actively-developed file.
 - `MessageAssetImage.vue` — the only **behavioural** change we have made to an
@@ -67,7 +74,7 @@ These do not conflict — but they can be *orphaned* by upstream refactors, so t
 | `start-fork.bat` | One-shot launcher: Ollama → KoboldCpp → backend → frontend → Chrome | `src/talemate/server/run.py` CLI flags; `talemate_frontend` pnpm `serve` script; default ports 5050/8082 |
 | `docs/fork/url-state-design.md` | Design + test results for URL state sync | — |
 | `talemate_frontend/src/utils/urlState.js` | Hash ⇄ state, pure functions | — |
-| `talemate_frontend/src/utils/urlStateSlices.js` | Reads/writes app state per URL slice | `scene_status.project_name` and `.save_files`; `WorldStateManager.tab` + `show()` + `$refs.characters.{selected,page}`; `AppConfig.{dialog,tab}` + `show()`; `DebugTools.{tab,selectTab}`; `VisualLibrary.{dialog,sceneSelectedId,dialogModel,openWithAsset}`; `TalemateApp.availableTabs` |
+| `talemate_frontend/src/utils/urlStateSlices.js` | Reads/writes app state per URL slice | `scene_status.project_name` and `.save_files`; `WorldStateManager.tab` + `show()` + `$refs.characters.{selected,page}`; `AppConfig.{dialog,tab}` + `show()`; `DebugTools.{tab,selectTab}`; `VisualLibrary.{dialog,dialogModel,activeTab,sceneSelectedId,sceneInitialTab,sceneOpenNodes,open,openWithAsset}` and its `activeTab` values `review_queue`/`pending_queue`/`scene`; `VisualAssetsTree` folder-id format `VIS_TYPE::CharacterName`; `SceneMessages.{messages,viewedAssetId}` + `$refs.requestRegenerateInstructions`; `TalemateApp.availableTabs` |
 | `talemate_frontend/src/components/UrlStateMixin.js` | Hash writer/reader + boot restore orchestration | `config.recent_scenes.scenes[].path`; `load_scene` / `request_scenes_list` / `scenes_list` message shapes; `registerMessageHandler` |
 
 !!! warning

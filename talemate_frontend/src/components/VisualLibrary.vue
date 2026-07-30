@@ -153,6 +153,7 @@
                   @update:open-nodes="sceneOpenNodes = $event"
                   @update:active-nodes="sceneActiveNodes = $event"
                   @update:selected-id="sceneSelectedId = $event"
+                  @update:detail-tab="sceneInitialTab = $event"
                   @open-generate="onOpenGenerateFromScene"
                   @open-iterate="onOpenIterateFromScene"
                 />
@@ -599,11 +600,28 @@ export default {
   unmounted() {
     this.unregisterMessageHandler(this.handleMessage);
   },
-  // `dialog`, `sceneSelectedId` and `dialogModel` are exposed for URL state sync
-  // (src/utils/urlStateSlices.js): the first two so the open asset can be read
-  // into the hash, `dialogModel` so closing from the URL still runs the
-  // unsaved-changes confirmation rather than discarding edits.
-  expose: ['addToPendingQueue', 'openWithAsset', 'dialog', 'sceneSelectedId', 'dialogModel'],
+  // Exposed for URL state sync (src/utils/urlStateSlices.js):
+  //   dialog, activeTab, sceneSelectedId, sceneInitialTab, sceneOpenNodes
+  //     - read into the hash so the library's own location is addressable
+  //   dialogModel
+  //     - closing from the URL runs the unsaved-changes confirmation through its
+  //       setter rather than discarding edits
+  //   open, openWithAsset
+  //     - restore entry points; `open` is needed for a tab-only deep link, where
+  //       there is no asset to open
+  // `sceneInitialTab` doubles as the live sub-tab: VisualLibraryScene reports
+  // changes up via update:detail-tab, and VisualImageView watches it back down.
+  expose: [
+    'addToPendingQueue',
+    'open',
+    'openWithAsset',
+    'dialog',
+    'dialogModel',
+    'activeTab',
+    'sceneSelectedId',
+    'sceneInitialTab',
+    'sceneOpenNodes',
+  ],
 };
 </script>
 

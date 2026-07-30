@@ -94,6 +94,7 @@
           :initial-tab="initialTab"
           @save-meta="onSaveMeta"
           @set-scene-cover-image="onSetSceneCoverImage"
+          @update:active-tab="$emit('update:detail-tab', $event)"
         />
       </div>
       <div v-else class="text-medium-emphasis text-caption">Select an asset to view</div>
@@ -163,7 +164,7 @@ import { VIS_TYPE, FORMAT_TYPE } from '@/constants/visual';
 
 export default {
   name: 'VisualLibraryScene',
-  emits: ['open-generate', 'open-iterate', 'update:open-nodes', 'update:active-nodes', 'update:selected-id'],
+  emits: ['open-generate', 'open-iterate', 'update:open-nodes', 'update:active-nodes', 'update:selected-id', 'update:detail-tab'],
   components: { VisualImageView, ConfirmActionPrompt, VisualLibraryUpload, VisualAssetsTree },
   inject: ['getWebsocket', 'registerMessageHandler', 'unregisterMessageHandler', 'requestSceneAssets'],
   props: {

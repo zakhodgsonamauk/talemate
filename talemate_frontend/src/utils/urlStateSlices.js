@@ -14,6 +14,23 @@
 
 import { emptyState, DRAWERS } from "@/utils/urlState";
 
+// VisualLibrary's internal tab values (VisualLibrary.vue:102-106) vs the shorter
+// tokens used in the hash.
+const LIBRARY_TAB_TO_URL = {
+    review_queue: "review",
+    pending_queue: "pending",
+    scene: "scene",
+};
+
+const LIBRARY_TAB_FROM_URL = {
+    review: "review_queue",
+    pending: "pending_queue",
+    scene: "scene",
+};
+
+// Asset ids are sha256 hex. Used to tell tree *folders* from leaf asset nodes.
+const ASSET_ID_RE = /^[0-9a-f]{64}$/i;
+
 /**
  * Read the world-editor path out of WorldStateManager.
  * Returns [] when nothing meaningful is selected.
@@ -69,8 +86,28 @@ export function readState(app) {
     }
 
     const visualLibrary = app.$refs.visualLibrary;
-    if (visualLibrary && visualLibrary.dialog && visualLibrary.sceneSelectedId) {
-        state.visual = visualLibrary.sceneSelectedId;
+    if (visualLibrary && visualLibrary.dialog) {
+        // The library is open, so it is addressable even with nothing selected —
+        // which is the gap the first pass left: opening it from the toolbar used to
+        // leave no trace in the hash at all.
+        state.visualTab = LIBRARY_TAB_TO_URL[visualLibrary.activeTab] || "scene";
+
+        if (state.visualTab === "scene") {
+            if (visualLibrary.sceneSelectedId) {
+                state.visual = visualLibrary.sceneSelectedId;
+                const detail = visualLibrary.sceneInitialTab;
+                if (detail && detail !== "info") {
+                    state.visualDetailTab = detail;
+                }
+            }
+
+            // Folders only. The treeview's `opened` array can also contain leaf
+            // (asset id) nodes, which carry no expansion meaning and would just
+            // bloat the hash.
+            state.vlopen = (visualLibrary.sceneOpenNodes || [])
+                .map(String)
+                .filter((node) => !ASSET_ID_RE.test(node));
+        }
     }
 
     const appConfig = app.$refs.appConfig;
@@ -212,17 +249,53 @@ export async function applyState(app, state) {
 
     await applyStoryImageState(app, state);
 
+    await applyVisualLibraryState(app, state);
+}
+
+/**
+ * Open, position or close the Visual Library.
+ *
+ * Only `?visual=` decides whether the dialog is open; `vlopen` is decoration on top
+ * of an already-open scene tab.
+ */
+async function applyVisualLibraryState(app, state) {
     const visualLibrary = app.$refs.visualLibrary;
-    if (state.visual) {
-        if (visualLibrary && typeof visualLibrary.openWithAsset === "function") {
-            visualLibrary.openWithAsset(state.visual);
-        }
-    } else if (visualLibrary && visualLibrary.dialog) {
-        // Through `dialogModel`, not `dialog` — the setter runs the
-        // unsaved-changes confirmation (VisualLibrary.vue:353-372). Assigning
-        // `dialog` directly would discard pending edits with no prompt.
-        visualLibrary.dialogModel = false;
+    if (!visualLibrary) {
+        return;
     }
+
+    if (!state.visual && !state.visualTab) {
+        if (visualLibrary.dialog) {
+            // Through `dialogModel`, not `dialog` — the setter runs the
+            // unsaved-changes confirmation (VisualLibrary.vue:353-372). Assigning
+            // `dialog` directly would discard pending edits with no prompt.
+            visualLibrary.dialogModel = false;
+        }
+        return;
+    }
+
+    if (state.visual) {
+        // Sets the scene tab and the detail sub-tab for us.
+        if (typeof visualLibrary.openWithAsset === "function") {
+            visualLibrary.openWithAsset(state.visual, state.visualDetailTab || "info");
+        }
+    } else {
+        // A tab with no selection — `open()` exists for exactly this case.
+        if (typeof visualLibrary.open === "function") {
+            visualLibrary.open();
+        }
+        visualLibrary.activeTab = LIBRARY_TAB_FROM_URL[state.visualTab] || "scene";
+    }
+
+    if (state.visualTab === "scene" && Array.isArray(state.vlopen)) {
+        // Set after opening: selecting an asset makes VisualLibraryScene merge the
+        // folders containing it into whatever is already open
+        // (VisualLibraryScene.vue:473), so ours survive and the derived ones are
+        // added on top.
+        visualLibrary.sceneOpenNodes = [...state.vlopen];
+    }
+
+    await app.$nextTick();
 }
 
 export { DRAWERS };

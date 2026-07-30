@@ -24,20 +24,29 @@
     { "id": "T9", "name": "TalemateApp wiring + restore", "status": "done", "deps": ["T2", "T3", "T7"] },
     { "id": "T10", "name": "Playwright e2e", "status": "done", "deps": ["T9"], "note": "All 14 cases pass; cases 3/7/14 re-run with the full stack (KoboldCpp up)" },
     { "id": "T11", "name": "FORK.md divergence tables", "status": "done", "deps": ["T10"] },
-    { "id": "T12", "name": "Story image viewer + edit prompt URLs (?img=, ?edit=, &del=1)", "status": "done", "deps": ["T10"], "note": "Required hoisting per-message viewer state into SceneMessages; edit prompt needed zero component changes" }
+    { "id": "T12", "name": "Story image viewer + edit prompt URLs (?img=, ?edit=, &del=1)", "status": "done", "deps": ["T10"], "note": "Required hoisting per-message viewer state into SceneMessages; edit prompt needed zero component changes" },
+    { "id": "T13", "name": "Visual Library URLs (?visual=tab|asset[/subtab], &vlopen=)", "status": "done", "deps": ["T12"], "note": "Cases 15-25 pass. Hoisted the asset sub-tab through VisualImageView -> VisualLibraryScene -> VisualLibrary; widened VisualLibrary expose. Queue selections excluded as non-durable." },
+    { "id": "T14", "name": "Fix query delimiter escaping in urlState.js", "status": "done", "deps": [], "note": "Latent bug in shipped code: blanket %2C/%2F un-escaping would tear a folder name containing a comma into two ids. Query now assembled per-value; list values parsed from the raw query." }
   ],
   "constraints": {
-    "max_upstream_files_modified": 6,
-    "max_upstream_lines": 70,
-    "new_npm_dependencies": 0
+    "max_upstream_files_modified": null,
+    "max_upstream_lines": null,
+    "new_npm_dependencies": 0,
+    "note": "Line ceiling dropped 2026-07-30 by explicit decision. It only ever estimated the cost of merging future upstream releases, never permission — this is our fork. Upstream sync is now treated as possible but unlikely, so FORK.md rows are kept as documentation while the ceiling no longer shapes design. Correctness first; merge risk noted per fragile hunk."
   },
   "actuals": {
-    "upstream_files_modified": 4,
-    "upstream_lines": "+64 / -11",
+    "upstream_files_modified": 6,
+    "upstream_lines": "+93 / -13",
     "new_files": 3,
-    "new_file_lines": 861,
     "new_npm_dependencies": 0,
-    "note": "Insertions now near the 70-line ceiling; a further slice this size needs the budget revisited, not quietly exceeded."
+    "upstream_files": [
+      "TalemateApp.vue",
+      "VisualLibrary.vue",
+      "VisualImageView.vue",
+      "VisualLibraryScene.vue",
+      "SceneMessages.vue",
+      "MessageAssetImage.vue"
+    ]
   },
   "decisions": [
     "Hash routing, not real paths — avoids a frontend_wsgi.py diff",
