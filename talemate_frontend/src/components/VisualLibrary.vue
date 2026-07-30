@@ -599,7 +599,11 @@ export default {
   unmounted() {
     this.unregisterMessageHandler(this.handleMessage);
   },
-  expose: ['addToPendingQueue', 'openWithAsset'],
+  // `dialog`, `sceneSelectedId` and `dialogModel` are exposed for URL state sync
+  // (src/utils/urlStateSlices.js): the first two so the open asset can be read
+  // into the hash, `dialogModel` so closing from the URL still runs the
+  // unsaved-changes confirmation rather than discarding edits.
+  expose: ['addToPendingQueue', 'openWithAsset', 'dialog', 'sceneSelectedId', 'dialogModel'],
 };
 </script>
 

@@ -361,6 +361,20 @@
     <v-snackbar v-model="errorNotification" color="red-darken-1" :timeout="3000">
         {{ errorMessage }}
     </v-snackbar>
+    <!-- Reports an auto-load triggered by the URL. Refresh reloads the scene from
+         disk, so say so rather than letting it look like nothing happened. -->
+    <v-snackbar
+        v-if="urlRestoreNotice"
+        :model-value="true"
+        :color="urlRestoreNotice.level === 'error' ? 'red-darken-1' : (urlRestoreNotice.level === 'warning' ? 'warning' : 'muted')"
+        :timeout="urlRestoreNotice.level === 'info' ? 6000 : -1"
+        @update:model-value="urlRestoreNotice = null"
+    >
+        {{ urlRestoreNotice.text }}
+        <template #actions>
+            <v-btn variant="text" @click="urlRestoreNotice = null">Dismiss</v-btn>
+        </template>
+    </v-snackbar>
   </v-app>
   <StatusNotification />
   <RateLimitAlert ref="rateLimitAlert" />
@@ -413,6 +427,7 @@ import { debounce } from 'lodash';
 import { isVisualAgentReady, isImageEditAvailable, isImageCreateAvailable } from '@/constants/visual';
 import { createSceneAssetsRequester } from './VisualAssetsMixin.js';
 import AutocompleteMixin from './AutocompleteMixin.js';
+import UrlStateMixin from './UrlStateMixin.js';
 
 export default {
   components: {
@@ -450,7 +465,7 @@ export default {
     PromptsMenu,
   },
   name: 'TalemateApp',
-  mixins: [AutocompleteMixin],
+  mixins: [AutocompleteMixin, UrlStateMixin],
   data() {
     return {
       appearancePreview: null, // Preview config while editing settings (null = use saved config)

@@ -76,20 +76,44 @@ export default {
       default: null,
     },
   },
-  inject: [
-    'requestSceneAssets',
-    'getAssetFromCache',
-    'getWebsocket',
-    'showAssetMenu',
-    'isAssetProcessing',
-    'markAssetProcessing',
-  ],
+  // Object form so `getViewedAssetId` / `setViewedAssetId` can default to null.
+  // They come from SceneMessages, the only place this component is currently
+  // rendered; defaulting means a future use outside that provider degrades to the
+  // local flag rather than throwing.
+  inject: {
+    requestSceneAssets: {},
+    getAssetFromCache: {},
+    getWebsocket: {},
+    showAssetMenu: {},
+    isAssetProcessing: {},
+    markAssetProcessing: {},
+    getViewedAssetId: { default: null },
+    setViewedAssetId: { default: null },
+  },
   data() {
     return {
-      showAssetView: false,
+      // Fallback only, used when no central viewer state is provided.
+      localAssetViewOpen: false,
     }
   },
   computed: {
+    // Which image the viewer shows is central state (SceneMessages.viewedAssetId)
+    // so that it is readable and settable from one place — the URL needs both.
+    showAssetView: {
+      get() {
+        if (this.getViewedAssetId) {
+          return !!this.assetId && this.getViewedAssetId() === this.assetId;
+        }
+        return this.localAssetViewOpen;
+      },
+      set(value) {
+        if (this.setViewedAssetId) {
+          this.setViewedAssetId(value ? this.assetId : null);
+          return;
+        }
+        this.localAssetViewOpen = value;
+      },
+    },
     assetId() {
       // Asset ID comes from prop (SceneMessages handles dynamic updates via message_asset_update)
       return this.asset_id;

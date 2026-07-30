@@ -23,9 +23,29 @@ git checkout feature/tell-me-a-story && git rebase main   # or merge
 | File | Lines touched | Why | Added |
 |---|---|---|---|
 | `docs/.pages` | +1 (after line 5) | Add `- Fork notes: fork` so our `docs/fork/` pages appear in the mkdocs nav. Root `.pages` uses an explicit nav list, so an unlisted directory is invisible. | 2026-07-29 |
+| `talemate_frontend/src/components/TalemateApp.vue` | +16 / -1 (import at 415, `mixins:` at 453, snackbar after 363) | URL state sync: import + register `UrlStateMixin`, and the restore-notice snackbar. All logic lives in the mixin; this is registration only. | 2026-07-30 |
+| `talemate_frontend/src/components/VisualLibrary.vue` | +5 / -1 (`expose:` at 602) | URL state sync: add `dialog`, `sceneSelectedId`, `dialogModel` to `expose` so the slice registry can read the open asset and close via the guarded setter. | 2026-07-30 |
+| `talemate_frontend/src/components/SceneMessages.vue` | +10 (`data()` at 534, `provide()` at 658) | URL state sync for story images: central `viewedAssetId` plus `getViewedAssetId` / `setViewedAssetId` provides. Needed because the viewer state was previously per-message. | 2026-07-30 |
+| `talemate_frontend/src/components/MessageAssetImage.vue` | +33 / -9 (`inject`/`data`/`computed` at 79-118) | URL state sync for story images: `showAssetView` becomes a computed over the provided central id; `inject` switched to object form so the two new keys can default to `null`. | 2026-07-30 |
 
-Conflict risk: **very low.** One appended nav line in a 5-line file. If upstream
-adds its own top-level section the merge is a trivial both-added.
+Conflict risk: **low.**
+
+- `docs/.pages` — one appended nav line in a 5-line file. If upstream adds its own
+  top-level section the merge is a trivial both-added.
+- `TalemateApp.vue` — three small, well-separated hunks in a 1742-line file. This is
+  the hottest file in the tree, so expect to re-apply by hand rather than cleanly
+  merge. Deliberately kept to registration: the mixin hooks itself in via
+  `registerMessageHandler` (`TalemateApp.vue:972`) instead of editing
+  `handleMessage`, so upstream churn in the dispatcher does not conflict.
+- `VisualLibrary.vue` — one line in an `expose` array. Conflicts only if upstream
+  edits that same array; the merge would be an obvious both-modified list.
+- `SceneMessages.vue` — two small additive hunks (one data key, two provides) in a
+  2100-line file. Low risk, but it is an actively-developed file.
+- `MessageAssetImage.vue` — the only **behavioural** change we have made to an
+  upstream component: the per-instance `showAssetView` flag became a computed over
+  state owned by `SceneMessages`. If upstream reworks how the asset viewer is opened,
+  re-apply by hand rather than trusting a clean merge. The fallback `localAssetViewOpen`
+  keeps the component working if the provides ever disappear.
 
 When this table gains rows, note the *upstream* line numbers at time of change so
 a future rebase can find the hunk.
@@ -45,6 +65,17 @@ These do not conflict — but they can be *orphaned* by upstream refactors, so t
 | `FORK.md` | This file | — |
 | `docs/fork/images-without-comfyui.md` | Phase 1 setup guide: KoboldCpp + SDXL Turbo | `client/koboldcpp.py` `visual_automatic1111_setup`; the Visualizer's `automatic_setup` default staying `True`; a1111 backend config key names |
 | `start-fork.bat` | One-shot launcher: Ollama → KoboldCpp → backend → frontend → Chrome | `src/talemate/server/run.py` CLI flags; `talemate_frontend` pnpm `serve` script; default ports 5050/8082 |
+| `docs/fork/url-state-design.md` | Design + test results for URL state sync | — |
+| `talemate_frontend/src/utils/urlState.js` | Hash ⇄ state, pure functions | — |
+| `talemate_frontend/src/utils/urlStateSlices.js` | Reads/writes app state per URL slice | `scene_status.project_name` and `.save_files`; `WorldStateManager.tab` + `show()` + `$refs.characters.{selected,page}`; `AppConfig.{dialog,tab}` + `show()`; `DebugTools.{tab,selectTab}`; `VisualLibrary.{dialog,sceneSelectedId,dialogModel,openWithAsset}`; `TalemateApp.availableTabs` |
+| `talemate_frontend/src/components/UrlStateMixin.js` | Hash writer/reader + boot restore orchestration | `config.recent_scenes.scenes[].path`; `load_scene` / `request_scenes_list` / `scenes_list` message shapes; `registerMessageHandler` |
+
+!!! warning
+    `urlStateSlices.js` reaches into four upstream components through `$refs` and is
+    the most likely thing here to be orphaned by an upstream refactor. It fails soft
+    — every access is guarded, so a renamed field degrades that one URL slice rather
+    than breaking the app — but a silent degradation is easy to miss. If a slice
+    stops appearing in the hash after an upstream merge, start there.
 
 !!! note
     `start-fork.bat` is a **new** file, deliberately not an edit to upstream's

@@ -534,6 +534,11 @@ export default {
             // Centralized cache for loaded asset data (base64 images)
             // Keyed by asset_id -> { base64: string, mediaType: string }
             assetCache: {},
+            // Asset id currently open in the full-size viewer, or null.
+            // Single source of truth: MessageAssetImage renders one AssetView per
+            // message, so without this there is no one place to ask "which image
+            // is open" — which URL state sync needs in both directions.
+            viewedAssetId: null,
             // Shared asset menu state
             assetMenu: {
                 show: false,
@@ -656,6 +661,11 @@ export default {
             getAssetFromCache: (assetId) => this.assetCache[assetId] || null,
             // Provide method to show the shared asset menu
             showAssetMenu: this.showAssetMenu,
+            // Which image the full-size viewer is showing, and how to change it.
+            // MessageAssetImage derives its dialog from this rather than holding
+            // its own flag, so exactly one viewer can be open at a time.
+            getViewedAssetId: () => this.viewedAssetId,
+            setViewedAssetId: (assetId) => { this.viewedAssetId = assetId; },
             // Provide method to check if asset is processing
             isAssetProcessing: this.isAssetProcessing,
             // Provide method to mark message as processing
