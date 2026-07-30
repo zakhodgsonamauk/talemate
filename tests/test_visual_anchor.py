@@ -1507,3 +1507,37 @@ async def test_prompt_is_trimmed_to_the_configured_budget(styling_agent):
 
     budget = styling_agent.actions["prompt_generation"].config["image_max_tokens"].value
     assert estimate_prompt_tokens(request.prompt) <= budget
+
+
+async def test_setting_filter_never_eats_action_detail(styling_agent):
+    """
+    A long setting anchor is full of common nouns - console, metal, space - and matching
+    on shared vocabulary alone removed real action detail, leaving prompts that described
+    a room and nobody in it.
+    """
+    from talemate.context import active_scene
+
+    long_anchor = (
+        "control room, spaceship interior, deep space, science fiction, "
+        "digital displays, metal framework, navigation console"
+    )
+    styling_agent.scene.visual_anchor = long_anchor
+    styling_agent.scene.visual_anchors = {}
+    styling_agent.scene.world_state.location = None
+
+    action = [
+        "leaning over console",
+        "hand gripping console edge",
+        "feet planted on metal deck",
+        "watching the displays",
+    ]
+    request = _request(", ".join([long_anchor, KAIRA_ANCHOR, "Kaira"] + action))
+
+    token = active_scene.set(styling_agent.scene)
+    try:
+        await styling_agent._finalize_prompt(request)
+    finally:
+        active_scene.reset(token)
+
+    for kw in action:
+        assert kw in request.prompt, f"action detail was eaten: {kw}"

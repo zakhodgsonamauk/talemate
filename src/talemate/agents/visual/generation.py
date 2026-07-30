@@ -41,6 +41,56 @@ log = structlog.get_logger("talemate.agents.visual.generation")
 # depicting nobody doing anything.
 ACTION_BUDGET_RESERVE = 0.35
 
+# Words marking a keyword as about a person or what they are doing, rather than about the
+# room. Setting-duplication filtering must never touch these.
+_BODY_AND_POSE_WORDS = {
+    "hand",
+    "hands",
+    "arm",
+    "arms",
+    "head",
+    "face",
+    "eye",
+    "eyes",
+    "mouth",
+    "jaw",
+    "shoulder",
+    "shoulders",
+    "back",
+    "chest",
+    "knee",
+    "knees",
+    "foot",
+    "feet",
+    "finger",
+    "fingers",
+    "skin",
+    "hair",
+    "figure",
+    "silhouette",
+    "profile",
+    "expression",
+    "glance",
+    "gaze",
+    "posture",
+    "stance",
+}
+
+
+def _describes_action(keyword: str) -> bool:
+    """
+    Whether a keyword is about a person or a moment rather than a place.
+
+    A gerund is the strongest signal - "leaning", "gripping", "watching" - with body and
+    pose words as the second. Cheap and deliberately generous: wrongly keeping a keyword
+    costs a token, wrongly dropping one costs the subject of the image.
+    """
+    words = re.findall(r"[\w'-]+", keyword.lower())
+    return any(
+        word.endswith("ing") and len(word) > 5 or word in _BODY_AND_POSE_WORDS
+        for word in words
+    )
+
 async_signals.register(
     "agent.visual.generation.before_generate",
     "agent.visual.generation.after_generate",
@@ -368,10 +418,17 @@ class GenerationMixin:
                 kept.append(keyword)
                 continue
 
+            # Never drop something describing a person or an action, however much
+            # vocabulary it shares with the setting. A long setting anchor is full of
+            # common nouns - console, metal, space - and matching on those alone ate
+            # legitimate action detail like "leaning over console".
+            if _describes_action(lowered):
+                kept.append(keyword)
+                continue
+
             # Majority overlap rather than a strict subset. "Starship bridge" against an
             # anchor holding "starship interior" is the same place named again, and a
-            # subset test misses it because "bridge" is a new word. An action phrase like
-            # "hand gripping console edge" only glances off the anchor and survives.
+            # subset test misses it because "bridge" is a new word.
             overlap = len(words & anchor_words) / len(words)
             if overlap >= 0.5:
                 dropped.append(keyword)
