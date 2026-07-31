@@ -264,6 +264,36 @@
       "inherited": false,
       "registry": "core/Stage",
       "base_type": "core/Node"
+    },
+    "bc8beb9e-a7ce-4326-8768-4981bf4da5d8": {
+      "title": "GET obj.message_ids",
+      "id": "bc8beb9e-a7ce-4326-8768-4981bf4da5d8",
+      "properties": {
+        "attribute": "message_ids"
+      },
+      "x": 30,
+      "y": 1050,
+      "width": 210,
+      "height": 98,
+      "collapsed": false,
+      "inherited": false,
+      "registry": "data/Get",
+      "base_type": "core/Node"
+    },
+    "0128a857-f77f-437e-af3f-0e69be55e540": {
+      "title": "GET obj.callback",
+      "id": "0128a857-f77f-437e-af3f-0e69be55e540",
+      "properties": {
+        "attribute": "callback"
+      },
+      "x": 30,
+      "y": 1170,
+      "width": 210,
+      "height": 98,
+      "collapsed": false,
+      "inherited": false,
+      "registry": "data/Get",
+      "base_type": "core/Node"
     }
   },
   "edges": {
@@ -299,7 +329,9 @@
       "a17175db-a812-43ed-949e-0cdfe256ba7c.object",
       "92b060a5-906b-4d4a-aee6-d9e399b7fbc9.object",
       "6eb74063-53e3-47b1-bee0-3283554fd51c.object",
-      "f70d59b6-f18e-4ed0-9896-342bc6451a62.object"
+      "f70d59b6-f18e-4ed0-9896-342bc6451a62.object",
+      "bc8beb9e-a7ce-4326-8768-4981bf4da5d8.object",
+      "0128a857-f77f-437e-af3f-0e69be55e540.object"
     ],
     "6eb74063-53e3-47b1-bee0-3283554fd51c.value": [
       "e4be8687-66cb-4c69-ab6f-b989c130a9ea.value"
@@ -318,6 +350,12 @@
     ],
     "c628b5b4-0007-4db6-b0a7-9924d3eec477.value": [
       "443879a9-f65b-4da1-9864-ce520e5efb25.state_b"
+    ],
+    "bc8beb9e-a7ce-4326-8768-4981bf4da5d8.value": [
+      "16877a6f-303f-4b58-b0c1-ff41fc3cf895.message_ids"
+    ],
+    "0128a857-f77f-437e-af3f-0e69be55e540.value": [
+      "94bf57a0-7e1b-4272-89f9-9762ea881014.callback"
     ]
   },
   "groups": [

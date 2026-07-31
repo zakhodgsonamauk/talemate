@@ -1694,6 +1694,10 @@ export default {
                 asset_id: assetId,
                 asset_allow_override: true,
                 asset_allow_auto_attach: true,
+                // Pin the attachment to this message - auto-detection can
+                // pick a different one (observed live: edit of one message's
+                // image attached to another, stranding the spinner).
+                message_ids: [messageId],
             };
 
             if (deleteOld) {
