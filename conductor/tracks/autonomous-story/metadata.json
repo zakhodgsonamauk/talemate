@@ -1,0 +1,336 @@
+{
+  "version": 3,
+  "track_id": "autonomous-story",
+  "name": "Story unfolds automatically around the player",
+  "type": "feature",
+  "created": "2026-07-30",
+  "status": "planned",
+  "design_doc": "docs/fork/autonomous-story-design.md",
+  "superpower_enhanced": true,
+  "loop_state": {
+    "current_step": "EXECUTE",
+    "step_status": "IN_PROGRESS",
+    "fix_cycle_count": 0,
+    "max_fix_cycles": 5,
+    "superpower_enhanced": true,
+    "checkpoints": {
+      "PLAN": {
+        "status": "PASSED"
+      },
+      "EVALUATE_PLAN": {
+        "status": "PASSED_AFTER_REVISION",
+        "report": "conductor/tracks/autonomous-story/plan-evaluation-report.md",
+        "verdict_first_pass": "FAIL",
+        "findings": 10,
+        "note": "loop-plan-evaluator and cto-plan-reviewer agents both returned idle with no output on two dispatches each; evaluation performed inline by the orchestrator session with all code claims verified firsthand. All 10 corrections applied to plan.md and spec.md."
+      }
+    },
+    "completed_tasks": [
+      "T2",
+      "T3",
+      "T4",
+      "T4b",
+      "T6",
+      "T7",
+      "T8",
+      "T9a",
+      "T19",
+      "T21"
+    ],
+    "next_task": "T22 (graceful absence), then T10-T12 pacing or T13-T18 plans",
+    "next_task_note": "T19 + T21 done and live-verified. OLLAMA_NUM_PARALLEL is NOT needed yet - the loop awaits the director then generates, so calls are already sequential; it only matters for T24 background director. User is play-testing next."
+  },
+  "cannot_self_certify": {
+    "reason": "6 acceptance criteria verify only by a human playing Talemate",
+    "human_verified_tasks": [
+      "T0",
+      "T1",
+      "T4b",
+      "T5",
+      "T11",
+      "T20",
+      "T23",
+      "T25"
+    ],
+    "acceptance_criteria": [
+      "AC1",
+      "AC3",
+      "AC5",
+      "AC9",
+      "AC10",
+      "AC11"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "T0",
+      "name": "Capture out-of-character baseline before any change - AC11 prerequisite",
+      "status": "pending",
+      "deps": [],
+      "human_verified": true
+    },
+    {
+      "id": "T1",
+      "name": "Raise Ollama context budget and record the effect - AC1",
+      "status": "pending",
+      "deps": [
+        "T0"
+      ],
+      "human_verified": true
+    },
+    {
+      "id": "T2",
+      "name": "Add max_ai_turns to game config General",
+      "status": "completed",
+      "deps": []
+    },
+    {
+      "id": "T3",
+      "name": "Expose max_ai_turns as a GetSceneState output",
+      "status": "completed",
+      "deps": [
+        "T2"
+      ]
+    },
+    {
+      "id": "T4",
+      "name": "Rewire the cap in scene-loop.json to read config, default still 3 - AC2",
+      "status": "completed",
+      "deps": [
+        "T3"
+      ]
+    },
+    {
+      "id": "T4b",
+      "name": "Raise the cap default to 12, gated on hand-back triggers - AC2, AC3",
+      "status": "completed",
+      "deps": [
+        "T4",
+        "T8"
+      ],
+      "human_verified": true,
+      "note": "code change done (default 12); needs your play-test to close AC2/AC3"
+    },
+    {
+      "id": "T5",
+      "name": "Verify director yield_to_user still returns control - AC3",
+      "status": "pending",
+      "deps": [
+        "T4"
+      ],
+      "human_verified": true
+    },
+    {
+      "id": "T6",
+      "name": "Quick-setting toggle for the AI-turn cap",
+      "status": "completed",
+      "deps": [
+        "T2"
+      ]
+    },
+    {
+      "id": "T7",
+      "name": "Direct-address detection, cheap local check - AC4",
+      "status": "completed",
+      "deps": []
+    },
+    {
+      "id": "T8",
+      "name": "Wire direct address into the skip_to_player path",
+      "status": "completed",
+      "deps": [
+        "T7",
+        "T4"
+      ]
+    },
+    {
+      "id": "T9",
+      "name": "Decision-point gating - investigated; choices already gate, dice rule decided",
+      "status": "decided",
+      "deps": [
+        "T8"
+      ],
+      "note": "player_turn_start fires inside WaitForInput (nodes/scene.py:984) so Dynamic Actions choices only appear when the player already holds the turn - nothing to gate. Dice rule decided by user: ask only when the player's own character is acting. Split into T9a (build) and T9b (never_auto_progress is dead config)."
+    },
+    {
+      "id": "T9a",
+      "name": "Dice confirmation for the player's own rolls - awaitable ux/BuildChoiceElement gate",
+      "status": "completed",
+      "deps": [
+        "T8"
+      ],
+      "human_verified": true,
+      "note": "Built. focal/Argument `character` + new scene/IsPlayerCharacterName Python node (name comparison in Python, not a fragile graph string-compare chain - core/Case only matches static properties). rollDice.state is now gated by Coallesce(Case \"Roll\", IsPlayerCharacterName.no); emit_system_message forced true for the player's own rolls via ORRouter -> AsBool(default False). Orphaned old AsBool removed. All edge endpoints validated against real node classes. Runtime behaviour still needs a play-test; fallback is the disabled_sub_actions denylist."
+    },
+    {
+      "id": "T9b",
+      "name": "Resolve never_auto_progress - dead config, implement or remove",
+      "status": "pending",
+      "deps": []
+    },
+    {
+      "id": "T10",
+      "name": "Pacing fields on SceneType",
+      "status": "pending",
+      "deps": []
+    },
+    {
+      "id": "T11",
+      "name": "Wire WaitForInput.abort_condition for push-mode scenes - AC5",
+      "status": "pending",
+      "deps": [
+        "T10",
+        "T4"
+      ],
+      "human_verified": true
+    },
+    {
+      "id": "T12",
+      "name": "Pacing fields in TemplateSceneType.vue and templateMappings.js",
+      "status": "pending",
+      "deps": [
+        "T10"
+      ]
+    },
+    {
+      "id": "T13",
+      "name": "Let a plan exist outside a chat - must survive cleanup_orphaned_plans",
+      "status": "pending",
+      "deps": []
+    },
+    {
+      "id": "T14",
+      "name": "Inject plan state into scene-direction.jinja2, map beat kinds - AC6",
+      "status": "pending",
+      "deps": [
+        "T13"
+      ]
+    },
+    {
+      "id": "T15",
+      "name": "Director writes a plan from a scene-direction turn - AC6 end to end",
+      "status": "pending",
+      "deps": [
+        "T14"
+      ]
+    },
+    {
+      "id": "T16",
+      "name": "Extend Beat with branch hints, with arc-generation regression guard",
+      "status": "pending",
+      "deps": [
+        "T13"
+      ]
+    },
+    {
+      "id": "T17",
+      "name": "Local branch selection with no director call - AC7",
+      "status": "pending",
+      "deps": [
+        "T16",
+        "T14"
+      ]
+    },
+    {
+      "id": "T18",
+      "name": "Teach the planner prompt to write branch hints",
+      "status": "pending",
+      "deps": [
+        "T17"
+      ]
+    },
+    {
+      "id": "T19",
+      "name": "Abstracted context mode for scene direction - AC8",
+      "status": "completed",
+      "deps": [],
+      "note": "New director/scene-direction-abstract-context.jinja2 built from layered_history + archived_history summaries, world state and character notes. Never touches the scene message history, so dialogue cannot leak by construction - a test enforces that. Selected via agent_config(\"director.scene_direction.abstract_context\"); config default False, enabled in the user config. AC8 tested end-to-end by capturing the rendered prompt."
+    },
+    {
+      "id": "T20",
+      "name": "Confirm plan quality on abstracted context, local director",
+      "status": "pending",
+      "deps": [
+        "T19"
+      ],
+      "human_verified": true
+    },
+    {
+      "id": "T21",
+      "name": "Second Ollama client routing director to a cloud model - AC9",
+      "status": "completed",
+      "deps": [
+        "T19"
+      ],
+      "note": "Cloud models were already pulled. Added OllamaCloudDirector client (deepseek-v4-pro:cloud, ctx 32768, api_handles_prompt_template true, reason_enabled true, reason_tokens 2048) and pointed agents.director.client at it; every other agent stays on local Rocinante. Verified live: 4.7s, correct ANALYSIS/DECISION tags, sensible plan from summaries only. Key finding - the model is a reasoning model: with a small num_predict it returns an EMPTY response because thinking consumes the budget, hence reason_enabled/reason_tokens. Talemate reads part.response and correctly ignores the separate thinking field."
+    },
+    {
+      "id": "T22",
+      "name": "Confirm play unaffected with no cloud client - AC9",
+      "status": "pending",
+      "deps": [
+        "T21"
+      ]
+    },
+    {
+      "id": "T23",
+      "name": "Measure direction_execute_turn latency, local and cloud",
+      "status": "pending",
+      "deps": [
+        "T21"
+      ],
+      "human_verified": true
+    },
+    {
+      "id": "T24",
+      "name": "Asynchronous director turn, needs its own design pass first - AC10",
+      "status": "pending",
+      "deps": [
+        "T23",
+        "T15",
+        "T17"
+      ]
+    },
+    {
+      "id": "T25",
+      "name": "Sustained in-character play session, count OOC actions - AC11",
+      "status": "pending",
+      "deps": [
+        "T24"
+      ],
+      "human_verified": true
+    },
+    {
+      "id": "T26",
+      "name": "Docs: design doc amendment, decision log, Auto Narration note",
+      "status": "pending",
+      "deps": [
+        "T25"
+      ]
+    }
+  ],
+  "problems": {
+    "P1": "Player must manually drive the narrator, pick who speaks next, and ask the story to progress, instead of just roleplaying their character",
+    "P2": "scene-loop.json hardcodes a data/number/Make literal '3' feeding a greater_equal against shared.ai_turns; the true branch unconditionally sets shared.skip_to_player, gating out Select Actor For Turn every third AI beat regardless of what the director wants. Not exposed in config or UI. The author's own watch node on that branch is named EMERGENCY BREAK",
+    "P3": "Scene Direction's prompt includes verbatim scene dialogue via scene-context-chat.jinja2 calling scene.context_history(min_dialogue=20, show_hidden=True), so routing the director to a cloud model both sends explicit content off-machine and risks a refusal killing the autopilot mid-turn",
+    "P4": "Plans exist (Plan/Beat/PlanStatus plus CreatePlan/GetActivePlan/CompleteTask nodes) but are bound to director chat via chat.plan_id, and nothing in the scene loop reads a plan, so the director cannot plan ahead for the loop to execute",
+    "P5": "Ollama client max_token_length is 8192 while scene_direction reserves 2048 for its own response and splits the rest at scene_context_ratio 0.3, leaving roughly 1.8k of scene context - the director plans through a keyhole, which will look like model weakness",
+    "P6": "SceneType carries no pacing configuration and WaitForInput.abort_condition, which exists and is evaluated each input poll, is connected to nothing - so wait-versus-push per scene is unexpressible"
+  },
+  "decisions": [
+    "Local-first, cloud optional. The system must stay fully playable on the local 12B with no cloud model configured; the cloud director is an optional upgrade, not a dependency.",
+    "Censorship is a property of the model, not of cloud. Talemate already tracks this per client via decensor_enabled. Among Ollama Cloud models gpt-oss:120b-cloud refuses explicit prose while deepseek-v3.1 and kimi-k2 are far more permissive - but with the abstraction bridge the director never sees prose, so gpt-oss becomes viable and is the strongest reasoner.",
+    "Cloud access goes through the signed-in local Ollama daemon, not the ollama.com API. The client sets enable_api_auth False so there is no key field; pulling a :cloud model makes it appear in fetch_available_models like any local model. No client code change.",
+    "Abstraction bridge before cloud director (T19 gates T21), so explicit prose never leaves the machine.",
+    "Turn model is scene-dependent: quiet scenes wait for the player, action and travel scenes push forward. Implemented via new SceneType pacing fields plus the existing unused WaitForInput.abort_condition socket.",
+    "Cadence is plan-ahead batches with background re-planning, and beats carry branch hints so a player deviation is absorbed locally without a cloud round-trip.",
+    "All four autonomy bundles permitted - pacing, world motion, authorship, consequence. Already the case: get_disabled_action_ids reads disabled_sub_actions from scene state, default empty, so nothing is denied unless explicitly denied.",
+    "Fork core rather than ship a package, chosen for global default behaviour and a proper config UI, accepting merge exposure on scene-loop.json and select-actor-for-turn.json. Edits must be additive. The per-scene extends route and the packaging route both remain available if merge pain dominates.",
+    "Auto Narration stays suppressed under Scene Direction. auto_narration.py:104-107 already returns no eligible actions when direction is enabled; two systems independently deciding to narrate produces double narration. Document it as inert rather than rewiring it.",
+    "Resolved by node-ID trace: the cap (SetState f8fe5739) and the director's yield (ConditionalSetState 88c066b8) are independent writers to shared.skip_to_player, consumed by GetState 4b748e41 into NOT 8f39be2c which gates Select Actor For Turn. Raising the cap therefore does not disturb the director's yield, making Phase 2 low risk.",
+    "Phases 1-4 are independently playable with no cloud model and no plan-system changes. Splitting Phases 5-9 into a follow-on track is reasonable and matches the visual-reference-consistency to visual-reference-closure precedent, but that call is the user's, so the plan carries all nine.",
+    "Dice rolls ask the player only when the player's own character is the actor (user decision, 2026-07-30). Rolls for other characters resolve silently as today. Requires a new `character` focal argument on roll_dice, since whose roll it is currently exists only in free-text `reason`.",
+    "Cloud director model is deepseek-v4-pro:cloud, chosen over gpt-oss:120b-cloud because gpt-oss is heavily safety-trained and this is adult roleplay - even with the abstraction bridge the summaries can carry charged content. It is a reasoning model, which is why the client sets reason_enabled with 2048 reason_tokens: without that budget the visible response comes back empty because thinking consumes num_predict.",
+    "OLLAMA_NUM_PARALLEL is not required for T21. The scene loop awaits the director turn before generating actor output, so cloud and local calls never overlap today. It becomes necessary only for T24."
+  ]
+}
