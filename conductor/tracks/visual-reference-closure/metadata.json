@@ -12,24 +12,95 @@
   "reviewed_by": "second-opinion panel panel-20260730-202854-32de (kimi-k2.7-code, glm-5.2, nemotron-3-ultra)",
   "loop_state": {
     "current_step": "EVALUATE_PLAN",
-    "step_status": "NOT_STARTED",
+    "step_status": "IN_PROGRESS",
     "fix_cycle_count": 0,
     "max_fix_cycles": 5,
     "superpower_enhanced": true,
     "checkpoints": {
-      "PLAN": { "status": "PENDING" }
-    }
+      "PLAN": {
+        "status": "PENDING"
+      }
+    },
+    "completed_tasks": [
+      "T7a"
+    ],
+    "next_task": "T1",
+    "next_task_note": "T7a is done. T1/T2 (the duplication guardrails) remain unimplemented and are the real remaining work in this track, alongside T3 verification and the user-blocked T5 canonical cover. Commit 3 of T7a is therefore still owed once T1/T2 land."
   },
   "tasks": [
-    { "id": "T1", "name": "Static tag-shaped duplication negatives in fork-styles.yaml", "status": "pending", "deps": [] },
-    { "id": "T2", "name": "Count-aware negatives beside _add_species_negatives + unit tests", "status": "pending", "deps": ["T1"] },
-    { "id": "T3", "name": "Verify single-subject and two-character generations - AC3, AC4, AC5, AC6", "status": "pending", "deps": ["T2"] },
-    { "id": "T4", "name": "photoreal_pony decision, recorded - AC7", "status": "pending", "deps": ["T1"] },
-    { "id": "T5", "name": "Canonical Kaira cover - AC8 (user-blocked, must not gate T7a)", "status": "pending", "deps": ["T3"] },
-    { "id": "T6a", "name": "Docs: guardrails + design-doc amendment + decision log", "status": "pending", "deps": ["T3", "T4"] },
-    { "id": "T6b", "name": "Docs: canonical-cover outcome", "status": "pending", "deps": ["T5"] },
-    { "id": "T7a", "name": "Commits: emphasis fix, feature, guardrails, docs, launcher - AC9", "status": "pending", "deps": ["T6a"] },
-    { "id": "T7b", "name": "Commit the canonical cover", "status": "pending", "deps": ["T5", "T6b"] }
+    {
+      "id": "T1",
+      "name": "Static tag-shaped duplication negatives in fork-styles.yaml",
+      "status": "pending",
+      "deps": []
+    },
+    {
+      "id": "T2",
+      "name": "Count-aware negatives beside _add_species_negatives + unit tests",
+      "status": "pending",
+      "deps": [
+        "T1"
+      ]
+    },
+    {
+      "id": "T3",
+      "name": "Verify single-subject and two-character generations - AC3, AC4, AC5, AC6",
+      "status": "pending",
+      "deps": [
+        "T2"
+      ]
+    },
+    {
+      "id": "T4",
+      "name": "photoreal_pony decision, recorded - AC7",
+      "status": "pending",
+      "deps": [
+        "T1"
+      ]
+    },
+    {
+      "id": "T5",
+      "name": "Canonical Kaira cover - AC8 (user-blocked, must not gate T7a)",
+      "status": "pending",
+      "deps": [
+        "T3"
+      ]
+    },
+    {
+      "id": "T6a",
+      "name": "Docs: guardrails + design-doc amendment + decision log",
+      "status": "pending",
+      "deps": [
+        "T3",
+        "T4"
+      ]
+    },
+    {
+      "id": "T6b",
+      "name": "Docs: canonical-cover outcome",
+      "status": "pending",
+      "deps": [
+        "T5"
+      ]
+    },
+    {
+      "id": "T7a",
+      "name": "Commits: emphasis fix, feature, guardrails, docs, launcher - AC9",
+      "status": "completed",
+      "deps": [
+        "T6a"
+      ],
+      "note": "Executed 2026-07-31. Shipped as: 11d9f55 strip-emphasis fix (style.py helper + generation.py call/import, split at hunk level out of a mixed working-tree diff, plus its re-entry tests); 0c27566 reference conditioning (references.py, agent/comfyui wiring, three ipadapter workflows, test_visual_reference.py); f754a5f docs + track registration; 4b8da71 launcher; 23ea5e3 tooling. DEVIATION 1: commit 3 'guard against duplicated subjects' was NOT made - it has no content, because T1 (fork-styles.yaml duplication negatives) and T2 (count-aware negatives beside _add_species_negatives) were never implemented. fork-styles.yaml is untouched and generation.py has no count logic. ee7f5ad addressed phrasing in style.py, not these guardrails. DEVIATION 2: .gitignore moved out of the launcher commit into the tooling commit - its only change is ignoring .code-review-graph/, which is unrelated to the launcher. DECISION: .mcp.json committed - CLAUDE.md already directs contributors to those tools and it holds no secret (localhost Ollama, api key literally 'ollama'). EXCLUDED as planned: scenes/*/assets/library.json (+361/-5 generated churn). CONFIRMED: config.yaml is gitignored, so the cloud-director routing stays machine-local. start-fork.local.bat is in .git/info/exclude and cannot be committed; it was updated locally for the ComfyUI default. ALSO SHIPPED, outside T7a's scope: 9146862 the visualize-prompt-adjustment feature, whose track postdates this plan."
+    },
+    {
+      "id": "T7b",
+      "name": "Commit the canonical cover",
+      "status": "pending",
+      "deps": [
+        "T5",
+        "T6b"
+      ]
+    }
   ],
   "problems": {
     "P1": "Illustration negatives carry no anti-duplication terms, so live generations produced two-to-four copies of the subject; the checkpoint is booru-tag trained so natural-language negatives are weak, and character count is variable so blanket count tags would fight legitimate multi-character shots",
