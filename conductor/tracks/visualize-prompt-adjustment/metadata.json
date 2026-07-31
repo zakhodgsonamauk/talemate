@@ -21,8 +21,8 @@
         "status": "DONE_PENDING_E2E"
       }
     },
-    "next_task": "T7/T8 live verification, then the vis-type modal",
-    "next_task_note": "Handed over. Fixed: SET local.generation_request now reads from Visual Generation Request rather than Generate Image, so the prompt-only path produces a request for Finalize. Requested next: a mid-step modal that asks for the vis type BEFORE prompt generation, then composes, then lets the user edit and send. That also dissolves the CHARACTER_CARD vs SCENE_ILLUSTRATION tension - visual-subject-fidelity T4 fixed framing by switching to SCENE_ILLUSTRATION and thereby lost subject focus, because a scene illustration invites the whole cast. Letting the user choose is the better answer than guessing."
+    "next_task": "T7/T8/T11 live verification",
+    "next_task_note": "Chooser shipped and the frontend rebuilt - frontend_wsgi.py serves talemate_frontend/dist, so a .vue edit does nothing until pnpm build. Needs a hard refresh in the browser because the bundle filename is content-hashed. T7/T8 remain live-verification only."
   },
   "tasks": [
     {
@@ -107,6 +107,16 @@
         "T7",
         "T8"
       ]
+    },
+    {
+      "id": "T11",
+      "name": "Ask for the vis type before composing the prompt - Adjust & Visualize only",
+      "status": "completed",
+      "deps": [
+        "T6"
+      ],
+      "human_verified": true,
+      "note": "A mid-step chooser before the prompt is written, because the vis type decides framing and who is in shot - not something to discover after the fact. Only on Adjust & Visualize; the plain chip stays one click with its automatic guess, which is what the two chips are for. buildVisualizeRequest's guess becomes the DEFAULT rather than the decision: right often enough to preselect, wrong often enough that it should not decide. Character options are hidden when the message names nobody, since those vis types need a character and the dialog has nothing to pick one from. The character is dropped for SCENE_BACKGROUND and OBJECT_ILLUSTRATION, which must not name a subject they are not meant to contain. This also dissolves the visual-subject-fidelity T4 tension - CHARACTER_CARD kept one subject but forced a camera-facing portrait, SCENE_ILLUSTRATION fixed framing but invited the whole cast, and a 'visual description of X in the current moment' is genuinely both."
     }
   ],
   "prompt_generation_source_of_truth": {

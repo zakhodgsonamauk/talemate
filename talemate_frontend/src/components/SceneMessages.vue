@@ -178,6 +178,44 @@
     </v-dialog>
 
     <!-- Scene Illustration Selection Dialog -->
+    <!-- Vis type chooser, shown before the prompt is composed.
+         Only on Adjust & Visualize: the plain chip stays one click and keeps its
+         automatic guess. That guess is the default here rather than the decision,
+         because a "visual description of X in the current moment" is genuinely both a
+         portrait subject and a scene, and only the user knows which they meant. -->
+    <v-dialog v-model="visTypeDialog.show" max-width="520">
+        <v-card>
+            <v-card-title>What should this image be?</v-card-title>
+            <v-card-text>
+                <p class="text-medium-emphasis text-body-2 mb-4">
+                    Chosen before the prompt is written, because it decides the framing and
+                    who is in shot.
+                </p>
+                <v-radio-group v-model="visTypeDialog.visType" hide-details density="comfortable">
+                    <v-radio
+                        v-for="option in visTypeOptions"
+                        :key="option.value"
+                        :value="option.value"
+                    >
+                        <template #label>
+                            <div>
+                                <div>{{ option.title }}</div>
+                                <div class="text-medium-emphasis text-caption">{{ option.hint }}</div>
+                            </div>
+                        </template>
+                    </v-radio>
+                </v-radio-group>
+            </v-card-text>
+            <v-card-actions>
+                <v-spacer></v-spacer>
+                <v-btn text @click="closeVisTypeDialog">Cancel</v-btn>
+                <v-btn color="primary" :disabled="!visTypeDialog.visType" @click="confirmVisType">
+                    Compose prompt
+                </v-btn>
+            </v-card-actions>
+        </v-card>
+    </v-dialog>
+
     <v-dialog v-model="illustrationSelectDialog.show" max-width="500">
         <v-card>
             <v-card-title>Select Scene Illustration</v-card-title>
@@ -569,6 +607,16 @@ export default {
                 base64ById: {},
             },
             // Scene illustration selection dialog state
+            // Vis type chooser for Adjust & Visualize. `request` holds what
+            // buildVisualizeRequest guessed, so confirming reuses the same path with
+            // only the vis type replaced.
+            visTypeDialog: {
+                show: false,
+                messageId: null,
+                visType: null,
+                request: null,
+                hasCharacter: false,
+            },
             illustrationSelectDialog: {
                 show: false,
                 messageId: null,
@@ -596,6 +644,43 @@ export default {
         }
     },
     computed: {
+        // Offered in the Adjust & Visualize chooser. The character options are hidden
+        // when the message names nobody, because those vis types need a character and
+        // there is nothing here to pick one from.
+        visTypeOptions() {
+            const options = [
+                {
+                    value: VIS_TYPE.SCENE_ILLUSTRATION,
+                    title: 'The moment',
+                    hint: 'Landscape. Everyone the paragraph mentions, doing what it describes.',
+                },
+                {
+                    value: VIS_TYPE.SCENE_BACKGROUND,
+                    title: 'The setting only',
+                    hint: 'Landscape, no people.',
+                },
+                {
+                    value: VIS_TYPE.OBJECT_ILLUSTRATION,
+                    title: 'An object',
+                    hint: 'A single thing, not a person or a place.',
+                },
+            ];
+            if (this.visTypeDialog.hasCharacter) {
+                options.unshift(
+                    {
+                        value: VIS_TYPE.CHARACTER_CARD,
+                        title: 'One character, full portrait',
+                        hint: 'Portrait format, facing the viewer. Best for a character card.',
+                    },
+                    {
+                        value: VIS_TYPE.CHARACTER_PORTRAIT,
+                        title: 'One character, head and shoulders',
+                        hint: 'Square. Best for an avatar.',
+                    },
+                );
+            }
+            return options;
+        },
         messageAssetsConfig() {
             return this.appearanceConfig?.scene?.message_assets || null;
         },
@@ -1293,12 +1378,55 @@ export default {
         // the prompt into chat. Nothing is saved at this stage — the modal's
         // Generate does that through `visual/generate`, carrying the
         // attachment context built here.
+        // Ask what kind of image this should be, then compose. The automatic guess seeds
+        // the choice: it is right often enough to be a sensible default and wrong often
+        // enough that it should not be the decision.
         visualizeMessageWithPrompt(message_id) {
             const message = this.messages.find(m => m.id === message_id);
             if (!message) return;
             const request = this.buildVisualizeRequest(message);
             if (!request) return;
 
+            this.visTypeDialog.messageId = message_id;
+            this.visTypeDialog.request = request;
+            this.visTypeDialog.hasCharacter = Boolean(request.character_name);
+            this.visTypeDialog.visType = request.vis_type;
+            this.visTypeDialog.show = true;
+        },
+
+        closeVisTypeDialog() {
+            this.visTypeDialog.show = false;
+            this.visTypeDialog.messageId = null;
+            this.visTypeDialog.request = null;
+            this.visTypeDialog.visType = null;
+            this.visTypeDialog.hasCharacter = false;
+        },
+
+        confirmVisType() {
+            const message_id = this.visTypeDialog.messageId;
+            const request = this.visTypeDialog.request;
+            const vis_type = this.visTypeDialog.visType;
+            if (!request || !vis_type) return;
+
+            // The character is only meaningful to the vis types that depict one. Sending
+            // it with a background or object request would name a subject the image is
+            // not supposed to contain.
+            const keepsCharacter = [
+                VIS_TYPE.CHARACTER_CARD,
+                VIS_TYPE.CHARACTER_PORTRAIT,
+                VIS_TYPE.SCENE_ILLUSTRATION,
+            ].includes(vis_type);
+
+            this.closeVisTypeDialog();
+            this.sendVisualizeWithPrompt(message_id, {
+                ...request,
+                vis_type,
+                character_name: keepsCharacter ? request.character_name : '',
+            });
+        },
+
+        // Visualize, but stop after the prompt is composed so the user can edit it.
+        sendVisualizeWithPrompt(message_id, request) {
             // Deliberately not added to visualizingMessageIds: the modal's own
             // loading state is the feedback here, and keeping the toolbar
             // spinner out of it means a preview that never arrives cannot
