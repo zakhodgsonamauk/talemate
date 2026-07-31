@@ -2233,3 +2233,78 @@ async def test_sex_conditioning_survives_a_paraphrased_anchor(styling_agent):
 
     assert request.negative_prompt, "no negatives at all - sex conditioning did not run"
     assert "1boy" in request.negative_prompt
+
+
+# ---------------------------------------------------------------------------
+# Rating tags
+#
+# The score tags are part of the problem they solve: score_9/score_8_up select for
+# highly-rated booru images, and on that corpus highly-rated skews explicit. Observed
+# live: a fully dressed subject, the complete set of nudity negatives delivered to
+# ComfyUI, and an explicit image regardless. Rating is a top-level axis of the training
+# data rather than a description of body parts.
+# ---------------------------------------------------------------------------
+
+
+async def test_a_dressed_subject_asks_for_a_safe_rating(styling_agent):
+    from talemate.context import active_scene
+
+    request = _request(", ".join([KAIRA_ANCHOR, "Kaira", "uniform", "boots"]))
+
+    token = active_scene.set(styling_agent.scene)
+    try:
+        await styling_agent._finalize_prompt(request)
+    finally:
+        active_scene.reset(token)
+
+    assert "rating_safe" in request.prompt
+    assert "rating_explicit" in request.negative_prompt
+    assert "rating_questionable" in request.negative_prompt
+
+
+async def test_the_rating_tag_leads_the_prompt(styling_agent):
+    """Same reasoning as the sex tags - attention thins across the prompt."""
+    from talemate.context import active_scene
+
+    request = _request(", ".join([KAIRA_ANCHOR, "Kaira", "uniform", "boots"]))
+
+    token = active_scene.set(styling_agent.scene)
+    try:
+        await styling_agent._finalize_prompt(request)
+    finally:
+        active_scene.reset(token)
+
+    assert request.prompt.split(",")[0].strip() == "rating_safe"
+
+
+async def test_an_undressed_scene_is_not_forced_safe(styling_agent):
+    """Forcing a safe rating onto a deliberately explicit scene would fight the story."""
+    from talemate.context import active_scene
+
+    request = _request(", ".join([KAIRA_ANCHOR, "Kaira", "bare torso"]))
+
+    token = active_scene.set(styling_agent.scene)
+    try:
+        await styling_agent._finalize_prompt(request)
+    finally:
+        active_scene.reset(token)
+
+    assert "rating_safe" not in request.prompt
+    assert "rating_explicit" not in (request.negative_prompt or "")
+
+
+async def test_rating_tags_do_not_depend_on_resolving_sex(styling_agent):
+    """Rating has nothing to do with sex, and sex resolution has proven fragile."""
+    from talemate.context import active_scene
+
+    styling_agent.kaira.base_attributes["gender"] = "non-binary"
+    request = _request(", ".join([KAIRA_ANCHOR, "Kaira", "uniform", "boots"]))
+
+    token = active_scene.set(styling_agent.scene)
+    try:
+        await styling_agent._finalize_prompt(request)
+    finally:
+        active_scene.reset(token)
+
+    assert "1girl" not in request.prompt, "sex should be unresolved here"
+    assert "rating_safe" in request.prompt, "rating must not be gated on sex"

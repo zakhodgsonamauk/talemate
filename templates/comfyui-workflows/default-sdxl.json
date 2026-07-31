@@ -50,7 +50,7 @@
       "add_noise": "enable",
       "noise_seed": 131938123826302,
       "steps": 50,
-      "cfg": 7,
+      "cfg": 8,
       "sampler_name": "dpmpp_2m_sde",
       "scheduler": "karras",
       "start_at_step": 0,

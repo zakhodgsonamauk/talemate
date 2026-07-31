@@ -120,6 +120,13 @@ _UNDRESS_INTENT_WORDS = {
     "exposed skin",
 }
 
+# Pony-derived checkpoints are trained with a rating axis alongside the score tags. It is
+# the intended control for this and binds harder than anatomy negatives, which were
+# delivered in full and ignored. Applied only to a dressed subject - forcing a safe rating
+# onto a deliberately explicit scene would fight the story.
+RATING_SAFE_TAG = "rating_safe"
+RATING_NEGATIVES = ("rating_explicit", "rating_questionable")
+
 _CLOTHING_WORDS = {
     "uniform",
     "shirt",
@@ -468,11 +475,13 @@ class GenerationMixin:
         keywords = await self._drop_secondary_traits(keywords, request)
         # Before the budget trim so the tags are accounted for rather than pushed out.
         keywords = await self._add_sex_tags(keywords, request)
+        keywords = await self._add_rating_tags(keywords, request)
         keywords = await self._trim_to_budget(keywords, request)
 
         keywords = list(dict.fromkeys(keywords))
         await self._add_species_negatives(keywords, request)
         await self._add_sex_negatives(keywords, request)
+        await self._add_rating_negatives(keywords, request)
         request.prompt = await self._render_with_emphasis(keywords, request)
 
         if request.prompt != original:
@@ -769,6 +778,85 @@ class GenerationMixin:
 
         return character_sex(primary)
 
+    def _subject_is_dressed(self, keywords: list[str]) -> bool:
+        """
+        Whether the prompt describes a clothed subject, by weight of evidence.
+
+        Interim, and known to be the wrong instrument - it reasons over a prompt that
+        describes everyone present, when the question concerns one person. T16 replaces it
+        with the per-character `visual_wardrobe` reinforcement. Kept behind one function so
+        that replacement is a single edit.
+
+        A veto was tried and failed: one leaked "bare chest" from another character switched
+        off every nudity negative for a subject wearing four garments. Counting instead lets
+        a deliberate undress beat still win - "unbuttoning her shirt" is one garment against
+        one undress phrase - while a stray word cannot disarm a dressed subject. A tie goes
+        to undress, so the scene keeps the benefit of the doubt.
+
+        Each keyword is classified once, undress before clothing, because a phrase naming a
+        garment while describing its removal would otherwise vote on both sides.
+        """
+        garments = 0
+        undress = 0
+        for keyword in (k.lower() for k in keywords):
+            if any(word in keyword for word in _UNDRESS_INTENT_WORDS):
+                undress += 1
+            elif any(word in keyword for word in _CLOTHING_WORDS):
+                garments += 1
+
+        return garments > undress
+
+    async def _add_rating_tags(
+        self, keywords: list[str], request: GenerationRequest
+    ) -> list[str]:
+        """
+        Ask a Pony-derived checkpoint for a safe rating when the subject is dressed.
+
+        The score tags are part of the problem they solve. `score_9, score_8_up,
+        score_7_up` select for highly-rated booru images, and on that corpus highly-rated
+        skews explicit - so the positive prompt carries a bias the anatomy negatives then
+        have to fight. Observed live: a fully dressed subject, the complete set of nudity
+        negatives delivered to ComfyUI, and an explicit image anyway.
+
+        Rating is a top-level axis of the training data rather than a description of body
+        parts, which is why it binds harder than the negatives did.
+
+        Deliberately independent of sex resolution: rating has nothing to do with sex, and
+        sex resolution has already proven fragile enough that coupling them would risk
+        losing this too.
+        """
+        scene = active_scene.get()
+        if not scene or request.vis_type in VIS_TYPES_WITHOUT_CAST:
+            return keywords
+
+        if not self._subject_is_dressed(keywords):
+            return keywords
+
+        if RATING_SAFE_TAG in keywords:
+            return keywords
+
+        log.debug("rating_tags.added", added=[RATING_SAFE_TAG])
+        return [RATING_SAFE_TAG, *keywords]
+
+    async def _add_rating_negatives(
+        self, keywords: list[str], request: GenerationRequest
+    ) -> None:
+        """Negate the explicit end of the rating axis for a dressed subject."""
+        scene = active_scene.get()
+        if not scene or request.vis_type in VIS_TYPES_WITHOUT_CAST:
+            return
+
+        if not self._subject_is_dressed(keywords):
+            return
+
+        existing = (request.negative_prompt or "").strip().rstrip(",")
+        additions = [n for n in RATING_NEGATIVES if n not in existing]
+        if not additions:
+            return
+
+        request.negative_prompt = ", ".join(filter(None, [existing, *additions]))
+        log.debug("rating_negatives.added", added=additions)
+
     async def _add_sex_tags(
         self, keywords: list[str], request: GenerationRequest
     ) -> list[str]:
@@ -817,26 +905,7 @@ class GenerationMixin:
 
         collect(SEX_NEGATIVES.get(sex, ()))
 
-        # Whether they are dressed is decided by weight of evidence, not by a single word.
-        #
-        # A veto was tried and failed: one leaked "bare chest" from another character
-        # switched off every nudity negative for a subject wearing a uniform, a shirt,
-        # trousers and a tool belt, and the result was explicit. Counting instead means a
-        # deliberate undress beat still wins - "unbuttoning her shirt" is one garment
-        # against one undress phrase - while a fully dressed subject survives a stray word.
-        # A tie goes to undress, so the scene keeps the benefit of the doubt.
-        # Each keyword is classified once, undress first: "unbuttoning her shirt" names a
-        # garment while describing its removal, and counting it on both sides would let it
-        # vote against itself.
-        garments = 0
-        undress = 0
-        for keyword in (k.lower() for k in keywords):
-            if any(word in keyword for word in _UNDRESS_INTENT_WORDS):
-                undress += 1
-            elif any(word in keyword for word in _CLOTHING_WORDS):
-                garments += 1
-
-        dressed = garments > undress
+        dressed = self._subject_is_dressed(keywords)
         if dressed:
             collect(NUDITY_NEGATIVES)
 
