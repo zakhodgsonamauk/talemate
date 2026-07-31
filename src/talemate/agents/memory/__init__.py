@@ -1001,6 +1001,28 @@ class ChromaDBMemoryAgent(MemoryAgent):
             )
 
         self.scene._memory_never_persisted = self.db.count() == 0
+
+        # GC orphan collections for this scene left behind by embedding
+        # switches (collection name is embedding-fingerprint-scoped, so a
+        # switch strands the previous collection forever)
+        try:
+            prefix = f"{self.scene.memory_id}-tm-"
+            for collection in self.db_client.list_collections():
+                name = getattr(collection, "name", None) or str(collection)
+                if name.startswith(prefix) and name != collection_name:
+                    log.info(
+                        "chromadb agent",
+                        status="dropping orphan collection",
+                        collection_name=name,
+                    )
+                    self.db_client.delete_collection(name)
+        except Exception as exc:
+            log.warning(
+                "chromadb agent",
+                status="orphan collection gc failed",
+                details=str(exc),
+            )
+
         log.info("chromadb agent", status="db ready")
         self._ready_to_add = True
 
@@ -1015,18 +1037,34 @@ class ChromaDBMemoryAgent(MemoryAgent):
         self.db.delete(where={"source": "talemate"})
 
     def drop_db(self):
-        if not self.db:
+        # after close_db() self.db is None but the collection (and any ghost
+        # docs) still exists on disk - the rebuild that follows drop_db must
+        # start from an empty collection, so delete by name instead of
+        # bailing on a missing handle
+        if getattr(self, "scene", None):
+            collection_name = self.make_collection_name(self.scene)
+        else:
+            collection_name = getattr(self, "collection_name", None)
+
+        if not collection_name:
             return
 
-        log.info(
-            "chromadb agent", status="dropping db", collection_name=self.collection_name
-        )
+        if not getattr(self, "db_client", None):
+            self.db_client = chromadb.PersistentClient(
+                settings=Settings(anonymized_telemetry=False)
+            )
+
+        log.info("chromadb agent", status="dropping db", collection_name=collection_name)
 
         try:
-            self.db_client.delete_collection(self.collection_name)
+            self.db_client.delete_collection(collection_name)
+        except chromadb.errors.NotFoundError:
+            pass
         except ValueError as exc:
             if "Collection not found" not in str(exc):
                 raise
+
+        self.db = None
 
     def close_db(self, scene, remove_unsaved_memory: bool = True):
         if not self.db:
@@ -1306,4 +1344,6 @@ class ChromaDBMemoryAgent(MemoryAgent):
             session_id=scene.memory_session_id,
         )
 
-        self._delete({"session": scene.memory_session_id, "source": "talemate"})
+        # no source clause - world entries carry source "manual"/"imported"
+        # and must be cleaned up with the rest of the unsaved session
+        self._delete({"session": scene.memory_session_id})
