@@ -1199,6 +1199,19 @@
       "inherited": false,
       "registry": "core/AsBool",
       "base_type": "core/Node"
+    },
+    "3919355b-3e5c-4328-a75b-de0c6fecee67": {
+      "title": "auto OR always-on",
+      "id": "3919355b-3e5c-4328-a75b-de0c6fecee67",
+      "properties": {},
+      "x": 270,
+      "y": 870,
+      "width": 140,
+      "height": 106,
+      "collapsed": false,
+      "inherited": false,
+      "registry": "core/ORRouter",
+      "base_type": "core/Node"
     }
   },
   "edges": {
@@ -1370,7 +1383,8 @@
       "a175ce77-dd20-475f-a324-175255b0ed85.value"
     ],
     "efb36ca2-b520-47ca-9ac5-3619259e89b3.direction_always_on": [
-      "bad4de23-1028-4be6-b6ab-d85d177060ff.always_on"
+      "bad4de23-1028-4be6-b6ab-d85d177060ff.always_on",
+      "3919355b-3e5c-4328-a75b-de0c6fecee67.b"
     ],
     "efb36ca2-b520-47ca-9ac5-3619259e89b3.direction_run_immediately": [
       "bad4de23-1028-4be6-b6ab-d85d177060ff.run_immediately"
@@ -1401,7 +1415,7 @@
       "33533e99-7333-4d71-93ed-b4c2735e5302.value"
     ],
     "911c7a59-03be-4be5-b50a-51ef55b6bd4d.auto_progress": [
-      "c432f53d-eec5-47a2-8e67-146a1d66df2b.a"
+      "3919355b-3e5c-4328-a75b-de0c6fecee67.a"
     ],
     "c432f53d-eec5-47a2-8e67-146a1d66df2b.yes": [
       "bad4de23-1028-4be6-b6ab-d85d177060ff.state"
@@ -1438,6 +1452,9 @@
     ],
     "d03f6c28-5f49-4a11-9c73-9e2f8f6d43b5.value": [
       "070dcc40-1aa7-4e45-bfa2-1a5fb0b2804e.value"
+    ],
+    "3919355b-3e5c-4328-a75b-de0c6fecee67.yes": [
+      "c432f53d-eec5-47a2-8e67-146a1d66df2b.a"
     ]
   },
   "groups": [

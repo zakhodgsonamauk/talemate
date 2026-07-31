@@ -73,3 +73,24 @@ Technical and business decisions made during development.
 - **Impact**: `SEED_MODE` and `resolve_seed` in `agents/visual/schema.py`. sha256 over
   the scene id rather than `hash()`, which is salted per process and would break the one
   property the mode exists to provide.
+
+### DECISION-005: Scene direction gate widened with a minimal OR, not rewired
+- **Date**: 2026-07-31
+- **Track**: director-trust-and-levers
+- **Decision**: In `scene-loop.json`, the AND router feeding `Scene Direction.state`
+  now takes `(GetSceneState.auto_progress OR GetSceneIntent.direction_always_on)` as
+  its first flag (new `core/ORRouter` node `3919355b-3e5c-4328-a75b-de0c6fecee67`)
+  instead of `auto_progress` alone. The second flag (`NOT shared.skip_to_player`) is
+  untouched. Effect: with the scene intent's `direction_always_on` set, the director
+  keeps taking direction turns during manual play (auto_progress off), while explicit
+  skip-to-player still suppresses it.
+- **Rationale**: Live-play failure: with Scene Direction enabled but auto_progress
+  off, the director never got a turn, so player-initiated stakes were never
+  adjudicated. `direction_always_on` was already wired to the SceneDirection node's
+  `always_on` input but the node's `state` gate never fired without auto_progress.
+- **Alternatives**: Deep scene-loop rework (AI-turn caps, hand-back triggers) —
+  deliberately NOT done here; that is owned by the `autonomous-story` track (its R2/R3).
+  This is the single minimal change director-trust-and-levers makes to the loop, so the
+  autonomous-story implementer must build on top of this OR gate rather than replace it.
+- **Impact**: Direction turns can now occur in manual play sessions. Frequency and
+  stance levers (same track) bound how intrusive that is.
