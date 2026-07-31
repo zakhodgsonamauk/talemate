@@ -1,0 +1,300 @@
+{
+  "1": {
+    "inputs": {
+      "ckpt_name": "CyberRealisticPony_V9.0_FP16.safetensors"
+    },
+    "class_type": "CheckpointLoaderSimple",
+    "_meta": {
+      "title": "Talemate Load Checkpoint"
+    }
+  },
+  "3": {
+    "inputs": {
+      "width": 1216,
+      "height": 832,
+      "batch_size": 1
+    },
+    "class_type": "EmptyLatentImage",
+    "_meta": {
+      "title": "Talemate Resolution"
+    }
+  },
+  "4": {
+    "inputs": {
+      "text": "",
+      "clip": [
+        "1",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Talemate Positive Prompt"
+    }
+  },
+  "5": {
+    "inputs": {
+      "text": "",
+      "clip": [
+        "1",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Talemate Negative Prompt"
+    }
+  },
+  "30": {
+    "inputs": {
+      "add_noise": "enable",
+      "noise_seed": 88112255,
+      "steps": 30,
+      "cfg": 7,
+      "sampler_name": "dpmpp_2m",
+      "scheduler": "karras",
+      "start_at_step": 0,
+      "end_at_step": 10000,
+      "return_with_leftover_noise": "disable",
+      "model": [
+        "1",
+        0
+      ],
+      "positive": [
+        "4",
+        0
+      ],
+      "negative": [
+        "5",
+        0
+      ],
+      "latent_image": [
+        "3",
+        0
+      ]
+    },
+    "class_type": "KSamplerAdvanced",
+    "_meta": {
+      "title": "Pass 1 - composition (no reference)"
+    }
+  },
+  "31": {
+    "inputs": {
+      "samples": [
+        "30",
+        0
+      ],
+      "vae": [
+        "1",
+        2
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "Pass 1 image"
+    }
+  },
+  "32": {
+    "inputs": {
+      "images": [
+        "31",
+        0
+      ],
+      "Hair": true,
+      "Glasses": true,
+      "Top-clothes": true,
+      "Bottom-clothes": true,
+      "Torso-skin": true,
+      "Face": true,
+      "Left-arm": true,
+      "Right-arm": true,
+      "Left-leg": true,
+      "Right-leg": true,
+      "Left-foot": true,
+      "Right-foot": true,
+      "mask_blur": 4,
+      "mask_offset": 0,
+      "invert_output": false,
+      "background": "Alpha"
+    },
+    "class_type": "BodySegment",
+    "_meta": {
+      "title": "Segment the person"
+    }
+  },
+  "34": {
+    "inputs": {
+      "mask": [
+        "32",
+        1
+      ],
+      "expand": 8,
+      "incremental_expandrate": 0.0,
+      "tapered_corners": true,
+      "flip_input": false,
+      "blur_radius": 6.0,
+      "lerp_alpha": 1.0,
+      "decay_factor": 1.0,
+      "fill_holes": true
+    },
+    "class_type": "GrowMaskWithBlur",
+    "_meta": {
+      "title": "Grow and soften the silhouette"
+    }
+  },
+  "35": {
+    "inputs": {
+      "pixels": [
+        "31",
+        0
+      ],
+      "vae": [
+        "1",
+        2
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "Pass 1 back to latent"
+    }
+  },
+  "36": {
+    "inputs": {
+      "samples": [
+        "35",
+        0
+      ],
+      "mask": [
+        "34",
+        0
+      ]
+    },
+    "class_type": "SetLatentNoiseMask",
+    "_meta": {
+      "title": "Restrict pass 2 to the person"
+    }
+  },
+  "20": {
+    "inputs": {
+      "image": "talemate/placeholder.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Talemate Reference 1"
+    }
+  },
+  "21": {
+    "inputs": {
+      "ipadapter_file": "ip-adapter-plus_sdxl_vit-h.safetensors"
+    },
+    "class_type": "IPAdapterModelLoader",
+    "_meta": {
+      "title": "IPAdapter Model"
+    }
+  },
+  "22": {
+    "inputs": {
+      "clip_name": "CLIP-ViT-H-14-laion2B-s32B-b79K.safetensors"
+    },
+    "class_type": "CLIPVisionLoader",
+    "_meta": {
+      "title": "CLIP Vision (ViT-H)"
+    }
+  },
+  "23": {
+    "inputs": {
+      "weight": 0.85,
+      "weight_type": "linear",
+      "combine_embeds": "average",
+      "start_at": 0.0,
+      "end_at": 1.0,
+      "embeds_scaling": "K+V",
+      "model": [
+        "1",
+        0
+      ],
+      "ipadapter": [
+        "21",
+        0
+      ],
+      "image": [
+        "20",
+        0
+      ],
+      "clip_vision": [
+        "22",
+        0
+      ],
+      "attn_mask": [
+        "34",
+        0
+      ]
+    },
+    "class_type": "IPAdapterAdvanced",
+    "_meta": {
+      "title": "Apply Character Reference (masked)"
+    }
+  },
+  "37": {
+    "inputs": {
+      "add_noise": "enable",
+      "noise_seed": 88112255,
+      "steps": 30,
+      "cfg": 7,
+      "sampler_name": "dpmpp_2m",
+      "scheduler": "karras",
+      "start_at_step": 14,
+      "end_at_step": 10000,
+      "return_with_leftover_noise": "disable",
+      "model": [
+        "23",
+        0
+      ],
+      "positive": [
+        "4",
+        0
+      ],
+      "negative": [
+        "5",
+        0
+      ],
+      "latent_image": [
+        "36",
+        0
+      ]
+    },
+    "class_type": "KSamplerAdvanced",
+    "_meta": {
+      "title": "Pass 2 - identity inside the mask"
+    }
+  },
+  "13": {
+    "inputs": {
+      "samples": [
+        "37",
+        0
+      ],
+      "vae": [
+        "1",
+        2
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "14": {
+    "inputs": {
+      "filename_prefix": "talemate-ipadapter-inpaint",
+      "images": [
+        "13",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  }
+}

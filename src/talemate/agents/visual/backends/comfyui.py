@@ -560,6 +560,10 @@ class Backend(backends.Backend):
                 total_bytes=len(reference_bytes),
             )
             uploaded_paths: list[str] = []
+            # Same asset bound to several reference slots must not be uploaded once per
+            # slot. A one-picture character fills every slot with the same id, which was
+            # three identical 1.8MB POSTs overwriting each other.
+            uploaded_by_asset: dict[str, str] = {}
             # Create a list of identifiers for each reference (asset_id for saved assets, None for inline)
             reference_ids = []
             if request.inline_reference:
@@ -585,6 +589,17 @@ class Backend(backends.Backend):
                     hash_str = hashlib.md5(img_bytes[:1024]).hexdigest()[:10]
                     filename = f"talemate_inline_{hash_str}.png"
 
+                if asset_id and asset_id in uploaded_by_asset:
+                    reused_path = uploaded_by_asset[asset_id]
+                    uploaded_paths.append(reused_path)
+                    log.debug(
+                        "comfyui.reference.reused",
+                        asset_id=asset_id,
+                        path=reused_path,
+                        index=idx,
+                    )
+                    continue
+
                 log.debug(
                     "comfyui.reference.upload",
                     asset_id=asset_id,
@@ -600,6 +615,8 @@ class Backend(backends.Backend):
                 subfolder = uploaded.get("subfolder", "talemate")
                 image_path = f"{subfolder}/{image_name}" if subfolder else image_name
                 uploaded_paths.append(image_path)
+                if asset_id:
+                    uploaded_by_asset[asset_id] = image_path
                 log.debug("comfyui.reference.uploaded", path=image_path)
             log.debug(
                 "comfyui.references.setting",

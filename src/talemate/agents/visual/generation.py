@@ -807,6 +807,10 @@ class GenerationMixin:
 
     @set_processing
     async def generate(self, request: GenerationRequest) -> GenerationResponse:
+        # Before _finalize_prompt, which selects its keyword handling from whichever
+        # backend the request is bound for - and attaching a reference is what moves a
+        # request onto the edit backend.
+        await self.attach_character_references(request)
         self._apply_seed(request)
         await self._finalize_prompt(request)
 

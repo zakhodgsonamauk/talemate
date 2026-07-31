@@ -22,6 +22,7 @@ from .schema import ReadyCheckResult, BackendStatusType, PROMPT_TYPE, SEED_MODE
 import talemate.agents.visual.nodes  # noqa: F401
 
 from .anchors import AnchorMixin
+from .references import ReferenceMixin
 from .style import StyleMixin
 from .generation import GenerationMixin
 from .analyze import AnalysisMixin
@@ -54,6 +55,7 @@ log = structlog.get_logger("talemate.agents.visual")
 @register()
 class VisualAgent(
     AnchorMixin,
+    ReferenceMixin,
     StyleMixin,
     GenerationMixin,
     AnalysisMixin,
@@ -215,6 +217,25 @@ class VisualAgent(
                         min=5,
                         max=200,
                         step=5,
+                    ),
+                },
+            ),
+            "_references": AgentAction(
+                enabled=True,
+                container=True,
+                label="Character References",
+                description="Uses a character's card image as a visual reference for scene illustrations, so their identity is fixed by the picture rather than by words.",
+                icon="mdi-account-box-outline",
+                config={
+                    "enabled": AgentActionConfig(
+                        type="bool",
+                        value=False,
+                        label="Anchor illustrations to character cards",
+                        description="When a scene illustration names a character who has a cover image, that image is attached as a reference and the request is routed to the image editing backend. Appearance keywords alone describe a type, not a person, so the same description yields a different face every time.",
+                        note=AgentActionNote(
+                            color="warning",
+                            text="Requires an image editing backend whose workflow accepts references - for ComfyUI, one with 'Talemate Reference N' nodes. Without one this does nothing.",
+                        ),
                     ),
                 },
             ),
