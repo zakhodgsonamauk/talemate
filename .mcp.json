@@ -9,7 +9,7 @@
       "env": {
         "CRG_OPENAI_BASE_URL": "http://127.0.0.1:11434/v1",
         "CRG_OPENAI_API_KEY": "ollama",
-        "CRG_OPENAI_MODEL": "qwen3-embedding-ctx2048:4b",
+        "CRG_OPENAI_MODEL": "qwen3-embedding-ctx2048:4b-cpu",
         "CRG_OPENAI_DIMENSION": "512"
       }
     }
