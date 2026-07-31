@@ -1,4 +1,4 @@
-from typing import Any, ClassVar, TYPE_CHECKING, Callable
+from typing import Any, ClassVar, TYPE_CHECKING, Callable, Literal
 import pydantic
 import enum
 import base64
@@ -322,6 +322,107 @@ class AssetAttachmentContext(pydantic.BaseModel):
         return False
 
 
+class PromptProfile(pydantic.BaseModel):
+    """
+    A checkpoint family's prompting dialect.
+
+    Prompts were composed in one dialect regardless of the model receiving
+    them - observed live: a Pony keyword prompt sent to Juggernaut XI, which
+    wants natural language under 75 tokens and reads score tags as noise.
+    The profile is resolved from the checkpoint BEFORE composition and steers
+    the distillation contract, the quality/style prefix, the token budget and
+    the negative-prompt base. Ground truth for the built-ins:
+    conductor/tracks/model-aware-prompting/spec.md (user-supplied guides).
+    """
+
+    id: str
+    label: str = ""
+    # text block injected into the distillation template's TASK section
+    dialect_instructions: str = ""
+    # quality/special tags prepended by the style pass ("" = none)
+    quality_prefix: str = ""
+    # whether the pony rating_* convention applies
+    rating_tags: bool = False
+    # whether an explicit art style/medium is mandatory in the prompt
+    art_style_required: bool = False
+    # CLIP-attention budget for the finished positive prompt
+    max_prompt_tokens: int = 150
+    # maximum emphasis weight the dialect tolerates
+    weight_cap: float = 1.3
+    # dialect-appropriate negative base terms (joined into NEGATIVE)
+    negative_base: str = ""
+    # style pass renders keywords (tag stanzas) or a natural-language sentence
+    style_render: Literal["tags", "natural"] = "tags"
+
+
+PROMPT_PROFILES: dict[str, PromptProfile] = {
+    "pony": PromptProfile(
+        id="pony",
+        label="Pony (score tags + structured description)",
+        dialect_instructions=(
+            "DIALECT - Pony four-section structure. After the quality/rating tags "
+            "(added separately), your PROMPT line supplies the remaining sections "
+            "in this order: (1) a FACTUAL DESCRIPTION - one or two natural-language "
+            "sentences covering the Five W's: who the subject is, what they look "
+            "like and wear, what they are doing, where and when; give the primary "
+            "subject detail and keep secondary elements concise; (2) a STYLISTIC "
+            "phrase - lighting, composition, palette, atmosphere; (3) BOOSTER TAGS "
+            "- comma-separated short tags reinforcing the key concepts. Pony "
+            "handles long descriptions well - two to three sentences is good. "
+            "Emphasis by position and booster repetition first; at most one "
+            "weighted phrase, never above 1.3."
+        ),
+        quality_prefix="score_9, score_8_up, score_7_up, score_6_up",
+        rating_tags=True,
+        art_style_required=True,
+        max_prompt_tokens=150,
+        weight_cap=1.3,
+        negative_base="text, watermark, low quality, blurry, deformed, extra limbs, bad hands, bad anatomy",
+        style_render="tags",
+    ),
+    "sdxl_natural": PromptProfile(
+        id="sdxl_natural",
+        label="SDXL natural language (Juggernaut, RealVis)",
+        dialect_instructions=(
+            "DIALECT - natural-language SDXL (Juggernaut family). Write the PROMPT "
+            "line as fluent descriptive sentences, NOT booru tags. Component order: "
+            "subject first (THE FIRST SENTENCE IS THE FOUNDATION - it must name the "
+            "subject and the action), then environment, key objects, color, mood, "
+            "lighting, perspective, textures, clothing. HARD LIMIT: 75 tokens - "
+            "past that the model stops reading; cut atmosphere before pose. Useful "
+            "trigger words: High Resolution, Cinematic, and concrete textures. "
+            "Do NOT use score_9/score tags or rating_ tags - this model ignores "
+            "them and they waste budget. At most one weighted phrase, never above "
+            "1.4."
+        ),
+        quality_prefix="High Resolution, Cinematic",
+        rating_tags=False,
+        art_style_required=False,
+        max_prompt_tokens=75,
+        weight_cap=1.4,
+        negative_base="fake eyes, deformed eyes, bad eyes, cgi, 3D, digital, airbrushed, bad hands",
+        style_render="natural",
+    ),
+    "descriptive": PromptProfile(
+        id="descriptive",
+        label="Descriptive prose (edit backends)",
+        dialect_instructions="",
+        quality_prefix="",
+        rating_tags=False,
+        art_style_required=False,
+        max_prompt_tokens=512,
+        weight_cap=1.0,
+        negative_base="",
+        style_render="natural",
+    ),
+}
+
+
+def get_prompt_profile(profile_id: str | None) -> PromptProfile:
+    """The profile for an id, defaulting to pony (the historical behavior)."""
+    return PROMPT_PROFILES.get(profile_id or "", PROMPT_PROFILES["pony"])
+
+
 class GenerationRequest(pydantic.BaseModel):
     prompt: str | None = None
     negative_prompt: str | None = None
@@ -342,6 +443,10 @@ class GenerationRequest(pydantic.BaseModel):
     # where the prompt in the box is what the user saw and approved - possibly
     # hand-edited - and recomposing it would silently discard those edits.
     distilled: bool = False
+
+    # The prompting dialect of the checkpoint this request will render on
+    # (see PromptProfile). "" = resolve lazily / historical pony behavior.
+    prompt_profile: str = ""
 
     agent_config: dict[str, Any] = pydantic.Field(default={})
 

@@ -862,6 +862,20 @@ class ComfyUIMixin:
                 description="The semantic style of the generated prompt. USe keywords for SDXL, SD51 and descriptive for flux and qwen.",
                 scene_overridable=False,
             ),
+            "checkpoint_profiles": AgentActionConfig(
+                type="blob",
+                value="",
+                label="Checkpoint prompt profiles",
+                description=(
+                    'Per-checkpoint prompting dialect overrides as JSON, e.g. '
+                    '{"juggernaut": "sdxl_natural", "mymix": "pony"} - keys are '
+                    "checkpoint filename substrings, values are profile ids "
+                    "(pony, sdxl_natural, descriptive). Checkpoints not listed "
+                    "here are matched by built-in name patterns; unknown names "
+                    "default to pony."
+                ),
+                scene_overridable=False,
+            ),
             "resolution_square": AgentActionConfig(
                 type="vector2",
                 title="Resolutions",

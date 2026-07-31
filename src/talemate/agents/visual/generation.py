@@ -1,4 +1,5 @@
 import asyncio
+import json
 import re
 import structlog
 from typing import Callable
@@ -24,8 +25,10 @@ from .schema import (
     GenerationResponse,
     BackendStatusType,
     GenerationRequest,
+    PromptProfile,
     Resolution,
     FORMAT_TYPE,
+    get_prompt_profile,
     resolve_seed,
 )
 from .style import (
@@ -141,6 +144,18 @@ RATING_NEGATIVES = ("rating_explicit", "rating_questionable")
 # only for a subject the prompt says is dressed. If this does not work, the conclusion is
 # that prompt-level control cannot reach this checkpoint and the model has to change (T14).
 SCORE_TAGS = ("score_9", "score_8_up", "score_7_up", "score_6_up", "score_5_up")
+
+# checkpoint filename -> prompting dialect. Order matters: first match wins.
+# Unmatched checkpoints fall through to pony - the historical behavior, made
+# explicit. Overridable per checkpoint via the comfyui action's
+# checkpoint_profiles config (JSON: {"substring": "profile_id"}).
+PROFILE_CHECKPOINT_PATTERNS: tuple[tuple[re.Pattern, str], ...] = (
+    (re.compile(r"pony|score_9|cyberrealistic", re.IGNORECASE), "pony"),
+    (
+        re.compile(r"juggernaut|realvis|realistic[ _-]?vision", re.IGNORECASE),
+        "sdxl_natural",
+    ),
+)
 
 _CLOTHING_WORDS = {
     "uniform",
@@ -522,6 +537,74 @@ class GenerationMixin:
         if seed is not None:
             request.sampler_settings.seed = seed
             log.debug("apply_seed", mode=str(mode), seed=seed)
+
+    def resolve_prompt_profile(
+        self,
+        request: "GenerationRequest | None" = None,
+        checkpoint: str | None = None,
+    ) -> PromptProfile:
+        """
+        The prompting dialect for the checkpoint this request will render on.
+
+        Precedence mirrors comfyui.resolve_checkpoint: explicit arg > request
+        extra_config override > agent-configured model. DESCRIPTIVE backends
+        resolve to the prose profile regardless of checkpoint. Unknown
+        checkpoints resolve to pony - the historical behavior, made explicit.
+        """
+        if request is not None and request.prompt_profile:
+            return get_prompt_profile(request.prompt_profile)
+
+        backend = (
+            self.backend_image_edit
+            if request is not None and request.gen_type == GEN_TYPE.IMAGE_EDIT
+            else getattr(self, "backend", None)
+        )
+        if (
+            getattr(backend, "prompt_type", PROMPT_TYPE.KEYWORDS)
+            != PROMPT_TYPE.KEYWORDS
+        ):
+            return get_prompt_profile("descriptive")
+
+        ckpt = checkpoint
+        if not ckpt and request is not None:
+            value = request.extra_config.get("checkpoint")
+            ckpt = value if isinstance(value, str) and value else None
+        if not ckpt:
+            for action_name in ("comfyui_image_create", "comfyui_image_edit"):
+                try:
+                    ckpt = self.resolve_config(action_name, "model")
+                except Exception:
+                    ckpt = None
+                if ckpt:
+                    break
+
+        if not ckpt:
+            return get_prompt_profile("pony")
+
+        # per-checkpoint override: JSON {"filename substring": "profile id"}
+        overrides: dict = {}
+        for action_name in ("comfyui_image_create", "comfyui_image_edit"):
+            try:
+                raw = self.resolve_config(action_name, "checkpoint_profiles")
+            except Exception:
+                continue
+            if raw:
+                try:
+                    overrides = json.loads(raw) if isinstance(raw, str) else dict(raw)
+                except Exception:
+                    log.warning(
+                        "prompt_profile.override_parse_failed", raw=str(raw)[:100]
+                    )
+                break
+        for needle, profile_id in overrides.items():
+            if needle and needle.lower() in ckpt.lower():
+                return get_prompt_profile(profile_id)
+
+        for pattern, profile_id in PROFILE_CHECKPOINT_PATTERNS:
+            if pattern.search(ckpt):
+                return get_prompt_profile(profile_id)
+
+        return get_prompt_profile("pony")
 
     async def _finalize_prompt(self, request: GenerationRequest) -> None:
         """
