@@ -1795,7 +1795,12 @@ class Scene(Emitter):
         self.nodegraph_state = state = GraphState()
         state.data["continue_scene"] = True
 
+        game_loop_round = 0
+
         while state.data["continue_scene"] and self.active:
+            game_loop_round += 1
+            # correlate every log line in this round of the scene loop
+            structlog.contextvars.bind_contextvars(round=game_loop_round)
             try:
                 await self.node_graph.execute(state)
             except GenerationCancelled:
@@ -1831,6 +1836,8 @@ class Scene(Emitter):
                     traceback=traceback.format_exc(),
                 )
                 emit("system", status="error", message=f"Unhandled Error: {e}")
+
+        structlog.contextvars.unbind_contextvars("round")
 
     async def _run_creative_loop(self, init: bool = True):
         await self.emit_history()

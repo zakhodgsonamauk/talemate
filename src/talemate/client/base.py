@@ -20,6 +20,7 @@ import urllib3
 import json
 
 import talemate.client.presets as presets
+import talemate.flowlog as flowlog
 import talemate.instance as instance
 import talemate.util as util
 from talemate.agents.context import active_agent
@@ -1674,11 +1675,16 @@ class ClientBase:
 
             self.clean_prompt_parameters(prompt_param)
 
+            _agent_context = active_agent.get()
             self.log.info(
                 "Sending prompt",
                 token_length=token_length,
                 max_token_length=self.max_token_length,
                 parameters=prompt_param,
+                client=self.name,
+                kind=kind,
+                agent=_agent_context.agent.agent_type if _agent_context else None,
+                agent_action=_agent_context.action if _agent_context else None,
             )
 
             if "<|RESPONSE_LENGTH_INSTRUCTIONS|>" in finalized_prompt:
@@ -1757,6 +1763,28 @@ class ClientBase:
             )
 
             emit("prompt_sent", data=prompt_data.model_dump())
+
+            # One completion event per LLM call carrying full attribution -
+            # this is the primary record for reconstructing a turn from the
+            # debug log without timestamp arithmetic.
+            call_fields = dict(
+                client=self.name,
+                model=self.model_name,
+                kind=kind,
+                agent=prompt_data.agent_type,
+                agent_action=prompt_data.agent_action,
+                agent_stack=prompt_data.agent_stack,
+                prompt_tokens=prompt_data.prompt_tokens,
+                response_tokens=prompt_data.response_tokens,
+                duration=round(prompt_data.time, 2),
+                tokens_per_second=(
+                    round(prompt_data.response_tokens / prompt_data.time, 1)
+                    if prompt_data.time > 0 and prompt_data.response_tokens
+                    else None
+                ),
+            )
+            self.log.info("llm.call.completed", **call_fields)
+            flowlog.record_llm_call(**call_fields)
 
             # File-based prompt logging for test scripts
             if os.environ.get("TALEMATE_LOG_PROMPTS"):

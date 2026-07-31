@@ -1,5 +1,6 @@
 import structlog
 from typing import TYPE_CHECKING, Callable
+import talemate.flowlog as flowlog
 from talemate.emit import emit
 from talemate.exceptions import GenerationCancelled
 import traceback
@@ -176,6 +177,10 @@ class Plugin:
 
     async def handle(self, data: dict):
         action: str = data.get("action")
+        with flowlog.flow(f"{self.router}:{action}"):
+            await self._handle(action, data)
+
+    async def _handle(self, action: str, data: dict):
         log.info(f"{self.router} action", action=action)
         fn = getattr(self, f"handle_{action}", None)
 
