@@ -21,10 +21,11 @@
     "completed_tasks": [
       "T1",
       "T2",
-      "T12"
+      "T12",
+      "T17"
     ],
-    "next_task": "T15 + T16 together",
-    "next_task_note": "T12 shipped but was defeated in live use by T15 (trait leak). T15 is the root cause and T16 replaces the brittle keyword test with the per-character wardrobe signal that already exists. Do them together - both concern attributing prompt content to the right character."
+    "next_task": "verify the adapter swap by generation, then T15",
+    "next_task_note": "T13 step 1 (face adapter) and T17 (extraction retry) shipped. Verify by generation before touching IPAdapter weights. IMPORTANT scheduling note: T6/T7/T8 (the pose and token-budget work) should NOT be attempted while IPAdapter is overriding the text conditioning - results would be unattributable. Re-assess them after the adapter swap is verified. T14 (second checkpoint) also looks less necessary than it did: the explicitness may be a symptom of clothing terms being overridden rather than the checkpoint asserting its prior."
   },
   "cannot_self_certify": {
     "reason": "diffusion output can only be judged by looking at it",
@@ -140,12 +141,12 @@
     {
       "id": "T13",
       "name": "Reference image's setting leaking into the scene",
-      "status": "pending",
+      "status": "in progress",
       "deps": [
         "T12"
       ],
       "human_verified": true,
-      "note": "Prompt said control room / sci-fi / holographic displays; output was an outdoor garden with plants, a bird and a water bottle. The reference photo is a bearded man outdoors, so the IMAGE_EDIT/IPAdapter path imported his background with his face. Identity transfer wanted, setting transfer not. Investigate weight_type and end_at, then edit-workflow denoise, then masking - one change at a time. Partially overlaps T10, whose deferral no longer blocks it."
+      "note": "Prompt said control room / sci-fi / holographic displays; output was an outdoor garden with plants, a bird and a water bottle. The reference photo is a bearded man outdoors, so the IMAGE_EDIT/IPAdapter path imported his background with his face. Identity transfer wanted, setting transfer not. Investigate weight_type and end_at, then edit-workflow denoise, then masking - one change at a time. Partially overlaps T10, whose deferral no longer blocks it. | STEP 1 DONE 2026-07-31: the latent is EmptyLatentImage with start_at_step 0, so this is pure text-to-image and the garden was NOT an img2img latent. Cause is IPAdapter strength: ip-adapter-PLUS transfers composition, background and style, at weight 0.8 / ease out / end_at 0.8 / K+V - effectively 'make an image like this photo', and the reference was shot outdoors. Swapped character and character-multi workflows to ip-adapter-plus-FACE_sdxl_vit-h, which was already installed. Weights left untouched deliberately so the adapter swap can be attributed alone. Inpaint left alone: it masks the region so background transfer is contained, and its weights (0.85 / linear / 1.0) were tuned separately. Needs a generation to verify."
     },
     {
       "id": "T14",
@@ -171,6 +172,13 @@
         "T12"
       ],
       "note": "Keyword matching failed twice in one session in both directions: 'bare metal' read as undress, and a leaked 'bare chest' disarmed the negatives for a fully dressed man. Counting garments vs undress phrases is a stopgap that reasons over a prompt describing everyone present, when the question concerns one person. character.visual_wardrobe (anchors.py:41, refreshed every 10 turns) is already a per-character LLM-written answer, and _suppress_stale_wardrobe already establishes the precedence where the scene beats the reinforcement. Scoping the question to the subject makes another character's 'bare chest' unreachable. Escalate to an explicit LLM judgement only when those sources are absent or conflict; keep keyword counting as last-resort fallback only."
+    },
+    {
+      "id": "T17",
+      "name": "Retry when response extraction fails, not only on an empty response",
+      "status": "completed",
+      "deps": [],
+      "note": "A 12B omitted the required `descriptive` section of a visual prompt; extract_all raised and the visualize aborted before ComfyUI was contacted, so nothing appeared and nothing was queued. The node's `attempts` property was documented and wired as 'retry on empty response' only. Extraction now happens inside the send loop and a malformed response consumes an attempt. Extraction failure gets its own allowance - max(attempts, 2) when a response_spec is present - because generate-visual-asset.json hardcodes attempts: 1, which is exactly the failing path, and raising a shared default would have changed every other graph. Exhausting the attempts re-raises the original ExtractionError rather than continuing with nothing extracted."
     }
   ],
   "problems": {
@@ -182,7 +190,9 @@
     "P6": "Nudity negatives were incomplete: a subject wearing jeans and a tank top was rendered with trousers open and genitals exposed, which 'nude, naked, topless' do not describe",
     "P7": "The reference image's background leaks into the generation - a reactor-room prompt produced an outdoor garden, because the reference photo was taken outdoors",
     "P8": "Another character's traits leak into the subject's prompt because _drop_secondary_traits matches anchor tokens while the LLM paraphrases them; this also disarmed the nudity negatives, since the leaked 'bare chest' read as undress intent",
-    "P9": "Sex conditioning silently did nothing whenever the LLM paraphrased the anchor, because it read _primary_character, which _primary_and_secondary only sets after confirming the anchor's own wording appears in the prompt"
+    "P9": "Sex conditioning silently did nothing whenever the LLM paraphrased the anchor, because it read _primary_character, which _primary_and_secondary only sets after confirming the anchor's own wording appears in the prompt",
+    "P10": "IPAdapter was overriding the text conditioning: ip-adapter-plus at weight 0.8, ease out, end_at 0.8, K+V transfers composition and background as well as identity, so an outdoor reference photo put a reactor-room scene in a garden and suppressed prompt detail",
+    "P11": "A malformed LLM response aborted the whole visualize action, because retries covered only empty responses - not responses missing a required section"
   },
   "decisions": [
     "Sex is expressed as booru tags (1boy / male focus / 1girl), not natural language. The checkpoint family is tag-trained; 'human male' carries little signal. This is the same principle visual-reference-closure recorded for negatives, applied to the positive, which nobody had done.",
@@ -195,6 +205,8 @@
     "Undress intent in the prompt suppresses the nudity negatives even when a garment is named. 'unbuttoning his shirt' names a garment while describing its removal; the scene text is the authority in both directions, not just when it says they are dressed.",
     "Model switching is a profile, not a checkpoint name: Pony and SDXL-Turbo need different sampler settings and different style tags, so swapping ckpt_name alone produces mush. Recorded before implementing T14.",
     "Dressed-or-not is decided by weight of evidence rather than a single word, as an interim measure: one leaked undress phrase must not disarm the negatives for a subject wearing four garments, while a deliberate undress beat (one garment, one undress phrase) still wins on a tie.",
-    "The keyword lists are acknowledged as the wrong instrument (user, 2026-07-31). T16 replaces them with the per-character visual_wardrobe reinforcement, which is already LLM-written and already refreshed on an interval, rather than adding a per-image LLM call for a question that is answered elsewhere."
+    "The keyword lists are acknowledged as the wrong instrument (user, 2026-07-31). T16 replaces them with the per-character visual_wardrobe reinforcement, which is already LLM-written and already refreshed on an interval, rather than adding a per-image LLM call for a question that is answered elsewhere.",
+    "IPAdapter fix starts with the model, not the weights: ip-adapter-plus-face was already installed and is the variant intended for identity-without-composition. Weights stay at 0.8/ease out/0.8 for now so the swap can be attributed on its own.",
+    "Extraction failure gets its own retry allowance rather than raising the shared `attempts` default, because generate-visual-asset.json pins attempts: 1 and changing the default would alter every other graph."
   ]
 }

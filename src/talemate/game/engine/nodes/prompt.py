@@ -20,7 +20,7 @@ from talemate.client.presets import make_kind
 from talemate.agents.context import ActiveAgent
 from talemate.context import active_scene
 from talemate.util import strip_partial_sentences
-from talemate.prompts.response import ResponseSpec
+from talemate.prompts.response import ExtractionError, ResponseSpec
 
 if TYPE_CHECKING:
     from talemate.tale_mate import Scene
@@ -685,25 +685,63 @@ class GenerateResponse(Node):
 
         send_prompt.__name__ = self.title.replace(" ", "_").lower()
 
-        with PrependTemplateDirectories(scene.template_dir):
-            for _ in range(attempts):
-                response = await agent.delegate(send_prompt)
-                if response:
-                    break
-
-        if isinstance(response, tuple):
-            response, data_obj = response
-        else:
-            data_obj = None
-
-        # Handle response extraction
-        # Priority: response_spec socket > template-defined extractors (in data_obj)
+        # Priority: response_spec socket > template-defined extractors (in data_obj).
+        # Resolved before the send loop because a response that cannot be extracted from
+        # is a reason to try again.
         response_spec: ResponseSpec | None = self.normalized_input_value(
             "response_spec"
         )
+
+        # `attempts` was only ever wired to empty responses. A non-empty response missing
+        # a required section is a different failure and used to abort the whole action:
+        # observed live, a 12B omitted the `descriptive` half of a visual prompt and the
+        # visualize died before ComfyUI was ever contacted. A format slip from a small
+        # local model is routine, so extraction gets its own allowance - one further call
+        # is cheaper than losing the action. Graphs that ask for more keep what they ask
+        # for.
+        send_attempts = max(attempts, 2) if response_spec is not None else attempts
+
+        data_obj = None
         extracted = None
+        extraction_error: ExtractionError | None = None
+
+        with PrependTemplateDirectories(scene.template_dir):
+            for attempt in range(send_attempts):
+                response = await agent.delegate(send_prompt)
+
+                if isinstance(response, tuple):
+                    response, data_obj = response
+                else:
+                    data_obj = None
+
+                if not response:
+                    continue
+
+                if response_spec is None:
+                    break
+
+                try:
+                    extracted = response_spec.extract_all(response)
+                except ExtractionError as exc:
+                    extraction_error = exc
+                    log.warning(
+                        "prompt.extraction_failed",
+                        attempt=attempt + 1,
+                        of=send_attempts,
+                        kind=kind,
+                        error=str(exc),
+                    )
+                    continue
+
+                extraction_error = None
+                break
+
+        # Every attempt produced something unusable - surface the original failure rather
+        # than continuing with nothing extracted.
+        if extraction_error is not None:
+            raise extraction_error
+
         if response_spec is not None:
-            extracted = response_spec.extract_all(response)
             if any(ext.parse_data for ext in response_spec.extractors.values()):
                 extracted = await response_spec.parse_data_fields(
                     extracted,
