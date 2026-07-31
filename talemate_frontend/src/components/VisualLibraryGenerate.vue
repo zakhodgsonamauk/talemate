@@ -76,7 +76,24 @@
               label="Character"
               :disabled="generating || promptLoading || characterItems.length === 0"
             />
-            
+
+            <!-- Per-request checkpoint choice. Only offered when the image backend
+                 answered the checkpoints query with actual models (ComfyUI); the
+                 sampler settings travel with the choice on the backend, so a
+                 Lightning model is not run at a base model's cfg. -->
+            <v-select
+              v-if="checkpointChoices.length > 1"
+              v-model="checkpoint"
+              class="mt-2"
+              :items="checkpointChoices"
+              item-title="label"
+              item-value="value"
+              label="Image Model"
+              hint="Sampler settings adjust to the chosen model automatically."
+              persistent-hint
+              :disabled="generating || promptLoading"
+            />
+
             <v-alert
               v-if="inlineReference"
               type="info"
@@ -191,7 +208,7 @@ import { VIS_TYPE, VIS_TYPE_OPTIONS, FORMAT_OPTIONS, FORMAT_TYPE, GEN_TYPE } fro
 import VisualReferenceImages from './VisualReferenceImages.vue';
 export default {
   name: 'VisualLibraryGenerate',
-  inject: ['getWebsocket'],
+  inject: ['getWebsocket', 'registerMessageHandler', 'unregisterMessageHandler'],
   components: { VisualReferenceImages },
   props: {
     modelValue: {
@@ -277,6 +294,10 @@ export default {
       format: FORMAT_TYPE.LANDSCAPE,
       characterName: '',
       referenceAssets: [],
+      // '' means the workflow's own default model; anything else is a
+      // per-request checkpoint override carried in extra_config.
+      checkpoint: '',
+      checkpointChoices: [],
     };
   },
   computed: {
@@ -388,6 +409,20 @@ export default {
       this.format = r.format || FORMAT_TYPE.LANDSCAPE;
       this.characterName = r.character_name || '';
       this.referenceAssets = (r.reference_assets && Array.isArray(r.reference_assets)) ? r.reference_assets.slice() : [];
+      // Regenerate keeps the checkpoint the image was made with.
+      this.checkpoint = (r.extra_config && r.extra_config.checkpoint) || '';
+    },
+    requestCheckpoints() {
+      this.getWebsocket().send(JSON.stringify({ type: 'visual', action: 'checkpoints' }));
+    },
+    handleMessage(message) {
+      if (message.type !== 'visual' || message.action !== 'checkpoints') return;
+      this.checkpointChoices = Array.isArray(message.data) ? message.data : [];
+      // A stale override pointing at a model that no longer exists must not be
+      // silently sent; fall back to the workflow default.
+      if (this.checkpoint && !this.checkpointChoices.some(c => c.value === this.checkpoint)) {
+        this.checkpoint = '';
+      }
     },
     close() {
       this.internalModel = false;
@@ -453,6 +488,9 @@ export default {
         if (this.attachmentContext) {
           payload.generation_request.asset_attachment_context = this.attachmentContext;
         }
+        if (this.checkpoint) {
+          payload.generation_request.extra_config = { checkpoint: this.checkpoint };
+        }
         this.getWebsocket().send(JSON.stringify(payload));
       }
       this.close();
@@ -465,11 +503,18 @@ export default {
       }));
     },
   },
+  mounted() {
+    this.registerMessageHandler(this.handleMessage);
+  },
+  unmounted() {
+    this.unregisterMessageHandler(this.handleMessage);
+  },
   watch: {
     modelValue(newVal) {
       this.internalModel = newVal;
       if (newVal) {
         this.applyInitialRequest();
+        this.requestCheckpoints();
       }
     },
     // A prompt-adjustment request opens the dialog before the backend has

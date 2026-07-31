@@ -3,6 +3,7 @@ import pydantic
 import structlog
 import httpx
 import json
+import re
 import time
 import urllib.parse
 import random
@@ -47,6 +48,44 @@ MODEL_RETRIEVAL_MAP = [
 ]
 
 MODEL_TYPES = list(set([model_type for _, _, model_type in MODEL_RETRIEVAL_MAP]))
+
+# Sampler settings that belong to a checkpoint, not to a workflow. A workflow's
+# baked-in steps/cfg are tuned for whatever checkpoint it shipped with; swapping the
+# checkpoint per request without swapping these produces garbage in both directions -
+# a Lightning-distilled model at cfg 8 fries, a base SDXL model at 6 steps is mud.
+#
+# Matched top-down against the checkpoint filename, first hit wins, so the more
+# specific pattern (lightning) must precede the broader one (juggernaut). Applied
+# ONLY when the request overrides the checkpoint - a workflow running its own
+# default model keeps its own settings.
+MODEL_PROFILES = [
+    (
+        re.compile(r"lightning", re.IGNORECASE),
+        {"steps": 6, "cfg": 1.5, "sampler_name": "dpmpp_sde", "scheduler": "karras"},
+    ),
+    (
+        re.compile(r"juggernaut", re.IGNORECASE),
+        {"steps": 35, "cfg": 4.5, "sampler_name": "dpmpp_2m", "scheduler": "karras"},
+    ),
+    (
+        re.compile(r"pony", re.IGNORECASE),
+        {"steps": 30, "cfg": 6.0, "sampler_name": "dpmpp_2m", "scheduler": "karras"},
+    ),
+    (
+        re.compile(r"turbo", re.IGNORECASE),
+        {"steps": 6, "cfg": 1.5, "sampler_name": "dpmpp_sde", "scheduler": "karras"},
+    ),
+]
+
+
+def model_profile(model_name: str | None) -> dict | None:
+    """The sampler profile for a checkpoint filename, or None when unrecognised."""
+    if not model_name:
+        return None
+    for pattern, profile in MODEL_PROFILES:
+        if pattern.search(model_name):
+            return profile
+    return None
 
 
 class Model(pydantic.BaseModel):
@@ -215,6 +254,29 @@ class Workflow(pydantic.BaseModel):
                     node["inputs"]["noise_seed"] = random.randint(0, 999999999999999)
                 if field == "seed":
                     node["inputs"]["seed"] = random.randint(0, 999999999999999)
+
+    def set_sampler(self, profile: dict):
+        """
+        Apply a checkpoint's sampler profile to every sampler node in the graph.
+
+        Same pattern as set_seeds: any node carrying one of the profile's input
+        fields gets it, because sampler settings live on KSampler in some workflows
+        and on KSamplerAdvanced or samplers behind custom nodes in others. cfg is
+        matched exactly - "cfg" - so unrelated fields like "cfg_scale_start" on
+        exotic nodes are left alone.
+        """
+        touched = 0
+        for node in self.nodes.values():
+            inputs = node.get("inputs", {})
+            updates = {
+                field: value
+                for field, value in profile.items()
+                if field in inputs
+            }
+            if updates:
+                inputs.update(updates)
+                touched += 1
+        log.debug("workflow.set_sampler", profile=profile, nodes_touched=touched)
 
     def set_reference_images(self, image_paths: list[str]):
         """
@@ -545,6 +607,24 @@ class Backend(backends.Backend):
     ) -> bytes:
         model: str = request.agent_config["model"]
         workflow: Workflow = request.agent_config["workflow"].copy
+
+        # A per-request checkpoint choice (Adjust & Visualize modal) outranks the
+        # agent-configured model. It carries its sampler profile with it: the
+        # workflow's baked-in steps/cfg are tuned for the workflow's own checkpoint,
+        # and e.g. a Lightning model at the Pony workflow's cfg produces garbage.
+        checkpoint_override = (request.extra_config or {}).get("checkpoint") or None
+        if checkpoint_override:
+            model = checkpoint_override
+            profile = model_profile(checkpoint_override)
+            if profile:
+                workflow.set_sampler(profile)
+            else:
+                log.warning(
+                    "comfyui.checkpoint_override.no_profile",
+                    checkpoint=checkpoint_override,
+                    note="workflow's own sampler settings kept - may not suit this model",
+                )
+
         workflow.set_resolution(request.resolution)
         workflow.set_prompt(request.prompt, request.negative_prompt)
         workflow.set_main_model(model)

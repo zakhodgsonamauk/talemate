@@ -128,6 +128,38 @@ class VisualWebsocketHandler(Plugin):
 
         await visual.analyze(request)
 
+    async def handle_checkpoints(self, data: dict):
+        """
+        List the checkpoints available on the image backend.
+
+        Feeds the model dropdown in the Adjust & Visualize modal. Only backends
+        that expose a model list (ComfyUI) answer with choices; anything else gets
+        an empty list and the frontend hides the control rather than offering a
+        choice that would be ignored.
+        """
+        visual = get_agent("visual")
+        choices: list[dict] = []
+
+        backend = getattr(visual, "backend", None)
+        if backend is not None and hasattr(backend, "models"):
+            try:
+                # Bust the backend's model cache so a checkpoint dropped into the
+                # models directory since startup shows up without a restart.
+                backend._object_info = {}
+                backend._models = None
+                models = await backend.models
+                choices = models.get_choices("checkpoint")
+            except Exception as e:
+                log.warning("visual.checkpoints.unavailable", error=str(e))
+
+        self.websocket_handler.queue_put(
+            {
+                "type": "visual",
+                "action": "checkpoints",
+                "data": choices,
+            }
+        )
+
     async def handle_cancel_generation(self, data: dict):
         """
         Cancels the current image generation task.
