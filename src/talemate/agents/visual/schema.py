@@ -334,10 +334,13 @@ class GenerationRequest(pydantic.BaseModel):
     sampler_settings: SamplerSettings = pydantic.Field(default=SamplerSettings())
     id: str = pydantic.Field(default_factory=lambda: str(uuid.uuid4()))
 
-    # Set once the prompt has been written by the distillation path. Both the
-    # FinalizePrompt graph node and `generate` run _finalize_prompt over the same
-    # request; without this marker the second pass would pay a second LLM call and
-    # then shred the distilled prompt through the legacy keyword surgery.
+    # "This prompt is final - do not recompose it." Set in two places: by the
+    # distillation path once it has written the prompt (both the FinalizePrompt
+    # graph node and `generate` run _finalize_prompt over the same request, and the
+    # second pass must neither pay a second LLM call nor shred the result through
+    # the legacy keyword surgery), and by the frontend on prompt-mode submissions,
+    # where the prompt in the box is what the user saw and approved - possibly
+    # hand-edited - and recomposing it would silently discard those edits.
     distilled: bool = False
 
     agent_config: dict[str, Any] = pydantic.Field(default={})

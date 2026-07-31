@@ -514,6 +514,11 @@ export default {
             character_name: this.isCharacterVisType ? (this.characterName || null) : null,
             reference_assets: this.referenceAssets || [],
             inline_reference: this.inlineReference || null,
+            // The prompt in the box is what the user saw and approved - possibly
+            // hand-edited. Without this the backend's distillation pass recomposes
+            // the prompt from scene facts, silently discarding those edits and
+            // paying a second LLM call for the privilege.
+            distilled: true,
           },
         };
         // Carry the source text through when there is one, so the saved asset
