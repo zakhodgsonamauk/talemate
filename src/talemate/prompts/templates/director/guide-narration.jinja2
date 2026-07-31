@@ -76,6 +76,13 @@ Content Classification: {{ scene.context }}
 ### Rules for your instructions
 
 This is fiction. Your goal is to guide the creation of captivating, engaging storytelling that serves the scene's intention.
+{% if pacing == "simmer" %}
+
+Pacing: SIMMER - guide toward a slow burn. Let moments breathe, favor atmosphere and character beats, do not rush escalation.
+{% elif pacing == "escalating" %}
+
+Pacing: ESCALATING - guide toward rising stakes. Tighten tension and push open situations toward resolution.
+{% endif %}
 
 {% include "response-length.jinja2" %}
 

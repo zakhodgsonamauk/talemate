@@ -176,6 +176,20 @@ When referencing tasks for edit, remove, or insert-after operations, use the tas
 {{ scene_plan.status_summary() }}
 {% endif %}
 
+{% set _agency_player = scene.get_player_character() %}
+{% if player_agency and _agency_player and _agency_player.is_player %}
+
+## Player agency
+The user controls the character `{{ _agency_player.name }}`. When your actions direct the scene:
+{% if player_agency == "assist" %}
+- Prefer not to act for `{{ _agency_player.name }}`, but you MAY have the scene include minor actions or reactions for them when it has stalled and doing so unblocks the story. Never make major decisions for them.
+{% elif player_agency == "strict" %}
+- NEVER author `{{ _agency_player.name }}`'s actions, dialogue or decisions.
+{% else %}
+- NEVER author `{{ _agency_player.name }}`'s choices, dialogue or decisions - but have the world respond to their actions decisively rather than stalling.
+{% endif %}
+{% endif %}
+
 Use light markdown in `<MESSAGE>` for clarity (lists, bold for emphasis). Avoid heavy formatting.
 
 {% if chat_enable_analysis %}

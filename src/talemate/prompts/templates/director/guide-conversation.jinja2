@@ -90,6 +90,13 @@ Explain {{ character.name }}'s way of speaking and mannerisms to guide the write
 {% endif %}
 
 This is fiction. Focus solely on WHAT needs to be conveyed to create captivating, engaging storytelling that serves the scene's intention. Trust the writer to capture {{ character.name }}'s personality and style based on your character description. How do we make {{ character.name }} a believable, natural sounding character in this next moment?
+{% if pacing == "simmer" %}
+
+Pacing: SIMMER - guide toward a slow burn. Let the moment breathe; do not rush escalation.
+{% elif pacing == "escalating" %}
+
+Pacing: ESCALATING - guide toward rising stakes. Tighten tension and push open situations toward resolution.
+{% endif %}
 
 IMPORTANT: Remind the writer to maintain the story's existing narrative perspective and tense (who's point of view is the narrative written for and in what tense, as identified in the scene analysis).
 Finally ALWAYS briefly state the formatting guidelines: Speech MUST go inside "".

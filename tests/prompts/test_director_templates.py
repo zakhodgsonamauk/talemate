@@ -26,7 +26,11 @@ from talemate.agents.director.scene_direction.schema import (
 )
 from talemate.context import active_scene
 from talemate.game.engine.nodes.core import GraphState
-from .helpers import create_mock_character, create_scene_with_characters
+from .helpers import (
+    create_mock_character,
+    create_scene_with_characters,
+    render_template,
+)
 
 
 @pytest.fixture
@@ -1915,3 +1919,133 @@ class TestChatMigration:
         migrated_chat = scene_data["agent_state"]["director"]["chats"]["xyz"]
         assert migrated_chat["mode"] == "decisive"
         assert migrated_chat["confirm_write_actions"] is False
+
+
+class TestDirectorLeverTemplateBlocks:
+    """Render tests for the autonomy-lever prompt blocks
+    (director-trust-and-levers track, Phase 3)."""
+
+    def _sd_vars(self, **overrides):
+        vars = {
+            "scene": create_scene_with_characters(),
+            "max_tokens": 8192,
+            "available_functions": [],
+            "direction_enable_analysis": False,
+            "stance": "nudge",
+            "adjudication": True,
+            "adjudication_window": 3,
+            "pacing": "steady",
+            "player_agency": "consequences",
+            "stale_beat": None,
+        }
+        vars.update(overrides)
+        return vars
+
+    def _render_sd(self, **overrides) -> str:
+        return render_template(
+            "director.scene-direction-instructions", self._sd_vars(**overrides)
+        )
+
+    # --- stance (R5) ---
+
+    @pytest.mark.parametrize(
+        "stance,marker",
+        [
+            ("hands_off", "HANDS OFF:"),
+            ("nudge", "NUDGE:"),
+            ("drive", "DRIVE:"),
+            ("showrunner", "SHOWRUNNER:"),
+        ],
+    )
+    def test_stance_blocks(self, stance, marker):
+        rendered = self._render_sd(stance=stance)
+        assert marker in rendered
+
+    # --- adjudication (R6) ---
+
+    def test_adjudication_block_on(self):
+        rendered = self._render_sd(adjudication=True, adjudication_window=4)
+        assert "Adjudicate player-initiated stakes" in rendered
+        assert "within 4 of their turns" in rendered
+
+    def test_adjudication_block_off(self):
+        rendered = self._render_sd(adjudication=False)
+        assert "Adjudicate player-initiated stakes" not in rendered
+
+    # --- stale beat (R7) ---
+
+    def test_stale_beat_block(self):
+        rendered = self._render_sd(
+            stale_beat={
+                "rounds": 7,
+                "threshold": 6,
+                "task": "Task 1 [abc] | status: pending\n  Confront the broker",
+            }
+        )
+        assert "STALE BEAT PRESSURE" in rendered
+        assert "7 direction rounds" in rendered
+        assert "Confront the broker" in rendered
+
+    def test_stale_beat_absent_when_none(self):
+        rendered = self._render_sd(stale_beat=None)
+        assert "STALE BEAT PRESSURE" not in rendered
+
+    # --- pacing (R10) ---
+
+    def test_pacing_simmer(self):
+        rendered = self._render_sd(pacing="simmer")
+        assert "SIMMER" in rendered
+
+    def test_pacing_escalating(self):
+        rendered = self._render_sd(pacing="escalating")
+        assert "ESCALATING" in rendered
+
+    def test_pacing_steady_silent(self):
+        rendered = self._render_sd(pacing="steady")
+        assert "Pacing:" not in rendered
+
+    # --- player agency (R11), scene direction template ---
+
+    @pytest.mark.parametrize(
+        "agency,marker",
+        [
+            ("strict", "NEVER author `Hero`'s actions, dialogue or decisions"),
+            ("consequences", "narrate the world's response to their actions decisively"),
+            ("assist", "MAY write minor actions or reactions"),
+        ],
+    )
+    def test_player_agency_scene_direction(self, agency, marker):
+        rendered = self._render_sd(player_agency=agency)
+        assert marker in rendered
+
+    # --- player agency (R11), chat template ---
+
+    def _render_chat_instructions(self, **overrides) -> str:
+        vars = {
+            "scene": create_scene_with_characters(),
+            "max_tokens": 8192,
+            "available_functions": [],
+            "chat_enable_analysis": False,
+            "history": [],
+            "mode": "normal",
+            "player_agency": "consequences",
+        }
+        vars.update(overrides)
+        return render_template("director.chat-instructions", vars)
+
+    @pytest.mark.parametrize(
+        "agency,marker",
+        [
+            ("strict", "NEVER author `Hero`'s actions, dialogue or decisions"),
+            ("consequences", "have the world respond to their actions decisively"),
+            ("assist", "minor actions or reactions"),
+        ],
+    )
+    def test_player_agency_chat(self, agency, marker):
+        rendered = self._render_chat_instructions(player_agency=agency)
+        assert "## Player agency" in rendered
+        assert marker in rendered
+
+    def test_player_agency_chat_absent_when_unset(self):
+        rendered = self._render_chat_instructions(player_agency=None)
+        assert "## Player agency" not in rendered

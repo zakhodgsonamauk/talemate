@@ -128,6 +128,73 @@ class SceneDirectionMixin:
                     description="Custom instructions to add to the scene direction.",
                     value="",
                 ),
+                "stance": AgentActionConfig(
+                    type="text",
+                    label="Directorial stance",
+                    description="How assertively the director runs the story: from acting only when asked to running the show.",
+                    value="nudge",
+                    choices=[
+                        {"label": "Hands off (act only when needed)", "value": "hands_off"},
+                        {"label": "Nudge (gentle course corrections)", "value": "nudge"},
+                        {"label": "Drive (actively push the story)", "value": "drive"},
+                        {"label": "Showrunner (run the show)", "value": "showrunner"},
+                    ],
+                ),
+                "adjudication": AgentActionConfig(
+                    type="bool",
+                    label="Adjudicate player stakes",
+                    description="When the player attempts something with stakes (negotiation, persuasion, deception, a plan), resolve it within a bounded number of their turns instead of letting it simmer.",
+                    value=True,
+                ),
+                "adjudication_window": AgentActionConfig(
+                    type="number",
+                    label="Adjudication window",
+                    description="Resolve player-initiated stakes within this many of their turns.",
+                    value=3,
+                    step=1,
+                    min=1,
+                    max=10,
+                ),
+                "stale_beat_rounds": AgentActionConfig(
+                    type="number",
+                    label="Stale beat pressure",
+                    description="When an active plan's current beat has not advanced for this many direction rounds, inject an escalating note to advance or resolve it. 0 disables.",
+                    value=6,
+                    step=1,
+                    min=0,
+                    max=30,
+                ),
+                "frequency": AgentActionConfig(
+                    type="number",
+                    label="Direction frequency",
+                    description="Take a direction turn only every Nth eligible round. 1 = every round. Manually triggered runs bypass this.",
+                    value=1,
+                    step=1,
+                    min=1,
+                    max=10,
+                ),
+                "pacing": AgentActionConfig(
+                    type="text",
+                    label="Pacing",
+                    description="Story pacing the director aims for. Fallback when the scene type does not specify pacing.",
+                    value="steady",
+                    choices=[
+                        {"label": "Simmer (slow burn, let moments breathe)", "value": "simmer"},
+                        {"label": "Steady (balanced)", "value": "steady"},
+                        {"label": "Escalating (raise stakes, push toward resolution)", "value": "escalating"},
+                    ],
+                ),
+                "player_agency": AgentActionConfig(
+                    type="text",
+                    label="Player agency",
+                    description="How strictly the director must keep its hands off the player character.",
+                    value="consequences",
+                    choices=[
+                        {"label": "Strict (never author the player character)", "value": "strict"},
+                        {"label": "Consequences (never author their choices, but respond decisively)", "value": "consequences"},
+                        {"label": "Assist (may act for them when the scene stalls)", "value": "assist"},
+                    ],
+                ),
                 "maintain_turn_balance": AgentActionConfig(
                     type="bool",
                     label="Maintain turn balance",
@@ -176,6 +243,34 @@ class SceneDirectionMixin:
     @property
     def direction_maintain_turn_balance(self) -> bool:
         return self.resolve_config("scene_direction", "maintain_turn_balance")
+
+    @property
+    def direction_stance(self) -> str:
+        return self.resolve_config("scene_direction", "stance")
+
+    @property
+    def direction_adjudication(self) -> bool:
+        return self.resolve_config("scene_direction", "adjudication")
+
+    @property
+    def direction_adjudication_window(self) -> int:
+        return int(self.resolve_config("scene_direction", "adjudication_window"))
+
+    @property
+    def direction_stale_beat_rounds(self) -> int:
+        return int(self.resolve_config("scene_direction", "stale_beat_rounds"))
+
+    @property
+    def direction_frequency(self) -> int:
+        return int(self.resolve_config("scene_direction", "frequency"))
+
+    @property
+    def direction_pacing(self) -> str:
+        return self.resolve_config("scene_direction", "pacing")
+
+    @property
+    def direction_player_agency(self) -> str:
+        return self.resolve_config("scene_direction", "player_agency")
 
     @property
     def direction_abstract_context(self) -> bool:
@@ -520,6 +615,81 @@ class SceneDirectionMixin:
             active_character_names=active_character_names,
         )
 
+    def _direction_frequency_gate(self) -> bool:
+        """Frequency lever: pass every Nth eligible round.
+
+        Counts skipped eligible rounds in agent scene state; when the counter
+        reaches N-1 skips, the next round passes and the counter resets.
+        """
+        frequency = self.direction_frequency
+        if frequency <= 1:
+            return True
+        count = (self.get_scene_state("direction_round_counter", default=0) or 0) + 1
+        if count >= frequency:
+            self.set_scene_states(direction_round_counter=0)
+            return True
+        self.set_scene_states(direction_round_counter=count)
+        return False
+
+    def _direction_active_plan(self):
+        """Best-effort 'active plan' for scene direction (no chat context):
+        prefer an executing plan, else a ready plan with pending tasks."""
+        from talemate.agents.director.plan.schema import Plan, PlanStatus
+        from talemate.agents.director.plan.util import PLANS_STATE_KEY
+
+        plans = self.scene.agent_state.get("director", {}).get(PLANS_STATE_KEY, {})
+        fallback = None
+        for raw in plans.values():
+            try:
+                plan = raw if isinstance(raw, Plan) else Plan.model_validate(raw)
+            except Exception:
+                continue
+            if plan.status == PlanStatus.executing:
+                return plan
+            if (
+                fallback is None
+                and plan.status == PlanStatus.ready
+                and plan.next_pending_task()
+            ):
+                fallback = plan
+        return fallback
+
+    def _direction_compute_stale_beat_pressure(self) -> dict | None:
+        """Stale-beat lever: track how many direction rounds the active plan's
+        current task has been static and return an escalation payload for the
+        prompt once the threshold is reached. Zero LLM cost - pure state
+        comparison against a snapshot kept in agent scene state.
+        """
+        threshold = self.direction_stale_beat_rounds
+        if threshold <= 0:
+            return None
+
+        plan = self._direction_active_plan()
+        task = plan.next_pending_task() if plan else None
+        if not plan or not task:
+            self.set_scene_states(stale_beat_tracker=None)
+            return None
+
+        snapshot = {
+            "plan_id": plan.id,
+            "task_id": task.id,
+            "completed": plan.completed_count,
+        }
+        tracker = self.get_scene_state("stale_beat_tracker", default=None) or {}
+        if all(tracker.get(k) == v for k, v in snapshot.items()):
+            rounds = tracker.get("rounds", 0) + 1
+        else:
+            rounds = 1
+        self.set_scene_states(stale_beat_tracker={**snapshot, "rounds": rounds})
+
+        if rounds < threshold:
+            return None
+        return {
+            "rounds": rounds,
+            "threshold": threshold,
+            "task": task.as_text(),
+        }
+
     def _direction_create_message(
         self, message: str, source: str = "director", **kwargs
     ) -> SceneDirectionMessage:
@@ -599,6 +769,11 @@ class SceneDirectionMixin:
         if not always_on and not self.direction_enabled_with_override:
             return [], False
 
+        # frequency lever: only take every Nth eligible round; manual
+        # (always_on) runs bypass the gate
+        if not always_on and not self._direction_frequency_gate():
+            return [], False
+
         # Set context to indicate we're in a direction turn
         ctx = scene_direction_context.get()
         ctx["in_direction_turn"] = True
@@ -651,6 +826,12 @@ class SceneDirectionMixin:
             "turn_balance": turn_balance,
             "maintain_turn_balance": self.direction_maintain_turn_balance,
             "user_agency": user_agency,
+            "stance": self.direction_stance,
+            "adjudication": self.direction_adjudication,
+            "adjudication_window": self.direction_adjudication_window,
+            "pacing": self.direction_pacing,
+            "player_agency": self.direction_player_agency,
+            "stale_beat": self._direction_compute_stale_beat_pressure(),
         }
 
         # Build prompt vars

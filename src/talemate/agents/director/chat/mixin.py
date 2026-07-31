@@ -625,6 +625,9 @@ class DirectorChatMixin:
             "custom_instructions": self.chat_custom_instructions,
             "mode": mode,
             "director_history_trim": action_utils.reverse_trim_history,
+            # agency guardrail is configured on scene_direction but applies to
+            # chat-driven scene actions too
+            "player_agency": self.direction_player_agency,
         }
 
         def _sync_plan_to_context():

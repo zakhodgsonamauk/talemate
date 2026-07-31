@@ -302,6 +302,7 @@ class GuideSceneMixin:
                 "character": character,
                 "response_length": response_length,
                 "max_tokens": self.client.max_token_length,
+                "pacing": self.direction_pacing,
             },
             response_spec=GUIDANCE_SPEC,
         )
@@ -340,6 +341,7 @@ class GuideSceneMixin:
                 "scene": self.scene,
                 "response_length": response_length,
                 "max_tokens": self.client.max_token_length,
+                "pacing": self.direction_pacing,
             },
             response_spec=GUIDANCE_SPEC,
         )
