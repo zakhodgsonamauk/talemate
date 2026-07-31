@@ -1,0 +1,57 @@
+{
+  "version": 3,
+  "track_id": "visual-subject-fidelity",
+  "name": "The right person doing the right thing",
+  "type": "feature",
+  "created": "2026-07-31",
+  "status": "in progress",
+  "superpower_enhanced": true,
+  "follows": "visual-reference-consistency",
+  "loop_state": {
+    "current_step": "EXECUTE",
+    "step_status": "IN_PROGRESS",
+    "fix_cycle_count": 0,
+    "max_fix_cycles": 5,
+    "superpower_enhanced": true,
+    "checkpoints": {
+      "PLAN": { "status": "PASSED" }
+    },
+    "completed_tasks": ["T1", "T2"],
+    "next_task": "T3 (human verification), or T4/T6 in parallel",
+    "next_task_note": "T1/T2 shipped with 38 tests. T3 needs a real generation and cannot be closed by an agent. T4 is an investigation that gates T5."
+  },
+  "cannot_self_certify": {
+    "reason": "diffusion output can only be judged by looking at it",
+    "human_verified_tasks": ["T3", "T9"],
+    "acceptance_criteria": ["AC1", "AC2", "AC4"]
+  },
+  "tasks": [
+    { "id": "T1", "name": "Booru sex tags at the front of the positive prompt", "status": "completed", "deps": [] },
+    { "id": "T2", "name": "Opposite-sex negatives, nudity negatives only when dressed", "status": "completed", "deps": [] },
+    { "id": "T3", "name": "Verify the wrong-person fix by generation - AC1, AC2", "status": "pending", "deps": ["T1", "T2"], "human_verified": true },
+    { "id": "T4", "name": "Establish why a scene moment became a CHARACTER_CARD", "status": "pending", "deps": [] },
+    { "id": "T5", "name": "Remove the camera-gaze tag from action prompts - AC5", "status": "pending", "deps": ["T4"] },
+    { "id": "T6", "name": "Drop vocabulary that cannot be drawn - AC6", "status": "pending", "deps": [] },
+    { "id": "T7", "name": "Keep the action as one weighted phrase - AC7", "status": "pending", "deps": ["T6"] },
+    { "id": "T8", "name": "Reduce the effective token budget, measured - AC8", "status": "pending", "deps": ["T6", "T7"] },
+    { "id": "T9", "name": "Verify the wrong-thing fix by generation - AC4", "status": "pending", "deps": ["T5", "T7", "T8"], "human_verified": true },
+    { "id": "T10", "name": "IPAdapter decision, recorded", "status": "pending", "deps": ["T3", "T9"] },
+    { "id": "T11", "name": "Docs: the tag-vocabulary finding", "status": "pending", "deps": ["T9", "T10"] }
+  ],
+  "problems": {
+    "P1": "A human male with a bearded male reference image generated as a half-naked female. The positive prompt said '(human male ...:1.3)' - natural language, which the booru-trained CyberRealisticPony_V9 checkpoint barely registers - while 'solo' and 'looking at viewer' sat near the front pulling toward the checkpoint's default subject, a young nude female",
+    "P2": "There was no sex handling anywhere in the visual pipeline. grep for 1boy/1girl/male focus/gender/sex over agents/visual/ and fork-styles.yaml returned nothing, and _add_species_negatives returns early when species is human, so a human subject had no corrective negatives at all",
+    "P3": "Poses come out generic. 'looking at viewer' is hardcoded in visual-styles.yaml:41 and :57 beside 'solo', sits at roughly token 20, and directly contradicts an action like leaning over a console",
+    "P4": "The prompt runs far past useful attention. image_max_tokens is 250 against a DEFAULT_MAX_PROMPT_TOKENS of 77; the observed prompt measured ~196 tokens with the action words near token 95, and style.py:39 already records that beyond ~155 tokens roughly half the prompt is past where the encoder meaningfully attends",
+    "P5": "The action is atomised and unweighted. 'Leaning over the console' arrives as 'standing, lean, hands hovering, interface' with the subject-object relationship destroyed, while the appearance anchor carries :1.3 and the action carries nothing. Roughly 40 tokens are unrenderable abstractions crowding out what does draw"
+  },
+  "decisions": [
+    "Sex is expressed as booru tags (1boy / male focus / 1girl), not natural language. The checkpoint family is tag-trained; 'human male' carries little signal. This is the same principle visual-reference-closure recorded for negatives, applied to the positive, which nobody had done.",
+    "Sex tags go at the FRONT of the prompt. Attention thins across the prompt and a tag sitting behind 'solo, looking at viewer' does not hold. They are also added before _trim_to_budget so they are budgeted rather than squeezed out.",
+    "Ambiguous or absent gender adds nothing. Character.gender is free-form; a wrong tag actively fights the prompt, which is worse than no tag.",
+    "Word-boundary matching on gender is mandatory: 'male' is a substring of 'female' and 'man' of 'woman', so naive substring tests invert the sex.",
+    "Nudity negatives are conditional on the prompt saying the subject is dressed. The scene text is the authority on what they wear, so an undressed scene must not have its own intent negated.",
+    "IPAdapter stays untouched until R1-R5 are verified. Changing text conditioning and reference strength together makes any result unattributable.",
+    "Not conflated with visual-reference-closure T1/T2, the still-unimplemented duplication guardrails. Same file, different defect."
+  ]
+}

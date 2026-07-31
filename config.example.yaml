@@ -34,6 +34,12 @@ clients: {}
 #    # back EMPTY and the director silently does nothing.
 #    reason_enabled: true
 #    reason_tokens: 2048
+#    # ALSO REQUIRED with Ollama. reason_enabled makes Talemate expect inline
+#    # <think>...</think> in the response so it can strip it, but Ollama returns
+#    # thinking in a SEPARATE field and the client only reads `response` - so
+#    # there is nothing to strip, the pattern never matches, and the default
+#    # "fail" raises ReasoningResponseError on every director turn.
+#    reason_failure_behavior: ignore
 #
 ## Route only the director at the cloud model; everything else stays local.
 #agents:

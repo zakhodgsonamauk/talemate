@@ -1978,3 +1978,115 @@ async def test_finalize_does_not_compound_emphasis_on_regenerate(styling_agent):
 
     assert second.prompt == first.prompt
     assert second.prompt.count(":1.3)") == 1
+
+
+# ---------------------------------------------------------------------------
+# Sex conditioning
+#
+# Observed live: Zak, a human male with a bearded male reference image attached,
+# came back as a nude female. The prompt carried "(human male, ...:1.3)" - natural
+# language, which a booru-trained Pony checkpoint barely registers - while `solo`
+# and `looking at viewer` sat near the front. Nothing in the negative prompt
+# opposed the default, because the species negatives return early for humans.
+# ---------------------------------------------------------------------------
+
+
+async def test_finalize_adds_booru_sex_tags_for_the_subject(styling_agent):
+    from talemate.context import active_scene
+
+    styling_agent.kaira.base_attributes["gender"] = "female"
+    request = _request(", ".join([KAIRA_ANCHOR, "Kaira"]))
+
+    token = active_scene.set(styling_agent.scene)
+    try:
+        await styling_agent._finalize_prompt(request)
+    finally:
+        active_scene.reset(token)
+
+    assert "1girl" in request.prompt
+
+
+async def test_sex_tags_lead_the_prompt(styling_agent):
+    """Attention thins across the prompt, so a sex tag at the tail does not hold."""
+    from talemate.context import active_scene
+
+    styling_agent.kaira.base_attributes["gender"] = "female"
+    request = _request(", ".join([KAIRA_ANCHOR, "Kaira"]))
+
+    token = active_scene.set(styling_agent.scene)
+    try:
+        await styling_agent._finalize_prompt(request)
+    finally:
+        active_scene.reset(token)
+
+    assert request.prompt.split(",")[0].strip() == "1girl"
+
+
+async def test_finalize_negates_the_opposite_sex(styling_agent):
+    from talemate.context import active_scene
+
+    styling_agent.kaira.base_attributes["gender"] = "female"
+    request = _request(", ".join([KAIRA_ANCHOR, "Kaira"]))
+    request.negative_prompt = "text, watermark"
+
+    token = active_scene.set(styling_agent.scene)
+    try:
+        await styling_agent._finalize_prompt(request)
+    finally:
+        active_scene.reset(token)
+
+    assert "1boy" in request.negative_prompt
+    assert "text, watermark" in request.negative_prompt
+
+
+async def test_nudity_is_negated_only_when_the_prompt_says_they_are_dressed(
+    styling_agent,
+):
+    from talemate.context import active_scene
+
+    styling_agent.kaira.base_attributes["gender"] = "female"
+    request = _request(", ".join([KAIRA_ANCHOR, "Kaira", "uniform", "boots"]))
+
+    token = active_scene.set(styling_agent.scene)
+    try:
+        await styling_agent._finalize_prompt(request)
+    finally:
+        active_scene.reset(token)
+
+    assert "nude" in request.negative_prompt
+
+
+async def test_an_undressed_scene_keeps_its_own_intent(styling_agent):
+    """The scene text is the authority. Negating nudity here would fight the prompt."""
+    from talemate.context import active_scene
+
+    styling_agent.kaira.base_attributes["gender"] = "female"
+    request = _request(", ".join([KAIRA_ANCHOR, "Kaira", "bare torso"]))
+
+    token = active_scene.set(styling_agent.scene)
+    try:
+        await styling_agent._finalize_prompt(request)
+    finally:
+        active_scene.reset(token)
+
+    assert "nude" not in (request.negative_prompt or "")
+    assert "naked" not in (request.negative_prompt or "")
+
+
+async def test_no_sex_conditioning_when_gender_is_unclear(styling_agent):
+    from talemate.context import active_scene
+
+    styling_agent.kaira.base_attributes["gender"] = "non-binary"
+    request = _request(", ".join([KAIRA_ANCHOR, "Kaira"]))
+    request.negative_prompt = "text"
+
+    token = active_scene.set(styling_agent.scene)
+    try:
+        await styling_agent._finalize_prompt(request)
+    finally:
+        active_scene.reset(token)
+
+    assert "1girl" not in request.prompt
+    assert "1boy" not in request.prompt
+    assert "1girl" not in request.negative_prompt
+    assert "1boy" not in request.negative_prompt

@@ -47,6 +47,82 @@ ACTION_BUDGET_RESERVE = 0.35
 # overwhelmingly human, so a non-human trait stated only positively comes back diluted.
 SPECIES_NEGATIVES = ("human skin", "human ears", "ordinary skin tone")
 
+# Booru tags for the subject's sex.
+#
+# The Pony-derived checkpoints are tag-trained. "human male" is natural language and
+# carries little signal, while "1boy" is a tag the model actually learned. Without it the
+# strongest real tags in the prompt are `solo` and `looking at viewer`, both of which pull
+# toward the checkpoint's default subject - a young female - and that is what came out.
+SEX_TAGS = {
+    "male": ("1boy", "male focus"),
+    "female": ("1girl",),
+}
+
+# The other half of the same instruction, exactly as with species. Negating the default is
+# what makes the positive tag hold.
+SEX_NEGATIVES = {
+    "male": ("1girl", "female", "breasts", "nipples"),
+    "female": ("1boy", "male focus"),
+}
+
+# Only added when the prompt says the subject is dressed. An undressed scene must not have
+# its own intent negated - the scene text is the authority on what they are wearing.
+NUDITY_NEGATIVES = ("nude", "naked", "topless")
+
+_CLOTHING_WORDS = {
+    "uniform",
+    "shirt",
+    "pants",
+    "trousers",
+    "jacket",
+    "coat",
+    "dress",
+    "skirt",
+    "armor",
+    "armour",
+    "harness",
+    "belt",
+    "boots",
+    "gloves",
+    "robe",
+    "suit",
+    "tunic",
+    "vest",
+    "jumpsuit",
+    "overalls",
+    "clothed",
+    "clothing",
+    "fully clothed",
+}
+
+# Word-boundary matching matters here: "female" contains "male" and "woman" contains
+# "man", so substring tests invert the sex. \b prevents both.
+_MALE_RE = re.compile(r"\b(male|man|men|boy|boys|masculine|he|him|his)\b", re.IGNORECASE)
+_FEMALE_RE = re.compile(
+    r"\b(female|woman|women|girl|girls|feminine|she|her|hers)\b", re.IGNORECASE
+)
+
+
+def normalise_sex(value: str | None) -> str | None:
+    """
+    Map a free-form gender string onto "male", "female", or nothing.
+
+    `Character.gender` is free text, so it may be a bare word, a phrase, or something
+    that resolves to neither. Ambiguous or absent values return None and no tags are
+    added: a wrong tag actively fights the prompt, which is worse than no tag at all.
+    """
+    if not value or not value.strip():
+        return None
+
+    male = bool(_MALE_RE.search(value))
+    female = bool(_FEMALE_RE.search(value))
+
+    if male and not female:
+        return "male"
+    if female and not male:
+        return "female"
+    return None
+
 # Cost of one emphasis group: the brackets and the weight itself.
 EMPHASIS_TOKEN_OVERHEAD = 4
 
@@ -269,10 +345,13 @@ class GenerationMixin:
         keywords = await self._suppress_stale_wardrobe(keywords, request)
         keywords = await self._drop_duplicate_setting(keywords, request)
         keywords = await self._drop_secondary_traits(keywords, request)
+        # Before the budget trim so the tags are accounted for rather than pushed out.
+        keywords = await self._add_sex_tags(keywords, request)
         keywords = await self._trim_to_budget(keywords, request)
 
         keywords = list(dict.fromkeys(keywords))
         await self._add_species_negatives(keywords, request)
+        await self._add_sex_negatives(keywords, request)
         request.prompt = await self._render_with_emphasis(keywords, request)
 
         if request.prompt != original:
@@ -548,6 +627,73 @@ class GenerationMixin:
         except Exception:
             configured = None
         return float(configured) if configured else 1.0
+
+    async def _subject_sex(
+        self, keywords: list[str], request: GenerationRequest
+    ) -> str | None:
+        """The sex of the character actually being drawn, or None if unclear."""
+        scene = active_scene.get()
+        if not scene or request.vis_type in VIS_TYPES_WITHOUT_CAST:
+            return None
+
+        # Same determination the species negatives use - the subject on screen, not
+        # simply the first of the cast.
+        await self._primary_and_secondary(keywords, request)
+        primary = getattr(self, "_primary_character", None)
+        if not primary:
+            return None
+
+        return normalise_sex(getattr(primary, "gender", "") or "")
+
+    async def _add_sex_tags(
+        self, keywords: list[str], request: GenerationRequest
+    ) -> list[str]:
+        """
+        Put booru sex tags at the front of the prompt.
+
+        Front, because attention thins across the prompt: the appearance anchor and the
+        action already sit well past the first CLIP chunk, and a sex tag buried there does
+        not hold against `solo` and `looking at viewer` near the start.
+        """
+        sex = await self._subject_sex(keywords, request)
+        if not sex:
+            return keywords
+
+        tags = [t for t in SEX_TAGS.get(sex, ()) if t not in keywords]
+        if not tags:
+            return keywords
+
+        log.debug("sex_tags.added", sex=sex, added=tags)
+        return [*tags, *keywords]
+
+    async def _add_sex_negatives(
+        self, keywords: list[str], request: GenerationRequest
+    ) -> None:
+        """
+        Negate the checkpoint's default sex, and nudity when the subject is dressed.
+
+        `_add_species_negatives` does this for non-human species but returns early for
+        humans, so a human subject previously had nothing at all pushing back.
+        """
+        sex = await self._subject_sex(keywords, request)
+        if not sex:
+            return
+
+        existing = (request.negative_prompt or "").strip().rstrip(",")
+        additions = [n for n in SEX_NEGATIVES.get(sex, ()) if n not in existing]
+
+        # Only claim they are dressed if the prompt says so.
+        dressed = any(
+            word in keyword.lower() for keyword in keywords for word in _CLOTHING_WORDS
+        )
+        if dressed:
+            additions += [n for n in NUDITY_NEGATIVES if n not in existing]
+
+        if not additions:
+            return
+
+        request.negative_prompt = ", ".join(filter(None, [existing, *additions]))
+        log.debug("sex_negatives.added", sex=sex, dressed=dressed, added=additions)
 
     async def _add_species_negatives(
         self, keywords: list[str], request: GenerationRequest
