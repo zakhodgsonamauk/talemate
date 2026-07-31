@@ -149,6 +149,85 @@ Human-only. The console-leaning case, plus one other distinctive action.
 
 ---
 
+## Phase 1b — What the first live verification actually showed (T3, partial)
+
+The sex fix worked: the subject came back male and bearded, matching the reference. Three
+separate defects were exposed underneath it, added here rather than folded into the earlier
+tasks because each has its own cause.
+
+### [x] T12 — Nudity negatives must cover dressed-and-exposed
+
+`nude, naked, topless` described none of what happened: the subject was wearing jeans and a
+tank top, with the trousers open and genitals exposed. He was not nude — he was dressed and
+exposed, which those three tags do not name.
+
+`NUDITY_NEGATIVES` extended with the anatomy and state-of-undress tags: `bottomless, penis,
+exposed genitals, pubic hair, nipples, undressing, unzipped, open pants, uncensored, nsfw`.
+
+Also refined the dressed test. A clothing word alone is not proof: "unbuttoning his shirt"
+names a garment while describing its removal, so `_UNDRESS_INTENT_WORDS` now suppresses the
+nudity negatives when the prompt describes undress, in either direction. The scene text is
+the authority.
+
+The two negative sets deliberately overlap on `nipples` — unconditional for a male subject,
+conditional for a dressed female one — so collection filters against what has already been
+gathered as well as what is already in the prompt, or the tag would be emitted twice.
+
+**Acceptance**: AC2, retested by generation. Cheapest of the three and reversible, so it goes
+first: if it alone fixes the explicitness, T14 may not be needed.
+
+### [ ] T13 — The reference image's setting is leaking into the scene
+
+The prompt said `control room, sci-fi, holographic displays, metallic surfaces, blue-white
+lighting`. The generated image was an outdoor garden — plants, a bird, a water bottle,
+daylight. The reference photograph is a bearded man outdoors, and the IMAGE_EDIT/IPAdapter
+path imported his background along with his face.
+
+Arguably worse than the explicitness for scene illustration: it puts the engineer in a
+garden during a reactor emergency. Identity transfer is wanted; setting transfer is not.
+
+Investigate in this order, one change at a time so the cause stays attributable:
+- IPAdapter `weight_type` and `end_at` in `sdxl-ipadapter-character.json` — `ease out` and
+  `0.8` shape how long the reference dominates.
+- Whether the edit workflow is running a denoise low enough to preserve the reference
+  composition, which would make this a workflow defect rather than a weight one.
+- Whether an `IPAdapter` attention mask or a face-only crop is the right shape of fix.
+
+Note this partially overlaps R6/T10, which deferred IPAdapter tuning until conditioning was
+trusted. Conditioning is now trusted for sex, so that deferral no longer blocks this.
+
+**Acceptance**: a scene illustration keeps the scene's setting while keeping the character's
+identity. Verified by generation. **Deps**: T12.
+
+### [ ] T14 — Switchable model profiles, selected by content
+
+Asked for directly: use a non-NSFW checkpoint for non-NSFW images.
+
+The plumbing already exists. `comfyui.py:1000-1012` resolves a handler per generation type
+carrying both a workflow and a model, and `set_main_model` (`:190`) overwrites `ckpt_name` in
+the workflow at request time — so the checkpoint is already decoupled from the workflow file
+and chosen per request. The hook for content-based selection goes immediately before that.
+
+The catch is that a checkpoint is not swappable alone. `start-fork.local.bat` already records
+why: the Pony checkpoints need `score_9, score_8_up, score_7_up` with steps 30, cfg 5-7,
+DPM++ 2M Karras, while `sd_xl_turbo_1.0_fp16` needs no score tags, steps ~6, cfg ~1, Euler a.
+Swapping the name alone produces mush.
+
+So the unit is a **profile**: checkpoint + sampler settings + style tags, selected together.
+ComfyUI currently reports three checkpoints installed —
+`CyberRealisticPony_V9.0_FP16` and `CyberRealistic_PonySemi_V5` (both uncensored) and
+`sd_xl_turbo_1.0_fp16` (censored, per the launcher's own note).
+
+Open question for the design: what selects the profile. Candidates are the presence of
+undress intent in the prompt (the signal T12 already computes), the scene's content
+classification, or an explicit per-scene setting. Decide before implementing.
+
+**Acceptance**: an SFW-classified generation uses the SFW profile with sampler settings that
+suit it, and an explicit scene still uses the uncensored profile. **Deps**: T12, and T13 if
+its finding changes the workflow.
+
+---
+
 ## Phase 6 — Close out
 
 ### [ ] T10 — IPAdapter decision, recorded

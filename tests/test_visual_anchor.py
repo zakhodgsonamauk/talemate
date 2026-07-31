@@ -2090,3 +2090,61 @@ async def test_no_sex_conditioning_when_gender_is_unclear(styling_agent):
     assert "1boy" not in request.prompt
     assert "1girl" not in request.negative_prompt
     assert "1boy" not in request.negative_prompt
+
+
+async def test_an_undressing_beat_is_not_negated_even_though_a_garment_is_named(
+    styling_agent,
+):
+    """"unbuttoning her shirt" names a garment while describing its removal.
+
+    Treating the garment as proof of being dressed would negate the scene's own intent.
+    """
+    from talemate.context import active_scene
+
+    styling_agent.kaira.base_attributes["gender"] = "female"
+    request = _request(
+        ", ".join([KAIRA_ANCHOR, "Kaira", "unbuttoning her shirt", "shirt"])
+    )
+
+    token = active_scene.set(styling_agent.scene)
+    try:
+        await styling_agent._finalize_prompt(request)
+    finally:
+        active_scene.reset(token)
+
+    assert "nude" not in (request.negative_prompt or "")
+    assert "penis" not in (request.negative_prompt or "")
+
+
+async def test_a_fully_dressed_subject_gets_the_anatomy_negatives(styling_agent):
+    """The observed failure: dressed, but rendered exposed."""
+    from talemate.context import active_scene
+
+    styling_agent.kaira.base_attributes["gender"] = "female"
+    request = _request(", ".join([KAIRA_ANCHOR, "Kaira", "uniform", "tool belt"]))
+
+    token = active_scene.set(styling_agent.scene)
+    try:
+        await styling_agent._finalize_prompt(request)
+    finally:
+        active_scene.reset(token)
+
+    assert "exposed genitals" in request.negative_prompt
+    assert "unzipped" in request.negative_prompt
+
+
+async def test_overlapping_negative_sets_are_not_emitted_twice(styling_agent):
+    """`nipples` is in both the male sex negatives and the nudity negatives."""
+    from talemate.context import active_scene
+
+    styling_agent.kaira.base_attributes["gender"] = "male"
+    request = _request(", ".join([KAIRA_ANCHOR, "Kaira", "uniform"]))
+
+    token = active_scene.set(styling_agent.scene)
+    try:
+        await styling_agent._finalize_prompt(request)
+    finally:
+        active_scene.reset(token)
+
+    tags = [t.strip() for t in request.negative_prompt.split(",") if t.strip()]
+    assert len(tags) == len(set(tags)), f"duplicate negatives: {request.negative_prompt}"

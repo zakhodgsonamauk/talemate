@@ -67,7 +67,51 @@ SEX_NEGATIVES = {
 
 # Only added when the prompt says the subject is dressed. An undressed scene must not have
 # its own intent negated - the scene text is the authority on what they are wearing.
-NUDITY_NEGATIVES = ("nude", "naked", "topless")
+#
+# "nude, naked, topless" alone proved insufficient: observed live, a male subject wearing
+# jeans and a tank top was rendered with the trousers open and genitals exposed. None of
+# those three tags describe that, because the subject is not nude - he is dressed and
+# exposed. The anatomy and state-of-undress tags are the ones that cover it.
+NUDITY_NEGATIVES = (
+    "nude",
+    "naked",
+    "topless",
+    "bottomless",
+    "penis",
+    "exposed genitals",
+    "pubic hair",
+    "nipples",
+    "undressing",
+    "unzipped",
+    "open pants",
+    "uncensored",
+    "nsfw",
+)
+
+# Words in the prompt that mean the scene intends undress. Their presence suppresses the
+# nudity negatives even when clothing is also mentioned - "unbuttoning his shirt" names a
+# garment while describing its removal, and negating that would fight the scene.
+_UNDRESS_INTENT_WORDS = {
+    "nude",
+    "naked",
+    "bare",
+    "topless",
+    "bottomless",
+    "shirtless",
+    "undress",
+    "undressing",
+    "undressed",
+    "unbuttoning",
+    "unbuttoned",
+    "unzipping",
+    "unzipped",
+    "stripping",
+    "exposed",
+    "nipples",
+    "cleavage",
+    "lingerie",
+    "underwear",
+}
 
 _CLOTHING_WORDS = {
     "uniform",
@@ -750,14 +794,29 @@ class GenerationMixin:
             return
 
         existing = (request.negative_prompt or "").strip().rstrip(",")
-        additions = [n for n in SEX_NEGATIVES.get(sex, ()) if n not in existing]
 
-        # Only claim they are dressed if the prompt says so.
-        dressed = any(
-            word in keyword.lower() for keyword in keywords for word in _CLOTHING_WORDS
+        # Filtered against what has already been collected as well as what is already in
+        # the prompt: the two sets overlap on purpose, so checking only `existing` would
+        # append the same tag twice in a single call.
+        additions: list[str] = []
+
+        def collect(candidates) -> None:
+            for candidate in candidates:
+                if candidate not in existing and candidate not in additions:
+                    additions.append(candidate)
+
+        collect(SEX_NEGATIVES.get(sex, ()))
+
+        # Only claim they are dressed if the prompt says so, and only if it does not also
+        # describe undress. The scene text is the authority in both directions.
+        lowered = [keyword.lower() for keyword in keywords]
+        wearing = any(word in keyword for keyword in lowered for word in _CLOTHING_WORDS)
+        undressing = any(
+            word in keyword for keyword in lowered for word in _UNDRESS_INTENT_WORDS
         )
+        dressed = wearing and not undressing
         if dressed:
-            additions += [n for n in NUDITY_NEGATIVES if n not in existing]
+            collect(NUDITY_NEGATIVES)
 
         if not additions:
             return

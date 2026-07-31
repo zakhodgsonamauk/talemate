@@ -100,10 +100,26 @@ def test_negatives_never_contradict_their_own_positive_tags():
         assert not overlap, f"{sex}: {overlap} is both positive and negative"
 
 
-def test_nudity_negatives_are_separate_from_sex_negatives():
-    """They are conditional on the subject being dressed, so they cannot be merged."""
-    for negatives in SEX_NEGATIVES.values():
-        assert not set(NUDITY_NEGATIVES) & set(negatives)
+def test_no_tag_is_both_positive_and_negative_including_nudity():
+    """The invariant that matters: nothing may be asked for and forbidden at once.
+
+    Overlap between the sex and nudity negatives is fine and deliberate — `nipples` is
+    negated unconditionally for a male subject and only conditionally for a dressed
+    female one — and duplicates are filtered when the negatives are assembled.
+    """
+    for sex, tags in SEX_TAGS.items():
+        forbidden = set(SEX_NEGATIVES[sex]) | set(NUDITY_NEGATIVES)
+        overlap = set(tags) & forbidden
+        assert not overlap, f"{sex}: {overlap} is both requested and forbidden"
+
+
+def test_negatives_are_not_duplicated_when_the_sets_overlap():
+    from talemate.agents.visual.generation import SEX_NEGATIVES as sn
+
+    combined = list(sn["male"]) + list(NUDITY_NEGATIVES)
+    # The assembly filters against what is already present; this pins that the overlap
+    # exists and so the filtering is load-bearing rather than incidental.
+    assert len(combined) != len(set(combined))
 
 
 # === character_sex — reading the sex from whatever evidence exists ===
@@ -209,3 +225,27 @@ def test_a_stated_non_binary_gender_is_not_overruled_by_prose():
         {"gender": "non-binary", "Appearance": "alien woman, deep violet skin, she waits"}
     )
     assert character_sex(c) is None
+
+
+# === nudity negatives: dressed-and-exposed is its own failure mode ===
+#
+# Observed live: a male subject wearing jeans and a tank top was rendered with the
+# trousers open and genitals exposed. "nude, naked, topless" describe none of that —
+# he was not nude, he was dressed and exposed.
+
+
+def test_nudity_negatives_cover_dressed_but_exposed():
+    from talemate.agents.visual.generation import NUDITY_NEGATIVES
+
+    for tag in ("penis", "exposed genitals", "pubic hair", "unzipped", "open pants"):
+        assert tag in NUDITY_NEGATIVES, f"{tag} missing — the observed failure survives"
+
+
+def test_undress_intent_words_do_not_overlap_clothing_words():
+    """`unzipped` must read as intent, not as a garment, or the check contradicts itself."""
+    from talemate.agents.visual.generation import (
+        _CLOTHING_WORDS,
+        _UNDRESS_INTENT_WORDS,
+    )
+
+    assert not _CLOTHING_WORDS & _UNDRESS_INTENT_WORDS

@@ -14,36 +14,157 @@
     "max_fix_cycles": 5,
     "superpower_enhanced": true,
     "checkpoints": {
-      "PLAN": { "status": "PASSED" }
+      "PLAN": {
+        "status": "PASSED"
+      }
     },
-    "completed_tasks": ["T1", "T2"],
-    "next_task": "T3 (human verification), or T4/T6 in parallel",
-    "next_task_note": "T1/T2 shipped with 38 tests. T3 needs a real generation and cannot be closed by an agent. T4 is an investigation that gates T5."
+    "completed_tasks": [
+      "T1",
+      "T2",
+      "T12"
+    ],
+    "next_task": "T3 re-verify by generation, then T13",
+    "next_task_note": "T12 shipped. Re-generate to see whether the anatomy negatives alone fix the explicitness - if they do, T14 may be unnecessary. T13 (reference background leak) is arguably the higher-value defect for scene illustrations."
   },
   "cannot_self_certify": {
     "reason": "diffusion output can only be judged by looking at it",
-    "human_verified_tasks": ["T3", "T9"],
-    "acceptance_criteria": ["AC1", "AC2", "AC4"]
+    "human_verified_tasks": [
+      "T3",
+      "T9"
+    ],
+    "acceptance_criteria": [
+      "AC1",
+      "AC2",
+      "AC4"
+    ]
   },
   "tasks": [
-    { "id": "T1", "name": "Booru sex tags at the front of the positive prompt", "status": "completed", "deps": [] },
-    { "id": "T2", "name": "Opposite-sex negatives, nudity negatives only when dressed", "status": "completed", "deps": [] },
-    { "id": "T3", "name": "Verify the wrong-person fix by generation - AC1, AC2", "status": "pending", "deps": ["T1", "T2"], "human_verified": true },
-    { "id": "T4", "name": "Establish why a scene moment became a CHARACTER_CARD", "status": "pending", "deps": [] },
-    { "id": "T5", "name": "Remove the camera-gaze tag from action prompts - AC5", "status": "pending", "deps": ["T4"] },
-    { "id": "T6", "name": "Drop vocabulary that cannot be drawn - AC6", "status": "pending", "deps": [] },
-    { "id": "T7", "name": "Keep the action as one weighted phrase - AC7", "status": "pending", "deps": ["T6"] },
-    { "id": "T8", "name": "Reduce the effective token budget, measured - AC8", "status": "pending", "deps": ["T6", "T7"] },
-    { "id": "T9", "name": "Verify the wrong-thing fix by generation - AC4", "status": "pending", "deps": ["T5", "T7", "T8"], "human_verified": true },
-    { "id": "T10", "name": "IPAdapter decision, recorded", "status": "pending", "deps": ["T3", "T9"] },
-    { "id": "T11", "name": "Docs: the tag-vocabulary finding", "status": "pending", "deps": ["T9", "T10"] }
+    {
+      "id": "T1",
+      "name": "Booru sex tags at the front of the positive prompt",
+      "status": "completed",
+      "deps": []
+    },
+    {
+      "id": "T2",
+      "name": "Opposite-sex negatives, nudity negatives only when dressed",
+      "status": "completed",
+      "deps": []
+    },
+    {
+      "id": "T3",
+      "name": "Verify the wrong-person fix by generation - AC1, AC2",
+      "status": "pending",
+      "deps": [
+        "T1",
+        "T2"
+      ],
+      "human_verified": true
+    },
+    {
+      "id": "T4",
+      "name": "Establish why a scene moment became a CHARACTER_CARD",
+      "status": "pending",
+      "deps": []
+    },
+    {
+      "id": "T5",
+      "name": "Remove the camera-gaze tag from action prompts - AC5",
+      "status": "pending",
+      "deps": [
+        "T4"
+      ]
+    },
+    {
+      "id": "T6",
+      "name": "Drop vocabulary that cannot be drawn - AC6",
+      "status": "pending",
+      "deps": []
+    },
+    {
+      "id": "T7",
+      "name": "Keep the action as one weighted phrase - AC7",
+      "status": "pending",
+      "deps": [
+        "T6"
+      ]
+    },
+    {
+      "id": "T8",
+      "name": "Reduce the effective token budget, measured - AC8",
+      "status": "pending",
+      "deps": [
+        "T6",
+        "T7"
+      ]
+    },
+    {
+      "id": "T9",
+      "name": "Verify the wrong-thing fix by generation - AC4",
+      "status": "pending",
+      "deps": [
+        "T5",
+        "T7",
+        "T8"
+      ],
+      "human_verified": true
+    },
+    {
+      "id": "T10",
+      "name": "IPAdapter decision, recorded",
+      "status": "pending",
+      "deps": [
+        "T3",
+        "T9"
+      ]
+    },
+    {
+      "id": "T11",
+      "name": "Docs: the tag-vocabulary finding",
+      "status": "pending",
+      "deps": [
+        "T9",
+        "T10"
+      ]
+    },
+    {
+      "id": "T12",
+      "name": "Nudity negatives must cover dressed-and-exposed - AC2",
+      "status": "completed",
+      "deps": [
+        "T1",
+        "T2"
+      ],
+      "note": "Live generation came back male and bearded (sex fix worked) but with trousers open and genitals exposed. 'nude, naked, topless' name none of that - he was dressed AND exposed. Added anatomy/state-of-undress tags. Also refined the dressed test: a clothing word alone is not proof, since 'unbuttoning his shirt' names a garment while describing its removal, so _UNDRESS_INTENT_WORDS suppresses the nudity negatives when the scene wants undress. The two negative sets overlap on 'nipples' deliberately, so collection filters against already-gathered additions as well as the existing prompt."
+    },
+    {
+      "id": "T13",
+      "name": "Reference image's setting leaking into the scene",
+      "status": "pending",
+      "deps": [
+        "T12"
+      ],
+      "human_verified": true,
+      "note": "Prompt said control room / sci-fi / holographic displays; output was an outdoor garden with plants, a bird and a water bottle. The reference photo is a bearded man outdoors, so the IMAGE_EDIT/IPAdapter path imported his background with his face. Identity transfer wanted, setting transfer not. Investigate weight_type and end_at, then edit-workflow denoise, then masking - one change at a time. Partially overlaps T10, whose deferral no longer blocks it."
+    },
+    {
+      "id": "T14",
+      "name": "Switchable model profiles, selected by content",
+      "status": "pending",
+      "deps": [
+        "T12"
+      ],
+      "note": "Plumbing exists: comfyui.py:1000-1012 resolves a per-gen-type handler carrying workflow AND model, and set_main_model (:190) overwrites ckpt_name at request time. But a checkpoint is not swappable alone - Pony needs score tags, steps 30, cfg 5-7, DPM++ 2M Karras; sd_xl_turbo needs no score tags, steps ~6, cfg ~1, Euler a (recorded in start-fork.local.bat). The unit is a profile: checkpoint + sampler + style tags. Installed: CyberRealisticPony_V9, CyberRealistic_PonySemi_V5 (both uncensored), sd_xl_turbo_1.0_fp16 (censored). Open question: what selects the profile - undress intent (already computed by T12), content classification, or an explicit per-scene setting."
+    }
   ],
   "problems": {
     "P1": "A human male with a bearded male reference image generated as a half-naked female. The positive prompt said '(human male ...:1.3)' - natural language, which the booru-trained CyberRealisticPony_V9 checkpoint barely registers - while 'solo' and 'looking at viewer' sat near the front pulling toward the checkpoint's default subject, a young nude female",
     "P2": "There was no sex handling anywhere in the visual pipeline. grep for 1boy/1girl/male focus/gender/sex over agents/visual/ and fork-styles.yaml returned nothing, and _add_species_negatives returns early when species is human, so a human subject had no corrective negatives at all",
     "P3": "Poses come out generic. 'looking at viewer' is hardcoded in visual-styles.yaml:41 and :57 beside 'solo', sits at roughly token 20, and directly contradicts an action like leaning over a console",
     "P4": "The prompt runs far past useful attention. image_max_tokens is 250 against a DEFAULT_MAX_PROMPT_TOKENS of 77; the observed prompt measured ~196 tokens with the action words near token 95, and style.py:39 already records that beyond ~155 tokens roughly half the prompt is past where the encoder meaningfully attends",
-    "P5": "The action is atomised and unweighted. 'Leaning over the console' arrives as 'standing, lean, hands hovering, interface' with the subject-object relationship destroyed, while the appearance anchor carries :1.3 and the action carries nothing. Roughly 40 tokens are unrenderable abstractions crowding out what does draw"
+    "P5": "The action is atomised and unweighted. 'Leaning over the console' arrives as 'standing, lean, hands hovering, interface' with the subject-object relationship destroyed, while the appearance anchor carries :1.3 and the action carries nothing. Roughly 40 tokens are unrenderable abstractions crowding out what does draw",
+    "P6": "Nudity negatives were incomplete: a subject wearing jeans and a tank top was rendered with trousers open and genitals exposed, which 'nude, naked, topless' do not describe",
+    "P7": "The reference image's background leaks into the generation - a reactor-room prompt produced an outdoor garden, because the reference photo was taken outdoors"
   },
   "decisions": [
     "Sex is expressed as booru tags (1boy / male focus / 1girl), not natural language. The checkpoint family is tag-trained; 'human male' carries little signal. This is the same principle visual-reference-closure recorded for negatives, applied to the positive, which nobody had done.",
@@ -52,6 +173,8 @@
     "Word-boundary matching on gender is mandatory: 'male' is a substring of 'female' and 'man' of 'woman', so naive substring tests invert the sex.",
     "Nudity negatives are conditional on the prompt saying the subject is dressed. The scene text is the authority on what they wear, so an undressed scene must not have its own intent negated.",
     "IPAdapter stays untouched until R1-R5 are verified. Changing text conditioning and reference strength together makes any result unattributable.",
-    "Not conflated with visual-reference-closure T1/T2, the still-unimplemented duplication guardrails. Same file, different defect."
+    "Not conflated with visual-reference-closure T1/T2, the still-unimplemented duplication guardrails. Same file, different defect.",
+    "Undress intent in the prompt suppresses the nudity negatives even when a garment is named. 'unbuttoning his shirt' names a garment while describing its removal; the scene text is the authority in both directions, not just when it says they are dressed.",
+    "Model switching is a profile, not a checkpoint name: Pony and SDXL-Turbo need different sampler settings and different style tags, so swapping ckpt_name alone produces mush. Recorded before implementing T14."
   ]
 }
