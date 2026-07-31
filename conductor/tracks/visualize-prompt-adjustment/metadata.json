@@ -1,0 +1,146 @@
+{
+  "version": 3,
+  "track_id": "visualize-prompt-adjustment",
+  "name": "Visualize with prompt adjustment: edit the composed prompt before generating",
+  "type": "feature",
+  "created": "2026-07-30",
+  "status": "planned",
+  "brainstormed_with_user": "2026-07-30",
+  "superpower_enhanced": true,
+  "loop_state": {
+    "current_step": "EVALUATE_EXECUTION",
+    "step_status": "BLOCKED_ON_LIVE_VERIFICATION",
+    "fix_cycle_count": 0,
+    "max_fix_cycles": 5,
+    "checkpoints": {
+      "PLAN": { "status": "SELF_VERIFIED", "note": "Load-bearing claims re-verified against source before execution; the dispatched loop-plan-evaluator never returned a verdict." },
+      "EXECUTE": { "status": "DONE_PENDING_E2E" }
+    }
+  },
+  "tasks": [
+    { "id": "T1", "name": "return_prompt flag + gate rework (de-risk JSON surgery)", "status": "completed", "deps": [], "note": "Superseded in approach: a second core/Switch cannot nest, so the old gate was replaced by two core/ANDRouter nodes. See decisions." },
+    { "id": "T2", "name": "DictCollector payload + websocket/WebsocketResponse prompt_preview leg - AC2, AC3, AC4", "status": "completed", "deps": ["T1"], "note": "12 nodes added, 1 removed: 50 nodes / 53 edge groups. Verified by loading through load_graph_from_file and asserting resolved socket sources." },
+    { "id": "T3", "name": "Investigate how VisualLibraryGenerate mounts outside VisualLibrary (blocks T4)", "status": "completed", "deps": [], "note": "Answer: it cannot be reused in place - the only instance is at VisualLibraryQueue.vue:89, inside VisualLibrary's closed dialog and a tab. A second instance is mounted in TalemateApp.vue, which already holds every prop, and is opened via provide/inject like openVisualLibraryWithAsset." },
+    { "id": "T4", "name": "Optional asset_attachment_context passthrough on VisualLibraryGenerate", "status": "completed", "deps": ["T3"] },
+    { "id": "T5", "name": "Second chip in MessageToolbar - AC1", "status": "completed", "deps": [], "note": "Gated on the existing showVisualize prop, so ContextInvestigationMessage.vue needed no change at all." },
+    { "id": "T6", "name": "SceneMessages request/response plumbing + spinner hygiene - AC5, AC10", "status": "completed", "deps": ["T2", "T3", "T5"] },
+    { "id": "T7", "name": "Generate through visual/generate and attach to message - AC6, AC7", "status": "blocked", "deps": ["T4", "T6"], "note": "Needs a live image backend and the single websocket. Not attempted: a second session is active on this repo and starting the backend/ComfyUI would contend for both the websocket and the GPU." },
+    { "id": "T8", "name": "Verify hand edits survive to asset metadata - AC8", "status": "blocked", "deps": ["T7"], "note": "Same reason as T7." },
+    { "id": "T9", "name": "Regression pass - AC9", "status": "completed", "deps": [], "note": "Full suite: 5706 passed, 7 pre-existing failures confirmed unrelated by re-running them with the graph change reverted (identical 7). Visual suite 155 passed including the new guard. Frontend vite build clean." },
+    { "id": "T10", "name": "Docs for return_prompt/prompt_preview + separate commits", "status": "pending", "deps": ["T7", "T8"] }
+  ],
+  "prompt_generation_source_of_truth": {
+    "audited": "2026-07-31, in response to 'do we have a single source of truth now?'",
+    "finalisation": "SINGLE. GenerationMixin._finalize_prompt in generation.py. Everything that generates reaches it because it sits inside visual.generate(), which is the only way to a backend. Two call sites now (generation.py:815 and the new FinalizePrompt node) but one implementation - no duplicated logic.",
+    "styles_and_anchors": "SINGLE. apply_styles / _insert_anchors in style.py, called from exactly one node (ApplyStyles, nodes.py:350), which appears in exactly one module (the composer).",
+    "composition": "TWO paths, both pre-existing. (1) agents/visual/generateVisualAsset - the full composer: LLM keywords + ApplyStyles + anchors. Embedded by wsh-visualize, director-action-create-image, on-persist-character-generate-visual, generate-avatar, generate-character-portrait-legacy. (2) agents/visual/generateImageEdit - its own Prompt/PromptPart/GenerationRequest/SelectBackend/GenerateImage and NO ApplyStyles, so the image-edit route does not get styles or anchors. Embedded by director-action-create-image and generate-avatar. Probably deliberate for edit instructions, but it is a genuine second assembly site and worth knowing about before changing 'the' prompt logic.",
+    "frontend": "No assembly. TemplateVisualStyle.vue authors style templates (config); the generate modal passes text through unchanged.",
+    "where_to_edit": "What goes INTO a prompt -> the composer (generate-visual-asset.json, style.py apply_styles/_insert_anchors, the PromptPart/Prompt nodes). How an assembled prompt is cleaned or weighted -> _finalize_prompt, one function. Remember the image-edit path skips the styles/anchors half.",
+    "this_track_added": "No new composition logic and no new finalisation logic - it reuses the composer and calls the agent's own _finalize_prompt.",
+    "new_invariant_introduced": "The adjust flow finalises twice (once for the preview, once on generate), so _finalize_prompt must stay repeatable. Regenerate already depended on this; nothing tested the round trip. Now pinned by TestFinalisationIsRepeatable - and writing that test immediately found a real bug, since fixed (see bug_found_and_fixed)."
+  },
+  "bug_found_and_fixed": {
+    "what": "weight_group escaped ( and ) unconditionally while strip_emphasis deliberately preserves \\( as literal content, so each finalise round trip doubled the escapes: \\(old\\) -> \\\\(old\\\\).",
+    "why_it_matters": "\\\\( is a literal backslash followed by an UNESCAPED bracket, which opens a weight group and changes how the rest of the prompt parses - precisely the failure weight_group's own docstring warns about.",
+    "pre_existing": "Yes, and not introduced by this track. Already reachable through regenerate, which re-submits an already-finalised prompt. This feature added a second route because the adjust flow finalises twice.",
+    "scope": "Bit any character whose anchor or visual_rules contains literal parentheses, e.g. a scar '(old)'.",
+    "found_by": "Writing the repeatability test the double-finalise invariant needed. The individual behaviours of weight_group and strip_emphasis were both already covered in test_visual_anchor.py; nothing covered the round trip between them, which is where the defect lived.",
+    "fix": "style.py: new module-level _UNESCAPED_BRACKET = re.compile(r'(?<!\\\\)[()]'), and weight_group substitutes through it instead of two unconditional str.replace calls. Escaping is now idempotent.",
+    "verified": "Round trip and a four-pass loop both stable (escape count does not grow). The 12 pre-existing emphasis/weight/bracket tests in test_visual_anchor.py still pass, as does the full suite at 5759. The xfail marker was removed - the test now asserts the fixed behaviour so a regression fails outright.",
+    "coordination_note": "style.py is in another session's working set. The edit is two lines plus a docstring paragraph, deliberately surgical to minimise conflict."
+  },
+  "correction_from_live_use": {
+    "reported": "The preview put two characters in the prompt when the narrated paragraph had one, and carried no (trait:1.3) emphasis.",
+    "root_cause": "One cause, and it invalidates how this track described itself. Prompt assembly has two halves. The graph builds the first - LLM keywords, art style, and an anchor for EVERY character in frame (style.py:548 states this is deliberate). The second half is GenerationMixin._finalize_prompt, which is Python-only and called from exactly one place: visual.generate at generation.py:815. The prompt_only branch never reaches it. That function runs sanitise_keywords, _drop_absent_character_anchors (the two-character symptom - it prunes the anchors of characters the prompt does not name), _suppress_stale_wardrobe, _drop_duplicate_setting, _drop_secondary_traits, _trim_to_budget, _add_species_negatives, and _render_with_emphasis (the missing-emphasis symptom - grep confirms it is the ONLY producer of A1111 weighting anywhere in the agent).",
+    "where_the_earlier_claim_broke": "The track claimed it 'shares the generation path'. True of composition, false of finalisation. The gap was recorded as an 'accepted fidelity gap' and characterised as a 'mechanical safety pass' whose only consequence was that the image might use a slightly filtered version of the previewed text. That was wrong in both direction and severity: the skipped pass performs subject disambiguation and all emphasis, so the preview was not a filtered version of the truth but a visibly different prompt - which defeats the entire point of a feature whose job is to show the user what will be used.",
+    "fix": "New node agents/visual/FinalizePrompt (nodes.py) calls the agent's own _finalize_prompt, so the shared-path claim is now honest for both halves rather than just the first. Wired on the return_prompt branch only, gated after the router and before WebsocketResponse. The payload's prompt, negative_prompt and format now come from the finalised request - negative_prompt too, because _add_species_negatives mutates it, making UnpackPrompt's copy stale as well.",
+    "double_finalise_is_safe": "visual/generate runs _finalize_prompt again on the edited prompt. This is the regenerate scenario the code already supports: _finalize_prompt calls strip_emphasis before re-splitting precisely because 'Regenerate re-submits a previous request, so the prompt may already be weighted' (generation.py:261-263, style.py:82-88). The pruning passes are no-ops second time round.",
+    "fallback_untouched": "Without return_prompt the system message still reads UnpackPrompt's pre-finalise text, so no-flag behaviour is unchanged. Pinned by test_the_no_flag_fallback_is_left_pre_finalise.",
+    "requires": "Backend restart - nodes.py registration and the graph change are both loaded at startup. No frontend rebuild needed for this round (bundle hash unchanged; only Python and graph JSON changed).",
+    "lesson": "Static verification proved the wiring was what I intended and could not tell me the intent was wrong. Two graph-level halves of one pipeline looked like one shared path from inside the graph. A single live generation surfaced it immediately - which is exactly the risk the still-blocked E2E tasks carry."
+  },
+  "adversarial_review": {
+    "reviewer": "independent subagent, frontend-focused (the node-graph half was already self-verified by execution)",
+    "note": "The dispatched loop-plan-evaluator went idle twice without ever producing a verdict; it was abandoned and a fresh reviewer run synchronously instead.",
+    "fixed": [
+      "Instruct-tab submit dropped the attachment context entirely. The adjust flow prefills instructions and leaves the Instruct tab enabled, so switching tabs and generating sent `visualize` with no message_ids and no save flags - the image would generate, land in the library as unsaved, and never attach to the message, with no error. `visualize` takes those as flat keys rather than a nested context, so onSubmit now maps attachmentContext onto message_ids/save_asset/asset_allow_auto_attach/asset_allow_override in the instruct branch.",
+      "`format` was wrong, not merely absent - this reverses the earlier decision to drop it. The modal defaults to LANDSCAPE, but the real path resolves format from VIS_TYPE_TO_FORMAT in SelectBackend (nodes.py:462), which is PORTRAIT for CHARACTER_CARD and OBJECT_ILLUSTRATION. So adjusting a character or object prompt silently produced a wide image where the plain button produced a tall one. Fixed by adding format to the payload from generation_request, which is safe on this branch (the graph already reads that object for the system-message title, and format is set at request construction, not during generation). FORMAT_TYPE is a StrEnum whose values match the frontend constants exactly.",
+      "The modal could strand on 'Composing prompt...' forever. promptLoading was cleared only by a successful preview, so an agent error or interrupt left both textareas disabled and Generate off with nothing explaining it. Added failVisualPromptAdjust(), called on visual/operation_done and image_generation_failed, plus a promptFailed alert offering to write a prompt by hand.",
+      "The claim in the initialRequest watcher's comment was false: promptLoading disabled only the two prompt textareas, so Vis Type, Format, Character and the reference picker stayed live and were silently reset when the preview landed. Those are now disabled during loading too, which makes the comment true rather than merely reworded.",
+      "`|| undefined` in the preview object was a spread-overwrite hazard - an explicitly-present undefined key wins in an object spread, so an omitted vis_type would have erased the one the modal opened with. Absent keys are now omitted instead of sent falsy.",
+      "instructions were kept in the modal but never sent, so assets made this way had no provenance and the library's 'Regenerate (Instruct)' would never appear for them. Now forwarded on the generation request when present.",
+      "persistent-placeholder was unconditional, floating the Prompt label permanently in the Visual Library's own dialog. Now bound to promptLoading.",
+      "Removed a dead provide (isVisualPromptAdjustOpen) that nothing injected."
+    ],
+    "test_gaps_closed": [
+      "Nothing pinned the source of the vis_type, character_name or message_ids payload values - only prompt/negative_prompt. message_ids is the entire correlation key, so re-pointing it would have left the suite green while the modal silently never filled in. All six values are now pinned by a parametrised test.",
+      "test_operation_done_waits_for_the_response asserted only that some Coallesce had some input from the response node - neither which socket nor that the Coallesce actually gates OperationDone. Both are now asserted.",
+      "Dropped test_the_two_sinks_are_mutually_exclusive: it re-ran the same four combinations as the tests above it with a strictly weaker predicate, so it could not fail independently and inflated the apparent coverage.",
+      "Guarded an unchecked [0] index on the collector lookup."
+    ],
+    "accepted_not_fixed": [
+      "The chip is offered even with no image backend configured. Plain Visualize degrades gracefully (prompt_only dumps to chat); the adjust modal instead opens with Generate permanently disabled. The composed prompt is still shown and readable, so it is informative rather than broken - but the disabled Generate is unexplained. Worth a follow-up.",
+      "buildVisualizeRequest can return null for an examine with an unhandled entity_kind, and the new method then returns silently with no feedback. Pre-existing behaviour shared with visualizeMessage, so not a regression introduced here.",
+      "TestMissingFlagIsSafe passes against the pristine tree - it pins stock data/Get and core/AsBool semantics that the wiring depends on. Documentation of an assumption rather than coverage of this change, and labelled as such."
+    ]
+  },
+  "verification_done": {
+    "graph_loads": "load_graph_from_file on the patched module: 50 nodes, and the visualize sub-handler still registers alongside revisualize and generate_tags.",
+    "edge_sockets": "Every edge endpoint checked against the instantiated node classes' real socket names; all resolved sources confirmed after reinitialize().",
+    "new_test": "tests/test_visual_prompt_preview.py - 22 tests in two complementary halves. 15 structural tests assert the graph FILE matches the intended wiring (proven non-vacuous: all 15 fail against the pristine graph, up from 9 before the review closed the coverage gaps). 4 behavioural tests run the real AsBool/Invert/ANDRouter chain over every flag combination to assert the DESIGN is correct - these use a synthetic chain, so they would NOT catch someone rewiring the real graph; that is the structural half's job. Plus 2 pinning data/Get's missing-key behaviour and 1 pinning that the module still declares the visualize handler.",
+    "branch_behaviour_matrix": "Verified by execution, not reasoning: (prompt_only=F, no flag) -> neither sink; (T, no flag) -> system message only, i.e. today's fallback preserved; (T, flag) -> websocket response only; (F, flag) -> neither. The sinks are mutually exclusive in all four. The first case is the regression that would have mattered most - a leaked prompt dump on every ordinary Visualize - and it is clean. Socket.as_bool(UNRESOLVED) is False (core: as_bool returns False for UNRESOLVED), so an unresolved prompt_only flag also cannot activate either branch.",
+    "plain_path_safety": "data/Get uses dict.get(), so the absent return_prompt key yields None and core/AsBool(default=False) turns that into False - the system-message branch therefore still fires exactly as before. Pinned by test.",
+    "not_verified": "AC6, AC7, AC8 - no image was actually generated, so nothing proves the edited prompt reaches a backend and attaches to the message."
+  },
+  "problems": {
+    "P1": "Visualize is fire-and-forget: SceneMessages.vue:1218 sends the request and the next thing the user sees is a finished image. The composed prompt, applied style, anchors and negative prompt are never shown and cannot be corrected, so a near-miss illustration can only be retried blind.",
+    "P2": "The data already exists but sinks into a dead end. UnpackPrompt (nodes.py:278) exposes positive_prompt/negative_prompt and the prompt_only branch already unpacks them, but routes them to a read-only EmitSystemMessage dump in chat that cannot be fed back into a generation."
+  },
+  "decisions": [
+    "User constraint, load-bearing: 'should share the generation path with the rest of the codebase'. This decides the architecture - no parallel prompt-building implementation.",
+    "Prompt composition lives only inside the agents/visual/generateVisualAsset node module and cannot be called standalone from Python: its core/Input sockets require a connected source in an outer graph (core/__init__.py:2002-2014) and no Python references it. So the return leg is wired in the node graph, not added as a Python side-door.",
+    "Extend the existing wsh-visualize.json rather than adding a sibling module. Chosen over a new wsh-visualize-prompt-preview.json because it shares the most - same generateVisualAsset node, same argument normalisation, same vis_type/character validation. Accepted risk: it edits the graph the working Visualize button already depends on, which T1 exists to de-risk.",
+    "Final generation reuses the existing visual/generate handler (websocket_handler.py:59) with asset_attachment_context.message_ids - the same call the Visual Library already makes. No new generation endpoint.",
+    "Reuse VisualLibraryGenerate.vue rather than building a new modal; it already has prompt, negative prompt, vis_type, format and references, plus an initialRequest prefill prop.",
+    "Modal opens immediately with instructions/vis_type filled and the prompt fields in a loading state, rather than spinning the chip and opening when ready. Chosen for responsiveness and so the wait is cancellable.",
+    "Chip appears on exactly the messages Visualize appears on today (context-investigation: examine / visual-scene / visual-character). Adding it to plain narrator messages was considered and dropped - they carry no source_arguments, so vis_type and character would have to be guessed.",
+    "return_prompt defaults absent/false so the existing no-backend prompt-only fallback keeps dumping to chat, byte-identical. No chat spam on the new path.",
+    "Do not add handle_visualize in Python: websocket_plugin.py:177-195 prefers handle_<action> over node-module sub-handlers, so it would shadow the module and bypass the shared path.",
+    "Gating uses two core/ANDRouter nodes, not a nested core/Switch. A second Switch cannot nest: Switch tests its own `value` input (logic.py:262-279), so one fed from return_prompt would activate regardless of prompt_only and emit a system message on the normal generation path. The old prompt_only Switch was therefore deleted and replaced by ANDRouter(prompt_only, !return_prompt) -> EmitSystemMessage and ANDRouter(prompt_only, return_prompt) -> WebsocketResponse. Both take flag `a` from generateVisualAsset's prompt_only OUTPUT rather than the input AsBool, because that output is what orders the branch after the prompt has actually been composed.",
+    "Payload entries use explicit data/MakeKeyValuePair nodes rather than letting DictCollector infer keys. best_key_name_for_socket (core/dynamic.py:30-60) only yields a usable key when the source socket is named `value` AND the source node carries a name/key/attribute property; for UnpackPrompt.positive_prompt, ValidateValueContained.value and Coallesce.value it would produce wrong or colliding keys.",
+    "`format` was dropped from the payload. generateVisualAsset exposes no format output, and taking it from generation_request is unproven on the prompt_only branch - the existing graph pointedly reads the prompt text from UnpackPrompt rather than from generation_request, which suggests that object is not fully populated there. The modal already defaults format to LANDSCAPE.",
+    "The chip reuses the existing showVisualize prop instead of adding a new toggle, so it appears exactly where Visualize does and ContextInvestigationMessage.vue is untouched.",
+    "Chip label is 'Adjust & Visualize' with mdi-image-edit-outline. 'Visualize with prompt adjustment' was too long for an x-small chip sharing a row with Visualize, TTS and Time Passage.",
+    "The prompt-adjust path deliberately does not add to visualizingMessageIds. The modal's own loading state is the feedback, and keeping the toolbar spinner out of it means a preview that never arrives cannot strand one - which is AC10 satisfied by construction rather than by cleanup."
+  ],
+  "technical_findings": [
+    "wsh-visualize.json binds to the websocket action via properties.name ('visualize') and properties.agent ('visual'); agents/base.py:456-503 walks every agents/AgentWebsocketHandler node at scene-loop startup and calls register_sub_handler.",
+    "websocket/WebsocketResponse (nodes/websocket.py:158) spreads its data input into {type, action, **data}, so payload keys arrive top-level - matching the existing convention at VisualImageView.vue:509-518 and SceneMessages.vue:773.",
+    "The module already receives websocket_router as a core/functions/Argument node, so GetWebsocketRouter is not needed.",
+    "visual.generate() (generation.py:809) runs attach_character_references, _apply_seed and _finalize_prompt but does NOT apply styles - styles/anchors come from ApplyStyles in the graph. So re-submitting a previewed prompt does not double-style it.",
+    "data/DictCollector (data.py:1149) has dynamic named inputs and is the right payload builder; core/Switch (logic.py:215) provides yes/no flow sockets with deactivation, matching how the existing prompt_only branch is built."
+  ],
+  "risks": [
+    "Hand-editing wsh-visualize.json is the main risk: UUID node keys plus a separate connection map at the bottom of the file make a mis-wired socket easy to introduce and hard to see. T1 exists purely to de-risk this, and the plain Visualize chip working is the registration smoke test after every edit.",
+    "Accepted fidelity gap: _finalize_prompt never runs on the prompt_only branch but does run on visual/generate, dropping unrenderable keywords, out-of-shot anchors and trimming to budget (generation.py:229-244). The prompt reaching the backend is a filtered version of what the modal showed. AC8 must therefore assert on a token that survives finalisation, not byte-equality.",
+    "Mounting VisualLibraryGenerate.vue outside VisualLibrary.vue is the largest frontend unknown - it needs scene, visualAgentStatus, templates, generationAvailable, editAvailable, maxReferences. T3 resolves this before T4 so T4 is not a rewrite.",
+    "visualizingMessageIds leakage: the operation_done sweep at SceneMessages.vue:773-775 clears the whole set. The new path must be covered by it or extend it, or cancelled/errored previews leave stuck spinners.",
+    "Commit hygiene: git add -A would sweep in scenes/*/assets/library.json churn and generated PNGs, which are disposable test output."
+  ],
+  "open_gaps": [
+    "Where templates comes from for the modal's art-style menu, and how maxReferences / editAvailable are derived in VisualLibrary.vue - resolve in T3.",
+    "Whether the injected openVisualLibraryWithAsset already provides a usable mounting route for the modal - resolve in T3.",
+    "Chip label and icon not finalised: 'Visualize with prompt adjustment' is long for an x-small chip; a pencil-badged variant of mdi-image-plus may read better."
+  ],
+  "constraints": {
+    "new_npm_dependencies": 0,
+    "new_python_prompt_building_code": 0,
+    "narrator_message_component_changed": false,
+    "note": "AC6/AC7/AC8 need real generations: ComfyUI up (start-fork.bat with USE_COMFYUI=1) and only one frontend connected - the backend accepts a single websocket, so a stray browser tab locks Playwright out. Set PYTHONIOENCODING=utf-8 when redirecting backend output."
+  },
+  "coordination": {
+    "other_session": "A second Claude session is editing the visual agent's Python (agent.py, generation.py, style.py, references.py, backends/comfyui.py).",
+    "this_track_writes": ["src/talemate/agents/visual/modules/wsh-visualize.json", "talemate_frontend/src/components/MessageToolbar.vue", "talemate_frontend/src/components/ContextInvestigationMessage.vue", "talemate_frontend/src/components/SceneMessages.vue", "talemate_frontend/src/components/VisualLibraryGenerate.vue"],
+    "overlap": "none expected; generation.py is read-only for this track, so re-read it rather than trusting recorded line numbers"
+  }
+}
