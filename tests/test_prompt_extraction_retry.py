@@ -106,3 +106,53 @@ def test_no_response_spec_means_no_extra_attempt():
     """Nothing to parse, so nothing to retry for - behaviour is unchanged."""
     _, sent = _run([GOOD], None, attempts=1)
     assert sent == 1
+
+
+# === the allowance, and what is actually required ===
+
+
+def test_extraction_allowance_is_three():
+    """Two proved too few: a 12B missed the same section twice in a row."""
+    from talemate.game.engine.nodes.prompt import EXTRACTION_ATTEMPTS
+
+    assert EXTRACTION_ATTEMPTS == 3
+
+
+def test_three_attempts_are_used_before_giving_up():
+    spec = _Spec()
+    with pytest.raises(ExtractionError):
+        _run([BAD, BAD, BAD], spec, attempts=3)
+    assert spec.calls == 3
+
+
+def test_the_visual_prompt_no_longer_requires_the_descriptive_half():
+    """`descriptive` is unused downstream in KEYWORDS mode.
+
+    `anchors.py:434-437` says so outright, and `characters_in_frame` already falls
+    back to every supplied character when the prose is absent. Failing an entire
+    visualize because an optional hint was missing was the real defect; the retry
+    only treated the symptom.
+    """
+    import json
+    from pathlib import Path
+
+    graph = json.loads(
+        (
+            Path(__file__).resolve().parents[1]
+            / "src/talemate/agents/visual/modules/generate-visual-asset.json"
+        ).read_text(encoding="utf-8")
+    )
+    raw = graph["nodes"]
+    nodes = raw if isinstance(raw, dict) else {n["id"]: n for n in raw}
+
+    specs = [
+        n for n in nodes.values() if n.get("registry") == "response/ResponseSpec"
+    ]
+    assert specs, "no ResponseSpec node in the visual-asset graph"
+
+    for spec in specs:
+        required = spec["properties"].get("required") or []
+        assert "keywords" in required, "keywords must stay required - it is the prompt"
+        assert "descriptive" not in required, (
+            "descriptive is required again; a missing optional hint will abort visualize"
+        )

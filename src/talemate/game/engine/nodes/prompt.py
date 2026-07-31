@@ -27,6 +27,10 @@ if TYPE_CHECKING:
 
 log = structlog.get_logger("talemate.game.engine.nodes.prompt")
 
+# How many times a response spec may fail to extract before the action gives up. Separate
+# from a node's own `attempts`, which only ever covered empty responses.
+EXTRACTION_ATTEMPTS = 3
+
 TYPE_CHOICES.extend(
     [
         "prompt",
@@ -696,10 +700,16 @@ class GenerateResponse(Node):
         # a required section is a different failure and used to abort the whole action:
         # observed live, a 12B omitted the `descriptive` half of a visual prompt and the
         # visualize died before ComfyUI was ever contacted. A format slip from a small
-        # local model is routine, so extraction gets its own allowance - one further call
-        # is cheaper than losing the action. Graphs that ask for more keep what they ask
-        # for.
-        send_attempts = max(attempts, 2) if response_spec is not None else attempts
+        # local model is routine, so extraction gets its own allowance - a further call is
+        # cheaper than losing the action. Graphs that ask for more keep what they ask for.
+        #
+        # Raised from 2 to 3 after two attempts still proved too few: a 12B missed the same
+        # section twice in a row on `investigate_1024`. Three is a judgement, not a
+        # measurement - past that, the model is not going to produce the format and paying
+        # for more calls is worse than failing.
+        send_attempts = (
+            max(attempts, EXTRACTION_ATTEMPTS) if response_spec is not None else attempts
+        )
 
         data_obj = None
         extracted = None

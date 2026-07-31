@@ -2034,8 +2034,7 @@
       "id": "d4a3e2a2-55b3-46ca-9232-f7062e41c0c1",
       "properties": {
         "required": [
-          "keywords",
-          "descriptive"
+          "keywords"
         ]
       },
       "x": 1571,
