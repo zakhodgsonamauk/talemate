@@ -123,6 +123,76 @@ def normalise_sex(value: str | None) -> str | None:
         return "female"
     return None
 
+
+def dominant_sex(text: str | None) -> str | None:
+    """
+    Read the sex from free prose by which signal dominates.
+
+    Stricter matching is right for a dedicated gender field, but prose describing one
+    person routinely mentions another - "her brother", "the captain and his crew" - so a
+    single opposing word should not veto the answer. A clear majority decides; a tie
+    decides nothing.
+    """
+    if not text or not text.strip():
+        return None
+
+    male = len(_MALE_RE.findall(text))
+    female = len(_FEMALE_RE.findall(text))
+
+    if male > female:
+        return "male"
+    if female > male:
+        return "female"
+    return None
+
+
+# Attribute names carrying the sex outright. Characters authored from a character card use
+# lowercase; ones generated in play can arrive Title-Cased, hence the case-insensitive
+# lookup rather than a direct `get`.
+_GENDER_ATTRIBUTE_KEYS = ("gender", "sex")
+
+# Fallback prose. A character generated during play may have no gender attribute at all -
+# observed with a character whose attributes were Age/Appearance/Background/Personality and
+# nothing else - while the appearance text says "his beard is full".
+_SEX_PROSE_ATTRIBUTE_KEYS = ("appearance", "description", "physical description")
+
+
+def character_sex(character) -> str | None:
+    """
+    Determine a character's sex from the best evidence available.
+
+    Explicit gender attribute first and read strictly. Only if that is missing or
+    unreadable does prose get consulted, and then by dominant signal.
+    """
+    if character is None:
+        return None
+
+    attributes = getattr(character, "base_attributes", None) or {}
+    lowered = {str(key).strip().lower(): value for key, value in attributes.items()}
+
+    stated = False
+    for key in _GENDER_ATTRIBUTE_KEYS:
+        value = str(lowered.get(key) or "").strip()
+        if not value:
+            continue
+        stated = True
+        sex = normalise_sex(value)
+        if sex:
+            return sex
+
+    # A gender that was stated but reads as neither - "non-binary", "androgynous" - is an
+    # answer, not a gap. Prose full of gendered words must not overrule it; only a missing
+    # attribute licenses the fallback.
+    if stated:
+        return None
+
+    for key in _SEX_PROSE_ATTRIBUTE_KEYS:
+        sex = dominant_sex(str(lowered.get(key) or ""))
+        if sex:
+            return sex
+
+    return dominant_sex(str(getattr(character, "description", "") or ""))
+
 # Cost of one emphasis group: the brackets and the weight itself.
 EMPHASIS_TOKEN_OVERHEAD = 4
 
@@ -643,7 +713,7 @@ class GenerationMixin:
         if not primary:
             return None
 
-        return normalise_sex(getattr(primary, "gender", "") or "")
+        return character_sex(primary)
 
     async def _add_sex_tags(
         self, keywords: list[str], request: GenerationRequest
