@@ -1,12 +1,22 @@
 <|SECTION:VISUAL CONTEXT|>
-{% set queries = [] %}
 {#
 Appearance is NOT queried here. It comes from cached visual anchors, injected
 after this prompt runs (agents/visual/style.py). Asking the LLM to re-describe
 each character on every generation is what made the same character arrive as a
 different person in every image, and it cost one query per character per image.
 See docs/fork/visual-consistency-design.md.
+
+The scene query itself is skipped when prompt distillation is on: the distiller
+re-derives the moment from the instructions and the recent story context anyway,
+so this call's answer would be paid for and then thrown away. Prompt building
+was measured slower than image generation with it in.
 #}
+{% if agent_config("visual._distillation.enabled") %}
+{% capture_context %}
+The final prompt is composed downstream from richer context; keywords from this pass seed it.
+{% end_capture_context %}
+{% else %}
+{% set queries = [] %}
 {% if not instructions %}
 {% set _ = queries.append({"id": "scene", "query": "What is happening in the current scene? Include details about the moment, actions, interactions between characters, and the environment.", "at_the_end": True}) %}
 {% else %}
@@ -17,6 +27,7 @@ See docs/fork/visual-consistency-design.md.
 {% capture_context %}
 {{ results["scene"] }}
 {% end_capture_context %}
+{% endif %}
 
 <|CLOSE_SECTION|>
 

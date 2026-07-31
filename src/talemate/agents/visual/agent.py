@@ -269,12 +269,25 @@ class VisualAgent(
                         note=AgentActionNote(
                             color="warning",
                             text=(
-                                "Needs a capable, uncensored text model on this agent's "
-                                "client - a weak model here reintroduces every prompt "
-                                "problem this exists to fix. Bake-off evidence (2026-07-31): "
-                                "glm-5.2:cloud on Ollama. The story prose in view of the "
-                                "call leaves the machine when the client is a cloud model."
+                                "Needs a capable, uncensored text model - a weak model "
+                                "here reintroduces every prompt problem this exists to "
+                                "fix. Bake-off evidence (2026-07-31): glm-5.2:cloud on "
+                                "Ollama. The story prose in view of the call leaves the "
+                                "machine when the client is a cloud model."
                             ),
+                        ),
+                    ),
+                    "client": AgentActionConfig(
+                        type="text",
+                        value="",
+                        label="Distillation client",
+                        description=(
+                            "Client (by name) used ONLY for the distillation call. "
+                            "Leave empty to use the agent's own client. Splitting them "
+                            "lets the agent's other, discarded-anyway prompt work stay "
+                            "on a fast local model while distillation gets the capable "
+                            "cloud one - prompt building was measured slower than image "
+                            "generation with everything on the cloud client."
                         ),
                     ),
                 },

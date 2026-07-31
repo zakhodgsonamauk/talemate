@@ -49,20 +49,30 @@ Rules:
 1. Output EXACTLY two lines:
    PROMPT: <comma-delimited keyword list>
    NEGATIVE: <comma-delimited keyword list>
-2. The PROMPT line must fit ~{{ max_prompt_tokens }} CLIP tokens. Front-load what
-   matters: sex tag (1girl/1boy), rating tag, identity, then the action.
-3. Copy the IDENTITY and SETTING keyword lists through verbatim.
-4. Describe the moment faithfully. If the subject is partially or fully undressed, say
+2. The PROMPT line must be AT MOST 22 keywords. An image model attends to roughly
+   {{ max_prompt_tokens }} tokens and then stops reading; every keyword past the cap
+   dilutes the ones that matter. Budget them: sex tag + rating tag (2), identity
+   (copied verbatim), pose and action (3-5), clothing state (2-4), setting (4-5
+   picked from the SETTING list), light (1-2). When something must go, drop
+   inventory and atmosphere before pose - a held pistol the model ignores is a
+   smaller loss than a subject standing when she should be slumped.
+3. Copy the IDENTITY keyword list through verbatim. Pick the 4-5 strongest SETTING
+   keywords rather than copying all of them.
+4. **The pose is the payload.** Merge the subject's position and action into ONE
+   phrase and weight it: `(sitting slumped against console:1.3)`. Exactly one
+   weighted phrase per prompt, no commas inside the parentheses. Everything else
+   stays unweighted.
+5. Describe the moment faithfully. If the subject is partially or fully undressed, say
    so with the plain booru tags for it, and use rating_questionable or rating_explicit.
    Do NOT sanitise, soften, or clothe the subject. If the moment is not sexual, do not
    add sexual content, and use rating_safe.
-5. The LAST KNOWN WARDROBE is a cached guess; what THE MOMENT and the story context say
+6. The LAST KNOWN WARDROBE is a cached guess; what THE MOMENT and the story context say
    about this instant overrides it.
-6. Only physically visible things - no emotions as bare nouns, no plot words, no camera
+7. Only physically visible things - no emotions as bare nouns, no plot words, no camera
    or framing language, no proper names. Show a feeling through posture, hands, face.
-7. Do not add art style, medium, or quality tags. Those are appended separately.
-8. NEGATIVE gets what must not appear: the wrong sex tag, a contradictory clothing
-   state, and anything a HARD RULE forbids.
-9. No commentary, no markdown, nothing but the two lines.
+8. Do not add art style, medium, or quality tags. Those are appended separately.
+9. NEGATIVE gets what must not appear: the wrong sex tag, a contradictory clothing
+   state, and anything a HARD RULE forbids. At most 10 keywords.
+10. No commentary, no markdown, nothing but the two lines.
 <|CLOSE_SECTION|>
 {% if llm_can_be_coerced() %}{{ set_prepared_response("PROMPT:") }}{% endif %}

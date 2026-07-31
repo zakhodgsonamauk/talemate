@@ -647,10 +647,30 @@ class GenerationMixin:
             log.warning("distill_prompt.no_context_history", error=str(e))
             recent = []
 
+        # Distillation may run on its own client: the capable cloud model does this
+        # one call, while the agent's other prompt work (whose output distillation
+        # discards) stays on something fast and local.
+        client = self.client
+        try:
+            configured = (self.resolve_config("_distillation", "client") or "").strip()
+        except Exception:
+            configured = ""
+        if configured:
+            from talemate.instance import get_client
+
+            try:
+                client = get_client(configured)
+            except KeyError:
+                log.warning(
+                    "distill_prompt.client_not_found",
+                    configured=configured,
+                    fallback=getattr(self.client, "name", None),
+                )
+
         try:
             raw, _ = await Prompt.request(
                 "visual.distill-image-prompt",
-                self.client,
+                client,
                 # Parametric kind: "visualize" alone caps the response at 150 tokens,
                 # which a thinking model spends before writing a single keyword.
                 "visualize_long",
