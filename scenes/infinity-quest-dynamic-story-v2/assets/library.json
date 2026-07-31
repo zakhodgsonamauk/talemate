@@ -550,6 +550,240 @@
           "h": 1.0
         }
       }
+    },
+    "ab89df944b105303c6edf9421d2733368c061266e60d49db67f5176a14d1036d": {
+      "id": "ab89df944b105303c6edf9421d2733368c061266e60d49db67f5176a14d1036d",
+      "file_type": "png",
+      "media_type": "image/png",
+      "meta": {
+        "name": null,
+        "vis_type": "CHARACTER_CARD",
+        "gen_type": "IMAGE_EDIT",
+        "character_name": "Kaira",
+        "prompt": "score_9, score_8_up, score_7_up, semi-realistic, detailed painterly rendering, realistic anatomy, cinematic lighting, sharp focus, solo, looking at viewer, 1girl, rating_safe, violet skin, geometric facial markings, indigo hair, large black eyes, tall stature, four-fingered hands, (standing gripping man's shoulder scanning room:1.3), open jacket, low cut top, gambling den, nar shaddaa, space station, dim red lighting, rustic metal architecture, yellow-green glow",
+        "negative_prompt": "1boy, exposed breasts, nude, weapon harness, holstered pulse pistol, sweat, hardened nipples, text, watermark, low quality, blurry, deformed, extra limbs, bad hands, bad anatomy",
+        "format": "PORTRAIT",
+        "resolution": {
+          "width": 832,
+          "height": 1216
+        },
+        "sampler_settings": {
+          "steps": 40,
+          "seed": null
+        },
+        "reference_assets": [
+          "2a2d07de2e420983bf68fbb5190d1a3ef4087fc111d708026bc0cb40f0e7711f"
+        ],
+        "tags": [],
+        "reference": [],
+        "analysis": null,
+        "cover_bbox": {
+          "x": 0.0,
+          "y": 0.0,
+          "w": 1.0,
+          "h": 1.0
+        }
+      }
+    },
+    "9651e23fc02b3f56a6a100f84b70e808d7034437eba1fbadecfbf1564c182a4c": {
+      "id": "9651e23fc02b3f56a6a100f84b70e808d7034437eba1fbadecfbf1564c182a4c",
+      "file_type": "png",
+      "media_type": "image/png",
+      "meta": {
+        "name": null,
+        "vis_type": "CHARACTER_CARD",
+        "gen_type": "IMAGE_EDIT",
+        "character_name": "Kaira",
+        "prompt": "score_9, score_8_up, score_7_up, semi-realistic, detailed painterly rendering, realistic anatomy, cinematic lighting, sharp focus, solo, looking at viewer, rating_safe, 1girl, violet skin, geometric facial markings, indigo hair, large black eyes, tall stature, four-fingered hands, (standing tense hand gripping shoulder:1.3), open jacket, tank top, grey-blue combat trousers, gambling den, nar shaddaa, dim red lighting, rustic metal architecture, holographic displays",
+        "negative_prompt": "1boy, exposed breasts, nude, weapon harness, holstered pulse pistol, sweat, hardened nipples, text, watermark, low quality, blurry, deformed, extra limbs, bad hands, bad anatomy",
+        "format": "PORTRAIT",
+        "resolution": {
+          "width": 832,
+          "height": 1216
+        },
+        "sampler_settings": {
+          "steps": 40,
+          "seed": null
+        },
+        "reference_assets": [
+          "ab89df944b105303c6edf9421d2733368c061266e60d49db67f5176a14d1036d"
+        ],
+        "tags": [],
+        "reference": [],
+        "analysis": null,
+        "cover_bbox": {
+          "x": 0.0,
+          "y": 0.0,
+          "w": 1.0,
+          "h": 1.0
+        }
+      }
+    },
+    "c54f771530e9a5ea338787fdb3d76546339b22791c797975df6158aa76816c78": {
+      "id": "c54f771530e9a5ea338787fdb3d76546339b22791c797975df6158aa76816c78",
+      "file_type": "png",
+      "media_type": "image/png",
+      "meta": {
+        "name": null,
+        "vis_type": "CHARACTER_CARD",
+        "gen_type": "IMAGE_EDIT",
+        "character_name": "Kaira",
+        "prompt": "score_9, score_8_up, score_7_up, semi-realistic, detailed painterly rendering, realistic anatomy, cinematic lighting, sharp focus, solo, looking at viewer, 1girl, rating_safe, violet skin, geometric facial markings, indigo hair, large black eyes, tall stature, four-fingered hands, fitted jacket, low-cut top, big cleavage, grey-blue combat trousers, boots, sweaty skin, cut above eyebrow, gambling den, nar shaddaa, dim red lighting, rustic metal architecture, holographic displays",
+        "negative_prompt": "1boy, nude, smiling, relaxed, running, standing still, bright lighting, clean skin, multiple people, text, watermark, low quality, blurry, deformed, extra limbs, bad hands, bad anatomy",
+        "format": "PORTRAIT",
+        "resolution": {
+          "width": 832,
+          "height": 1216
+        },
+        "sampler_settings": {
+          "steps": 40,
+          "seed": null
+        },
+        "reference_assets": [
+          "2a2d07de2e420983bf68fbb5190d1a3ef4087fc111d708026bc0cb40f0e7711f"
+        ],
+        "tags": [],
+        "reference": [],
+        "analysis": null,
+        "cover_bbox": {
+          "x": 0.0,
+          "y": 0.0,
+          "w": 1.0,
+          "h": 1.0
+        }
+      }
+    },
+    "f1fe958dfd6d4432020351f610713e7e4cae3f47cde9dd030064e1cf69414026": {
+      "id": "f1fe958dfd6d4432020351f610713e7e4cae3f47cde9dd030064e1cf69414026",
+      "file_type": "png",
+      "media_type": "image/png",
+      "meta": {
+        "name": null,
+        "vis_type": "CHARACTER_CARD",
+        "gen_type": "TEXT_TO_IMAGE",
+        "character_name": "Entropy",
+        "prompt": "score_9, score_8_up, score_7_up, semi-realistic, detailed painterly rendering, realistic anatomy, cinematic lighting, sharp focus, solo, looking at viewer, male, rating_safe, small hovering drone, dark metallic shell, smooth curves, band of indicator lights along equator, amber to blue-white lights, (hovering directly above and behind two figures full body visible:1.3), dim red lighting, rustic metal architecture, card tables, holographic displays, gambling den, nar shaddaa, space station",
+        "negative_prompt": "female, human, humanoid, face, standing alone, solo, text, watermark, weapons, low quality, blurry, deformed, extra limbs, bad hands, bad anatomy",
+        "format": "PORTRAIT",
+        "resolution": {
+          "width": 832,
+          "height": 1216
+        },
+        "sampler_settings": {
+          "steps": 40,
+          "seed": null
+        },
+        "reference_assets": [],
+        "tags": [],
+        "reference": [],
+        "analysis": null,
+        "cover_bbox": {
+          "x": 0.0,
+          "y": 0.0,
+          "w": 1.0,
+          "h": 1.0
+        }
+      }
+    },
+    "9993e1d597e0462dc8b15e83bf81a316f4a31ab3da80819132d9dd9b5da19ea7": {
+      "id": "9993e1d597e0462dc8b15e83bf81a316f4a31ab3da80819132d9dd9b5da19ea7",
+      "file_type": "jpeg",
+      "media_type": "image/jpeg",
+      "meta": {
+        "name": "",
+        "vis_type": "CHARACTER_CARD",
+        "gen_type": "TEXT_TO_IMAGE",
+        "character_name": "Hannah",
+        "prompt": "",
+        "negative_prompt": "",
+        "format": "PORTRAIT",
+        "resolution": {
+          "width": 852,
+          "height": 1204
+        },
+        "sampler_settings": null,
+        "reference_assets": [],
+        "tags": [],
+        "reference": [
+          "CHARACTER_CARD",
+          "CHARACTER_PORTRAIT"
+        ],
+        "analysis": "",
+        "cover_bbox": {
+          "x": 0.0,
+          "y": 0.0,
+          "w": 1.0,
+          "h": 1.0
+        }
+      }
+    },
+    "c20a999f9ef7c6d1d19894cb92ec51c18b9f3ff35ffae83d42e423fd80a5536f": {
+      "id": "c20a999f9ef7c6d1d19894cb92ec51c18b9f3ff35ffae83d42e423fd80a5536f",
+      "file_type": "png",
+      "media_type": "image/png",
+      "meta": {
+        "name": null,
+        "vis_type": "CHARACTER_CARD",
+        "gen_type": "IMAGE_EDIT",
+        "character_name": "Kaira",
+        "prompt": "score_9, score_8_up, score_7_up, semi-realistic, detailed painterly rendering, realistic anatomy, cinematic lighting, sharp focus, solo, looking at viewer, 1girl, violet skin, geometric facial markings, indigo hair, large black eyes, tall stature, four-fingered hands, (standing ready with disruptor pistol aimed at unseen target:1.3), dark combat jumpsuit unzipped, ample cleavage, sweat-beaded skin, starship weapons locker, metal bulkheads, shelved racks, utilitarian interior, recessed artificial lighting, dim amber glow on forearms",
+        "negative_prompt": "1boy, fully clothed, smiling, relaxed posture, outdoor setting, bright lighting, clean skin, resting position, holster visible, multiple people, text, watermark, low quality, blurry, deformed, extra limbs, bad hands, bad anatomy",
+        "format": "PORTRAIT",
+        "resolution": {
+          "width": 832,
+          "height": 1216
+        },
+        "sampler_settings": {
+          "steps": 40,
+          "seed": null
+        },
+        "reference_assets": [
+          "2a2d07de2e420983bf68fbb5190d1a3ef4087fc111d708026bc0cb40f0e7711f"
+        ],
+        "tags": [],
+        "reference": [],
+        "analysis": null,
+        "cover_bbox": {
+          "x": 0.0,
+          "y": 0.0,
+          "w": 1.0,
+          "h": 1.0
+        }
+      }
+    },
+    "9555dd59e78b7f787519825a726cfc7bfb91ca787cf085f5b785d079d5435576": {
+      "id": "9555dd59e78b7f787519825a726cfc7bfb91ca787cf085f5b785d079d5435576",
+      "file_type": "png",
+      "media_type": "image/png",
+      "meta": {
+        "name": null,
+        "vis_type": "CHARACTER_CARD",
+        "gen_type": "IMAGE_EDIT",
+        "character_name": "Kaira",
+        "prompt": "score_9, score_8_up, score_7_up, semi-realistic, detailed painterly rendering, realistic anatomy, cinematic lighting, sharp focus, solo, looking at viewer, 1girl, violet skin, geometric facial markings, indigo hair, large black eyes, tall stature, four-fingered hands, dark combat jumpsuit, scorch marks, sweat-beaded skin, (standing tense holding disruptor pistol lowered:1.3), starship weapons locker, metal bulkheads, shelved racks, recessed artificial lighting, rating_safe",
+        "negative_prompt": "1boy, nude, relaxed posture, smiling, bright lighting, outdoor setting, clean skin, armor, text, watermark, low quality, blurry, deformed, extra limbs, bad hands, bad anatomy",
+        "format": "PORTRAIT",
+        "resolution": {
+          "width": 832,
+          "height": 1216
+        },
+        "sampler_settings": {
+          "steps": 40,
+          "seed": null
+        },
+        "reference_assets": [
+          "c20a999f9ef7c6d1d19894cb92ec51c18b9f3ff35ffae83d42e423fd80a5536f"
+        ],
+        "tags": [],
+        "reference": [],
+        "analysis": null,
+        "cover_bbox": {
+          "x": 0.0,
+          "y": 0.0,
+          "w": 1.0,
+          "h": 1.0
+        }
+      }
     }
   }
 }
