@@ -1349,7 +1349,17 @@ class ClientBase:
 
             # Check for empty response
             if not response or not response.strip():
-                self.log.warning("empty response from generation")
+                # Head and tail of the prompt, because "empty" is almost always a
+                # property of the prompt (context overflow, an immediate stopping
+                # string, a coercion the model declined) and by the time anyone
+                # investigates, the prompt is gone.
+                self.log.warning(
+                    "empty response from generation",
+                    kind=kind,
+                    parameters=prompt_param,
+                    prompt_head=finalized_prompt[:400],
+                    prompt_tail=finalized_prompt[-600:],
+                )
                 action = await self._prompt_generation_error(
                     EMPTY_RESPONSE_MESSAGE, status_code=None
                 )
