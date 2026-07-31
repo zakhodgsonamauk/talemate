@@ -752,6 +752,7 @@ class SceneDirectionMixin:
         | None = None,
         always_on: bool = False,
         max_actions: int | None = None,
+        manual: bool = False,
     ) -> tuple[list[SceneDirectionActionResultMessage], bool]:
         """
         Execute a scene direction turn - analyze the scene and perform any needed actions.
@@ -760,6 +761,8 @@ class SceneDirectionMixin:
             on_action_complete: Optional callback for each action completed
             always_on: If True, override enabled check and always execute
             max_actions: Optional override for max actions per turn (None = use agent config)
+            manual: True for user-triggered runs (websocket handlers) - keeps the
+                enabled check but bypasses the frequency gate
 
         Returns:
             tuple: (actions_taken, yield_to_user)
@@ -770,8 +773,12 @@ class SceneDirectionMixin:
             return [], False
 
         # frequency lever: only take every Nth eligible round; manual
-        # (always_on) runs bypass the gate
-        if not always_on and not self._direction_frequency_gate():
+        # (user-triggered) and always_on runs bypass the gate
+        if (
+            not always_on
+            and not manual
+            and not self._direction_frequency_gate()
+        ):
             return [], False
 
         # Set context to indicate we're in a direction turn

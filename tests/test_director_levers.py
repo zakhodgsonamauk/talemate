@@ -115,6 +115,29 @@ class TestFrequencyGate:
         result = await director.direction_execute_turn(always_on=True)
         assert result == (["generated"], True)
 
+    @pytest.mark.asyncio
+    async def test_manual_bypasses_gate_but_not_enabled_check(
+        self, director, monkeypatch
+    ):
+        """User-triggered (websocket) runs bypass the frequency gate while
+        still respecting the enabled check."""
+        _set_config(director, "frequency", 99)
+
+        async def fake_generate(**kwargs):
+            return (["generated"], True)
+
+        monkeypatch.setattr(director, "_direction_generate", fake_generate)
+
+        # direction disabled: manual run still refuses
+        assert await director.direction_execute_turn(manual=True) == ([], False)
+
+        director.actions["scene_direction"].enabled = True
+        try:
+            result = await director.direction_execute_turn(manual=True)
+        finally:
+            director.actions["scene_direction"].enabled = False
+        assert result == (["generated"], True)
+
 
 def _make_plan(scene, *, status=PlanStatus.executing, task_count=2) -> Plan:
     plan = Plan(

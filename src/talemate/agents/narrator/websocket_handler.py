@@ -120,7 +120,7 @@ class NarratorWebsocketHandler(Plugin):
         await director.direction_append_message(
             UserInteractionMessage(user_input=query, is_direction=True)
         )
-        await director.direction_execute_turn()
+        await director.direction_execute_turn(manual=True)
         return True
 
     @set_loading("Looking at the scene", cancellable=True, as_async=True)

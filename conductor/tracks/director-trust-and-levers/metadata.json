@@ -3,12 +3,12 @@
   "track_id": "director-trust-and-levers",
   "name": "Director trust and autonomy levers",
   "type": "feature",
-  "status": "planned",
+  "status": "implemented",
   "superpower_enhanced": true,
   "created": "2026-07-31",
   "loop_state": {
-    "current_step": "EXECUTE",
-    "step_status": "IN_PROGRESS"
+    "current_step": "EVALUATE_EXECUTION",
+    "step_status": "COMPLETED"
   },
-  "notes": "Spec and plan authored in-session from live debugging context (2026-07-31). Plan step and plan evaluation intentionally pre-completed: designs were validated against source during the session itself. Execution should start directly. Sibling track autonomous-story owns the deep scene-loop rework - see spec 'Relationship' section."
+  "notes": "Executed 2026-07-31 (commits 5ffdddf, a1d15e3, 2cf2a84, ed32a97, 1908f7c). All ACs met; per-phase + final second-opinion reviews run (dispositions in review-notes.md). Static verification only - user must restart the backend and run the live-test checklist in report.md. Sibling track autonomous-story owns the deep scene-loop rework; the single loop change here is DECISION-005."
 }

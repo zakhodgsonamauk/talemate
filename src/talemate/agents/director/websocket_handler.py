@@ -101,7 +101,7 @@ class DirectorWebsocketHandler(DirectorChatWebsocketMixin, Plugin):
                 user_input=payload.instructions, is_direction=True
             )
             await self.director.direction_append_message(message)
-        await self.director.direction_execute_turn()
+        await self.director.direction_execute_turn(manual=True)
 
     @set_loading("Generating dynamic actions", cancellable=True, as_async=True)
     async def handle_request_dynamic_choices(self, data: dict):
