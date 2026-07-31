@@ -75,10 +75,10 @@ When setting pins you can optionally provide a condition to automatically activa
 <|SECTION:Chat History - THIS IS WHAT YOU RESPOND TO|>
 {% for m in trimmed_history %}
 {% if m.type == 'action_result' %}
-[#{{ loop.index }}] [action] Executed `{{ m.name }}`
+[#{{ loop.index }}] [action] Executed `{{ m.name }}`{% if m.status and m.status != 'success' %} [STATUS: {{ m.status|upper }}]{% endif %}
 Instructions: `{{ m.instructions }}`
 
-Result: {{ json(m.result) }}
+Result{% if m.status and m.status != 'success' %} ({{ m.status|upper }} - the action did NOT succeed, do not report success){% endif %}: {{ json(m.result) }}
 ---
 {% elif m.type == 'asset_view' %}
 [#{{ loop.index }}] [{{ m.source }}]{% if m.message %} {{ m.message }}{% endif %} [IMAGE SHOWN: asset_id={{ m.asset_id }}]

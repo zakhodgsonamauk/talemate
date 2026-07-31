@@ -196,8 +196,11 @@ class TestExecuteSequential:
         assert len(focal.state.calls) == 2
 
     @pytest.mark.asyncio
-    async def test_unknown_callback_skipped(self, mock_client, setup_director):
-        """Calls referencing unknown callbacks are skipped without error."""
+    async def test_unknown_callback_recorded_not_executed(
+        self, mock_client, setup_director
+    ):
+        """Calls referencing unknown callbacks are recorded as failed (so
+        summaries can surface them) but never executed."""
         called = []
 
         async def known_fn(text):
@@ -218,9 +221,14 @@ class TestExecuteSequential:
         await focal._execute(response, State())
 
         assert called == ["run me"]
-        # Only the known call is appended to state
-        assert len(focal.state.calls) == 1
-        assert focal.state.calls[0].name == "known"
+        # Both calls are recorded; the unknown one as a failed attempt
+        assert len(focal.state.calls) == 2
+        unknown_call = focal.state.calls[0]
+        assert unknown_call.name == "unknown"
+        assert unknown_call.called is False
+        assert "Unknown function" in unknown_call.error
+        assert focal.state.calls[1].name == "known"
+        assert focal.state.calls[1].called is True
 
     @pytest.mark.asyncio
     async def test_callback_error_stored_and_execution_continues(

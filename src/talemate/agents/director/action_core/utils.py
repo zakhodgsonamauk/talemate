@@ -759,11 +759,16 @@ async def execute_actions(
     async def on_call_complete(call: focal.Call):
         if call.name not in ordered_instructions:
             return
+        failed = not call.called or call.error
+        result = call.result
+        if failed:
+            result = f"FAILED: {call.error or 'the action was not executed'}"
         action_msg = create_result(
             name=call.name,
             arguments=call.arguments or {},
-            result=call.result,
+            result=result,
             instructions=selection_instructions.get(call.name),
+            status="error" if failed else "success",
         )
         result_messages.append(action_msg)
         if on_action_complete:

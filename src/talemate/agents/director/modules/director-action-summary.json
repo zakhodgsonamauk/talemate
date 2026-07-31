@@ -277,7 +277,7 @@
       "title": "Advanced Format",
       "id": "f4052651-2d29-4e43-8303-0d8387cdfe7a",
       "properties": {
-        "template": "No action's were taken."
+        "template": "NO CHANGES WERE MADE: none of the requested operations were executed. The request failed - do NOT report success to the user; state that the action did not take effect."
       },
       "x": 37,
       "y": 389,

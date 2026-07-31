@@ -160,15 +160,19 @@ class Focal:
         if response:
             await self._execute(response, State())
 
-        # if no calls were made and we still have retries, try again
-        if not self.state.calls and retry_state["retries"] > 0:
+        # if no calls were successfully executed and we still have retries,
+        # try again (recorded-but-failed calls don't count as progress)
+        if (
+            not any(call.called for call in self.state.calls)
+            and retry_state["retries"] > 0
+        ):
             log.warning(
                 "focal.request - NO CALLS MADE - retrying",
                 retries=retry_state["retries"],
             )
             retry_state["retries"] -= 1
             return await self.request(
-                template_name=template_name, retry_state=retry_state
+                template_name=template_name, prompt=prompt, retry_state=retry_state
             )
 
         return response
@@ -192,6 +196,10 @@ class Focal:
 
             if call.name not in self.callbacks:
                 log.warning("focal.execute.unknown_callback", name=call.name)
+                # record the attempt so summaries and result messages can
+                # surface it instead of it vanishing silently
+                call.error = f"Unknown function '{call.name}' - no such action exists"
+                self.state.calls.append(call)
                 i += 1
                 continue
 
@@ -277,9 +285,6 @@ class Focal:
             call.result = result
             call.called = True
 
-            if focal_context:
-                await focal_context.process_after_hooks(call)
-
         except Exception as e:
             if getattr(e, "focal_reraise", False):
                 raise e
@@ -290,12 +295,41 @@ class Focal:
             )
             call.error = str(e)
 
+        # after-hooks run for successful AND failed calls (so failures still
+        # produce result messages) - only reraised rejections skip them
+        if focal_context:
+            try:
+                await focal_context.process_after_hooks(call)
+            except Exception:
+                log.error(
+                    "focal.execute.after_hooks_error",
+                    callback=call.name,
+                    error=traceback.format_exc(),
+                )
+
+    def _calls_from_data(self, data: list) -> list[Call]:
+        """
+        Convert extracted data items to Call objects one at a time - a single
+        invalid item must not discard its valid siblings.
+        """
+        calls: list[Call] = []
+        for item in data:
+            try:
+                calls.append(Call(**item))
+            except Exception as e:
+                log.warning(
+                    "focal.extract.invalid_call - skipping",
+                    item=item,
+                    error=str(e),
+                )
+        return calls
+
     async def _extract(self, response: str) -> list[Call]:
         # first try to extract data from the response using tooling
         try:
             data = extract_data(response, self.state.schema_format)
             if data:
-                return [Call(**call) for call in data]
+                return self._calls_from_data(data)
         except Exception as e:
             log.warning(
                 "focal.extract.data FAILED - attempting fenced block",
@@ -306,7 +340,7 @@ class Focal:
             text = f"```{self.state.schema_format}\n{response}\n```"
             data = extract_data(text, self.state.schema_format)
             if data:
-                return [Call(**call) for call in data]
+                return self._calls_from_data(data)
         except Exception as e:
             log.warning(
                 "focal.extract.data FAILED - attempting to use AI to extract calls",
@@ -334,7 +368,7 @@ class Focal:
             dedupe_enabled=False,
         )
 
-        calls = [Call(**call) for call in calls_json.get("calls", [])]
+        calls = self._calls_from_data(calls_json.get("calls", []))
 
         log.debug("focal.extract", calls=calls)
 
