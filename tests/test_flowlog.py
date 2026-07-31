@@ -59,3 +59,24 @@ class TestFlow:
         except ValueError:
             pass
         assert "flow" not in structlog.contextvars.get_contextvars()
+
+
+class TestNestedFlows:
+    def test_nested_flow_restores_outer_flow_key(self):
+        with flowlog.flow("outer") as outer_id:
+            with flowlog.flow("inner") as inner_id:
+                assert structlog.contextvars.get_contextvars()["flow"] == inner_id
+            assert structlog.contextvars.get_contextvars()["flow"] == outer_id
+        assert "flow" not in structlog.contextvars.get_contextvars()
+
+    def test_nested_calls_attribute_to_inner_flow(self):
+        with structlog.testing.capture_logs() as captured:
+            with flowlog.flow("outer"):
+                flowlog.record_llm_call(agent="a", duration=1.0)
+                with flowlog.flow("inner"):
+                    flowlog.record_llm_call(agent="b", duration=2.0)
+        summaries = [e for e in captured if e["event"] == "flow.summary"]
+        assert len(summaries) == 2
+        inner, outer = summaries
+        assert inner["agents"] == {"b": 1}
+        assert outer["agents"] == {"a": 1}

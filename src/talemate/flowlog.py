@@ -40,26 +40,29 @@ def flow(name: str):
     flow_id = f"{name}:{uuid.uuid4().hex[:6]}"
     calls: list[dict] = []
     calls_token = _flow_calls.set(calls)
-    structlog.contextvars.bind_contextvars(flow=flow_id)
-    try:
-        yield flow_id
-    finally:
+    # bound_contextvars restores any outer flow's value on exit, so nested
+    # flows do not clobber each other
+    with structlog.contextvars.bound_contextvars(flow=flow_id):
         try:
-            if calls:
-                per_agent: dict[str, int] = {}
-                for call in calls:
-                    agent = call.get("agent") or "unattributed"
-                    per_agent[agent] = per_agent.get(agent, 0) + 1
-                log.info(
-                    "flow.summary",
-                    llm_calls=len(calls),
-                    llm_seconds=round(sum(c.get("duration") or 0 for c in calls), 2),
-                    agents=per_agent,
-                )
-        except Exception:
-            pass
-        structlog.contextvars.unbind_contextvars("flow")
-        _flow_calls.reset(calls_token)
+            yield flow_id
+        finally:
+            try:
+                if calls:
+                    per_agent: dict[str, int] = {}
+                    for call in calls:
+                        agent = call.get("agent") or "unattributed"
+                        per_agent[agent] = per_agent.get(agent, 0) + 1
+                    log.info(
+                        "flow.summary",
+                        llm_calls=len(calls),
+                        llm_seconds=round(
+                            sum(c.get("duration") or 0 for c in calls), 2
+                        ),
+                        agents=per_agent,
+                    )
+            except Exception:
+                pass
+            _flow_calls.reset(calls_token)
 
 
 def record_llm_call(**fields):
