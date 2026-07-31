@@ -14,6 +14,16 @@
           <v-tab value="instruct" :disabled="isIterateMode">Instruct</v-tab>
         </v-tabs>
 
+        <v-alert
+          v-if="promptFailed"
+          type="warning"
+          density="compact"
+          variant="tonal"
+          class="mb-3"
+        >
+          The agent did not return a composed prompt. Write one yourself below, or cancel.
+        </v-alert>
+
         <v-window v-model="mode">
           <!-- Prompt Mode -->
           <v-window-item value="prompt">
@@ -22,7 +32,10 @@
               label="Prompt"
               rows="4"
               auto-grow
-              :disabled="generating"
+              :loading="promptLoading"
+              :disabled="generating || promptLoading"
+              :placeholder="promptLoading ? 'Composing prompt…' : undefined"
+              :persistent-placeholder="promptLoading"
               @keydown.enter.exact.prevent="onSubmit"
             />
 
@@ -32,7 +45,8 @@
               label="Negative Prompt"
               rows="2"
               auto-grow
-              :disabled="generating"
+              :loading="promptLoading"
+              :disabled="generating || promptLoading"
             />
 
             <v-row class="mt-2">
@@ -41,7 +55,7 @@
                   v-model="visType"
                   :items="visTypeOptions"
                   label="Vis Type"
-                  :disabled="generating"
+                  :disabled="generating || promptLoading"
                 />
               </v-col>
               <v-col cols="6">
@@ -49,7 +63,7 @@
                   v-model="format"
                   :items="formatOptions"
                   label="Format"
-                  :disabled="generating"
+                  :disabled="generating || promptLoading"
                 />
               </v-col>
             </v-row>
@@ -60,7 +74,7 @@
               class="mt-2"
               :items="characterItems"
               label="Character"
-              :disabled="generating || characterItems.length === 0"
+              :disabled="generating || promptLoading || characterItems.length === 0"
             />
             
             <v-alert
@@ -78,7 +92,7 @@
               title="Reference Images"
               :reference-assets="referenceAssets"
               :inline-reference="inlineReference"
-              :editable="editAvailable"
+              :editable="editAvailable && !promptLoading"
               :max-references="maxReferences"
               :available-asset-ids="availableAssetIds"
               :available-assets-map="availableAssetsMap"
@@ -228,6 +242,28 @@ export default {
       required: false,
       default: () => ({}),
     },
+    // Attachment behaviour for the generated asset, forwarded verbatim as the
+    // request's asset_attachment_context. Set when the generation was started
+    // from somewhere that owns a target (e.g. a scene message that the image
+    // should attach to); left null for the Visual Library's own use.
+    attachmentContext: {
+      type: Object,
+      required: false,
+      default: null,
+    },
+    // True while the backend is still composing the prompt for this request.
+    // The prompt fields hold the loading state rather than the dialog, so the
+    // user sees the vis type and instructions immediately and can cancel.
+    promptLoading: {
+      type: Boolean,
+      default: false,
+    },
+    // Prompt composition finished without returning anything. Editing is
+    // re-enabled so the dialog is still usable by hand rather than stranded.
+    promptFailed: {
+      type: Boolean,
+      default: false,
+    },
   },
   emits: ['update:modelValue'],
   data() {
@@ -245,8 +281,8 @@ export default {
   },
   computed: {
     canSubmit() {
-      if (!this.canGenerate || this.generating) return false;
-      
+      if (!this.canGenerate || this.generating || this.promptLoading) return false;
+
       if (this.mode === 'instruct') {
         // Instruct mode: requires vis_type, and character_name if character vis type
         if (this.isCharacterVisType) {
@@ -319,6 +355,40 @@ export default {
     },
   },
   methods: {
+    applyInitialRequest() {
+      const r = this.initialRequest;
+      if (!r) {
+        this.mode = 'prompt';
+        this.prompt = '';
+        this.negativePrompt = '';
+        this.instructions = '';
+        this.visType = VIS_TYPE.UNSPECIFIED;
+        this.format = FORMAT_TYPE.LANDSCAPE;
+        this.characterName = '';
+        this.referenceAssets = [];
+        return;
+      }
+      // Instructions present and not iterating: the caller wants the agent to
+      // compose the prompt, so start on the instruct tab. A prompt-adjustment
+      // request carries both, and wants the prompt tab — it passes
+      // prefer_prompt_mode to say so.
+      if (r.instructions && r.instructions.trim() && !this.isIterateMode && !r.prefer_prompt_mode) {
+        this.mode = 'instruct';
+        this.instructions = r.instructions.trim();
+      } else {
+        this.mode = 'prompt';
+        // Prompt-adjustment keeps the source text so the instruct tab still
+        // shows what the prompt was composed from; every other caller cleared
+        // it here, so leave that alone.
+        this.instructions = r.prefer_prompt_mode ? (r.instructions || '').trim() : '';
+      }
+      this.prompt = r.prompt || '';
+      this.negativePrompt = r.negative_prompt || '';
+      this.visType = r.vis_type || VIS_TYPE.UNSPECIFIED;
+      this.format = r.format || FORMAT_TYPE.LANDSCAPE;
+      this.characterName = r.character_name || '';
+      this.referenceAssets = (r.reference_assets && Array.isArray(r.reference_assets)) ? r.reference_assets.slice() : [];
+    },
     close() {
       this.internalModel = false;
       this.$emit('update:modelValue', false);
@@ -340,6 +410,19 @@ export default {
         if (this.instructions && this.instructions.trim()) {
           payload.instructions = this.instructions.trim();
         }
+        // `visualize` takes the attachment target as flat keys rather than a
+        // nested context. Without these an adjust-flow request that was
+        // submitted from the Instruct tab would generate an image that never
+        // attaches to — or is even saved for — the message it started from.
+        if (this.attachmentContext) {
+          const ctx = this.attachmentContext;
+          if (ctx.message_ids && ctx.message_ids.length) {
+            payload.message_ids = ctx.message_ids;
+          }
+          payload.save_asset = true;
+          payload.asset_allow_auto_attach = !!ctx.allow_auto_attach;
+          payload.asset_allow_override = !!ctx.allow_override;
+        }
         this.getWebsocket().send(JSON.stringify(payload));
       } else {
         // Prompt mode: use generate endpoint
@@ -360,6 +443,16 @@ export default {
             inline_reference: this.inlineReference || null,
           },
         };
+        // Carry the source text through when there is one, so the saved asset
+        // records what it was composed from and the library can offer
+        // "Regenerate (Instruct)" for it. Callers that clear instructions in
+        // prompt mode are unaffected.
+        if (this.instructions && this.instructions.trim()) {
+          payload.generation_request.instructions = this.instructions.trim();
+        }
+        if (this.attachmentContext) {
+          payload.generation_request.asset_attachment_context = this.attachmentContext;
+        }
         this.getWebsocket().send(JSON.stringify(payload));
       }
       this.close();
@@ -376,32 +469,17 @@ export default {
     modelValue(newVal) {
       this.internalModel = newVal;
       if (newVal) {
-        if (this.initialRequest) {
-          const r = this.initialRequest;
-          // If instructions are present and not in iterate mode, switch to instruct mode
-          if (r.instructions && r.instructions.trim() && !this.isIterateMode) {
-            this.mode = 'instruct';
-            this.instructions = r.instructions.trim();
-          } else {
-            this.mode = 'prompt';
-            this.instructions = '';
-          }
-          this.prompt = r.prompt || '';
-          this.negativePrompt = r.negative_prompt || '';
-          this.visType = r.vis_type || VIS_TYPE.UNSPECIFIED;
-          this.format = r.format || FORMAT_TYPE.LANDSCAPE;
-          this.characterName = r.character_name || '';
-          this.referenceAssets = (r.reference_assets && Array.isArray(r.reference_assets)) ? r.reference_assets.slice() : [];
-        } else {
-          this.mode = 'prompt';
-          this.prompt = '';
-          this.negativePrompt = '';
-          this.instructions = '';
-          this.visType = VIS_TYPE.UNSPECIFIED;
-          this.format = FORMAT_TYPE.LANDSCAPE;
-          this.characterName = '';
-          this.referenceAssets = [];
-        }
+        this.applyInitialRequest();
+      }
+    },
+    // A prompt-adjustment request opens the dialog before the backend has
+    // composed the prompt, then fills it in when the preview arrives. Every
+    // field this re-applies is disabled while promptLoading, so it cannot
+    // discard user input — if you make one of them editable during loading,
+    // this watcher will start clobbering it.
+    initialRequest() {
+      if (this.internalModel) {
+        this.applyInitialRequest();
       }
     },
     internalModel(newVal) {

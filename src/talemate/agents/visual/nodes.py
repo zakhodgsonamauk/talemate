@@ -696,6 +696,59 @@ class UnpackGenerationRequest(AgentNode):
         )
 
 
+@register("agents/visual/FinalizePrompt")
+class FinalizePrompt(AgentNode):
+    """
+    Run the agent's final prompt pass over a generation request.
+
+    Prompt assembly has two halves. The graph builds the first: the LLM's
+    keywords, the art style, and an anchor for every character in frame. The
+    second half lives in Python, in GenerationMixin._finalize_prompt - keyword
+    sanitising, dropping the anchors of characters the prompt does not name,
+    wardrobe/setting/trait pruning, the token budget, species negatives, and
+    identity emphasis.
+
+    `visual.generate` calls it immediately before handing the request to a
+    backend, so it is normally invisible. Anything that wants to *show* a prompt
+    without generating from it has to call it too, or it displays a materially
+    different string: every character's anchor still present and no
+    `(trait:1.3)` weighting, because emphasis is applied nowhere else.
+
+    Safe to run more than once. _finalize_prompt strips existing emphasis before
+    re-splitting, which is what already makes regenerate's re-submission work.
+
+    Mutates the request in place and passes it through.
+    """
+
+    _agent_name: ClassVar[str] = "visual"
+
+    def __init__(self, title="Finalize Visual Prompt", **kwargs):
+        super().__init__(title=title, **kwargs)
+
+    def setup(self):
+        self.add_input("state")
+        self.add_input("generation_request", socket_type="visual/generation_request")
+
+        self.add_output("state")
+        self.add_output("generation_request", socket_type="visual/generation_request")
+        self.add_output("prompt", socket_type="str")
+        self.add_output("negative_prompt", socket_type="str")
+
+    async def run(self, state: GraphState):
+        generation_request: GenerationRequest = self.require_input("generation_request")
+
+        await self.agent._finalize_prompt(generation_request)
+
+        self.set_output_values(
+            {
+                "state": self.get_input_value("state"),
+                "generation_request": generation_request,
+                "prompt": generation_request.prompt or "",
+                "negative_prompt": generation_request.negative_prompt or "",
+            }
+        )
+
+
 @register("agents/visual/UnpackGenerationResponse")
 class UnpackGenerationResponse(AgentNode):
     """

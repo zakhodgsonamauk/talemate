@@ -646,7 +646,7 @@ export default {
             return instructions;
         },
     },
-    inject: ['getWebsocket', 'registerMessageHandler', 'setWaitingForInput', 'beginUxInteraction', 'endUxInteraction', 'clearUxInteractions', 'requestSceneAssets', 'openVisualLibraryWithAsset'],
+    inject: ['getWebsocket', 'registerMessageHandler', 'setWaitingForInput', 'beginUxInteraction', 'endUxInteraction', 'clearUxInteractions', 'requestSceneAssets', 'openVisualLibraryWithAsset', 'openVisualPromptAdjust', 'applyVisualPromptPreview', 'failVisualPromptAdjust'],
     provide() {
         return {
             requestDeleteMessage: this.requestDeleteMessage,
@@ -674,6 +674,8 @@ export default {
             insertTimePassage: this.insertTimePassage,
             // Generate a visual asset for a context-investigation message
             visualizeMessage: this.visualizeMessage,
+            // Same, but stops to let the user edit the composed prompt first
+            visualizeMessageWithPrompt: this.visualizeMessageWithPrompt,
             isMessageVisualizing: this.isMessageVisualizing,
         }
     },
@@ -765,6 +767,32 @@ export default {
                     this.processingAssetMessageIds.delete(data.message_id);
                     this.visualizingMessageIds.delete(data.message_id);
                 }
+            }
+
+            // The composed prompt came back for an "Adjust & Visualize" click.
+            // Fill the already-open modal in; the handler ignores previews for
+            // a message it has since moved on from.
+            if (data.type === 'visual' && data.action === 'prompt_preview') {
+                const messageId = (data.message_ids || [])[0];
+                if (messageId != null) {
+                    // Only keys the payload actually carried. Spreading an
+                    // explicit `undefined` over the request would erase the
+                    // vis_type or character the modal was opened with.
+                    const preview = { prompt: data.prompt || '', negative_prompt: data.negative_prompt || '' };
+                    for (const key of ['vis_type', 'character_name', 'format']) {
+                        if (data[key]) preview[key] = data[key];
+                    }
+                    this.applyVisualPromptPreview(messageId, preview);
+                }
+            }
+
+            // Prompt composition ended without a preview (agent error, or the
+            // generation was interrupted). Release the modal's loading state.
+            if (data.type === 'visual' && data.action === 'operation_done') {
+                this.failVisualPromptAdjust();
+            }
+            if (data.type === 'image_generation_failed') {
+                this.failVisualPromptAdjust();
             }
 
             // The visual operation finished — clear any toolbar "Visualize"
@@ -1231,6 +1259,55 @@ export default {
                 save_asset: true,
                 asset_allow_override: true,
                 asset_allow_auto_attach: true,
+                message_ids: [message_id],
+            };
+            if (request.character_name) {
+                payload.character_name = request.character_name;
+            }
+            if (request.instructions) {
+                payload.instructions = request.instructions;
+            }
+            this.getWebsocket().send(JSON.stringify(payload));
+        },
+
+        // Visualize, but stop after the prompt is composed so the user can edit
+        // it. Sends the same `visualize` request the plain path does, with
+        // prompt_only + return_prompt so the backend returns the composed
+        // prompt over the websocket instead of generating an image or dumping
+        // the prompt into chat. Nothing is saved at this stage — the modal's
+        // Generate does that through `visual/generate`, carrying the
+        // attachment context built here.
+        visualizeMessageWithPrompt(message_id) {
+            const message = this.messages.find(m => m.id === message_id);
+            if (!message) return;
+            const request = this.buildVisualizeRequest(message);
+            if (!request) return;
+
+            // Deliberately not added to visualizingMessageIds: the modal's own
+            // loading state is the feedback here, and keeping the toolbar
+            // spinner out of it means a preview that never arrives cannot
+            // strand one.
+            this.openVisualPromptAdjust(
+                message_id,
+                {
+                    vis_type: request.vis_type,
+                    character_name: request.character_name || '',
+                    instructions: request.instructions || '',
+                    prefer_prompt_mode: true,
+                },
+                {
+                    message_ids: [message_id],
+                    allow_auto_attach: true,
+                    allow_override: true,
+                },
+            );
+
+            const payload = {
+                type: 'visual',
+                action: 'visualize',
+                vis_type: request.vis_type,
+                prompt_only: true,
+                return_prompt: true,
                 message_ids: [message_id],
             };
             if (request.character_name) {

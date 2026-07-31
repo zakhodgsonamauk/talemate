@@ -358,6 +358,25 @@
 
     <AppConfig ref="appConfig" :agentStatus="agentStatus" :sceneActive="sceneActive" :clientStatus="clientStatus" @appearance-preview="onAppearancePreview" @appearance-preview-clear="onAppearancePreviewClear" />
     <AgentActionOverrides ref="agentActionOverrides" :app-config="appConfig" :agent-status="agentStatus" />
+    <!-- Prompt adjustment for a scene message's visualisation. The Visual
+         Library's own copy of this dialog lives inside its closed dialog, so a
+         message toolbar cannot reach it; this instance is opened through the
+         injected openVisualPromptAdjust(). -->
+    <VisualLibraryGenerate
+      v-model="promptAdjust.show"
+      :scene="scene"
+      :generating="visualGenerating"
+      :can-generate="visualCanGenerate"
+      :generation-available="visualGenerationAvailable"
+      :edit-available="visualEditAvailable"
+      :max-references="visualMaxReferences"
+      :visual-agent-status="agentStatus?.visual"
+      :templates="worldStateTemplates"
+      :initial-request="promptAdjust.request"
+      :attachment-context="promptAdjust.attachmentContext"
+      :prompt-loading="promptAdjust.loading"
+      :prompt-failed="promptAdjust.failed"
+    />
     <v-snackbar v-model="errorNotification" color="red-darken-1" :timeout="3000">
         {{ errorMessage }}
     </v-snackbar>
@@ -407,7 +426,9 @@ import RateLimitAlert from './RateLimitAlert.vue';
 import GenerationErrorDialog from './GenerationErrorDialog.vue';
 import VersionMismatchAlert from './VersionMismatchAlert.vue';
 import { versionsMatch } from '@/constants/version';
+import { BACKEND_STATUS } from '@/constants/backendStatus';
 import VisualLibrary from './VisualLibrary.vue';
+import VisualLibraryGenerate from './VisualLibraryGenerate.vue';
 import VoiceLibrary from './VoiceLibrary.vue';
 import WorldStateManager from './WorldStateManager.vue';
 import WorldStateManagerMenu from './WorldStateManagerMenu.vue';
@@ -447,6 +468,7 @@ export default {
     StatusNotification,
     IntroView,
     VisualLibrary,
+    VisualLibraryGenerate,
     WorldStateManager,
     WorldStateManagerMenu,
     NodeEditor,
@@ -569,6 +591,16 @@ export default {
       actAs: null,
       appConfig: {},
       worldStateTemplates: {},
+      // Prompt-adjustment dialog for a scene message's visualisation.
+      // `request` is null until the backend returns the composed prompt.
+      promptAdjust: {
+        show: false,
+        loading: false,
+        failed: false,
+        request: null,
+        attachmentContext: null,
+        messageId: null,
+      },
       // busy status of agents
       agentStatus: {},
       // scene state of agents
@@ -710,6 +742,28 @@ export default {
     creativeMode() {
       return this.tab === 'main' && this.sceneActive && this.scene.environment === 'creative';
     },
+    // Visual agent availability for the prompt-adjustment dialog. Mirrors the
+    // same derivations VisualLibrary.vue makes for its own copy of the dialog.
+    visualMeta() {
+      return this.agentStatus?.visual?.meta || {};
+    },
+    visualGenerating() {
+      const visual = this.agentStatus?.visual;
+      return !!(visual?.busy || visual?.busy_bg);
+    },
+    visualCanGenerate() {
+      return !!this.agentStatus?.visual?.available;
+    },
+    visualGenerationAvailable() {
+      return this.visualMeta?.image_create?.status === BACKEND_STATUS.OK;
+    },
+    visualEditAvailable() {
+      return this.visualMeta?.image_edit?.status === BACKEND_STATUS.OK;
+    },
+    visualMaxReferences() {
+      const max = this.visualMeta?.image_edit?.max_references;
+      return typeof max === 'number' ? max : 0;
+    },
     leftDrawerWidth() {
       // Wider drawer for prompts tab to match debug tools drawer
       return this.tab === 'prompts' ? 400 : 300;
@@ -846,6 +900,35 @@ export default {
         if (this.$refs.visualLibrary && typeof this.$refs.visualLibrary.openWithAsset === 'function') {
           this.$refs.visualLibrary.openWithAsset(assetId, initialTab);
         }
+      },
+      // Open the prompt-adjustment dialog for a message. Called before the
+      // prompt exists: the dialog shows vis type and instructions immediately
+      // and fills the prompt fields in when applyVisualPromptPreview() lands.
+      openVisualPromptAdjust: (messageId, request, attachmentContext) => {
+        this.promptAdjust.messageId = messageId;
+        this.promptAdjust.request = request || null;
+        this.promptAdjust.attachmentContext = attachmentContext || null;
+        this.promptAdjust.loading = true;
+        this.promptAdjust.failed = false;
+        this.promptAdjust.show = true;
+      },
+      applyVisualPromptPreview: (messageId, preview) => {
+        // Ignore a preview for a message the dialog has moved on from.
+        if (!this.promptAdjust.show || this.promptAdjust.messageId !== messageId) {
+          return false;
+        }
+        this.promptAdjust.request = { ...(this.promptAdjust.request || {}), ...preview };
+        this.promptAdjust.loading = false;
+        this.promptAdjust.failed = false;
+        return true;
+      },
+      // The visual operation ended without a preview — the prompt could not be
+      // composed. Release the loading state or the dialog sits on "Composing
+      // prompt…" forever with Generate disabled and nothing to explain it.
+      failVisualPromptAdjust: () => {
+        if (!this.promptAdjust.show || !this.promptAdjust.loading) return;
+        this.promptAdjust.loading = false;
+        this.promptAdjust.failed = true;
       },
       addToVisualLibraryPendingQueue: (items) => {
         if (this.$refs.visualLibrary && typeof this.$refs.visualLibrary.addToPendingQueue === 'function') {

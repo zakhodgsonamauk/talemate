@@ -40,6 +40,12 @@
       <v-progress-circular v-if="visualizeBusy" class="ml-2" size="14" indeterminate="disable-shrink" color="primary"></v-progress-circular>
     </v-chip>
 
+    <!-- visualize, but review the composed prompt first -->
+    <v-chip v-if="showVisualize" size="x-small" class="ml-2" label color="primary" variant="tonal" @click="visualizeMessageWithPrompt(messageId)" :disabled="uxLocked || appBusy || visualizeBusy">
+      <v-icon class="mr-1">mdi-image-edit-outline</v-icon>
+      Adjust &amp; Visualize
+    </v-chip>
+
     <!-- generate tts -->
     <v-chip v-if="showTts && ttsAvailable" size="x-small" class="ml-2" label color="secondary" variant="tonal" @click="generateTTS(messageId)" :disabled="uxLocked || appBusy || ttsBusy">
       <v-icon class="mr-1">mdi-account-voice</v-icon>
@@ -157,6 +163,7 @@ export default {
     'generateTTS',
     'insertTimePassage',
     'visualizeMessage',
+    'visualizeMessageWithPrompt',
   ],
   computed: {
     forkable() {
