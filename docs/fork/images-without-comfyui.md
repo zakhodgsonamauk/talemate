@@ -3,6 +3,13 @@
 Fork-specific setup guide. Gets inline scene images working with **no ComfyUI**,
 while Ollama keeps serving text.
 
+!!! info "This is now the fallback path"
+    KoboldCpp cannot condition generation on a reference image, so it cannot keep a
+    character's face consistent between illustrations. For that, see
+    [comfyui-ipadapter-setup.md](comfyui-ipadapter-setup.md). This path remains the
+    fastest and simplest option, and the two never run at once — one GPU.
+    `start-fork.bat` starts ComfyUI by default; use `USE_KOBOLDCPP=1` for this path.
+
 This is a **configuration-only** path — it required no code changes to Talemate.
 
 ---

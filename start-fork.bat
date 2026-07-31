@@ -4,7 +4,8 @@ REM  tell-me-a-story - launch everything
 REM ============================================================
 REM  Starts, in order:
 REM    1. Ollama            (text)   - localhost:11434
-REM    2. KoboldCpp         (images) - localhost:5001, image-only
+REM    2. ComfyUI           (images) - localhost:8188  (default)
+REM       or KoboldCpp      (images) - localhost:5001  (USE_KOBOLDCPP=1)
 REM    3. Talemate backend           - localhost:5050
 REM    4. Talemate frontend          - localhost:8082
 REM  then waits for the frontend and opens Chrome.
@@ -19,7 +20,17 @@ REM    TALEMATE_FRONTEND_PORT  (default 8082)
 REM    KCPP_PORT               (default 5001)
 REM    KCPP_DIR                (default %LOCALAPPDATA%\koboldcpp)
 REM    KCPP_MODEL              (default <KCPP_DIR>\models\sd_xl_turbo_1.0_fp16.safetensors)
-REM    SKIP_IMAGES=1           don't start KoboldCpp
+REM    COMFYUI_PORT            (default 8188)
+REM    COMFYUI_DIR             (default C:\ComfyUI-talemate)
+REM    COMFYUI_ARGS            (default --reserve-vram 5) extra ComfyUI flags
+REM    USE_KOBOLDCPP=1         use KoboldCpp instead of ComfyUI - the fast
+REM                            fallback, no reference conditioning. Same as
+REM                            USE_COMFYUI=0.
+REM    SKIP_IMAGES=1           don't start any image backend
+REM
+REM  ComfyUI is the DEFAULT image backend - it is the reference-conditioned path
+REM  that keeps characters looking like themselves.
+REM  See docs\fork\comfyui-ipadapter-setup.md
 REM    NO_BROWSER=1            don't open Chrome
 REM ------------------------------------------------------------
 
@@ -41,6 +52,12 @@ if "%TALEMATE_FRONTEND_PORT%"=="" set "TALEMATE_FRONTEND_PORT=8082"
 if "%KCPP_PORT%"==""              set "KCPP_PORT=5001"
 if "%KCPP_DIR%"==""               set "KCPP_DIR=%LOCALAPPDATA%\koboldcpp"
 if "%KCPP_MODEL%"==""             set "KCPP_MODEL=%KCPP_DIR%\models\sd_xl_turbo_1.0_fp16.safetensors"
+if "%COMFYUI_PORT%"==""           set "COMFYUI_PORT=8188"
+if "%COMFYUI_DIR%"==""            set "COMFYUI_DIR=C:\ComfyUI-talemate"
+REM Keeps VRAM free for the Ollama text model. ComfyUI caches the checkpoint
+REM after a run (~10.9GB measured with SDXL + IP-Adapter), and Rocinante-12B
+REM wants ~8.6GB, which does not fit in 16GB together. Set to "" to disable.
+if not defined COMFYUI_ARGS      set "COMFYUI_ARGS=--reserve-vram 5"
 
 set "TALEMATE_DEBUG=1"
 set "COREPACK_ENABLE_DOWNLOAD_PROMPT=0"
@@ -50,6 +67,14 @@ REM start-fork.local.bat, which is untracked. Keeps this file generic.
 REM The .\ prefix is required: cmd fails to resolve a bare command name
 REM containing more than one dot.
 if exist "start-fork.local.bat" call .\start-fork.local.bat
+
+REM ---------[ Image backend choice ]---------
+REM Resolved AFTER start-fork.local.bat so that file can set USE_KOBOLDCPP.
+REM ComfyUI is the default: it is the reference-conditioned path that keeps
+REM characters looking like themselves. USE_KOBOLDCPP=1 selects the fast
+REM fallback, and USE_COMFYUI=0 means the same thing.
+if "%USE_KOBOLDCPP%"=="1"         set "USE_COMFYUI=0"
+if not defined USE_COMFYUI        set "USE_COMFYUI=1"
 
 REM Prefer the embedded Node runtime when install.bat provisioned one.
 if exist "embedded_node\node.exe" set "PATH=%CD%\embedded_node;%PATH%"
@@ -118,9 +143,34 @@ call :wait_for 11434 30 Ollama
 
 :after_ollama
 
-REM ---------[ 2. KoboldCpp - images ]---------
+REM ---------[ 2. Images - ComfyUI or KoboldCpp ]---------
+REM One GPU, so exactly one of these runs. ComfyUI is the reference-conditioned
+REM path (character consistency); KoboldCpp is the fast fallback.
 if "%SKIP_IMAGES%"=="1" (
-    echo [skip]  KoboldCpp skipped ^(SKIP_IMAGES=1^) - image generation unavailable
+    echo [skip]  image backend skipped ^(SKIP_IMAGES=1^) - image generation unavailable
+    goto :after_images
+)
+
+if "%USE_COMFYUI%"=="1" (
+    call :is_listening %COMFYUI_PORT%
+    if "!LISTENING!"=="1" (
+        echo [ok]    ComfyUI already running on %COMFYUI_PORT%
+        goto :after_images
+    )
+    if not exist "%COMFYUI_DIR%\python_embeded\python.exe" (
+        echo [WARN]  ComfyUI not found at "%COMFYUI_DIR%"
+        echo         Image generation will be unavailable. Text still works.
+        echo         Setup: docs\fork\comfyui-ipadapter-setup.md
+        goto :after_images
+    )
+    echo [start] ComfyUI ^(images^) on %COMFYUI_PORT%
+    echo         %COMFYUI_ARGS%
+    REM /D sets the new window's working directory. Doing it that way avoids a
+    REM nested-quote "cd /d ... && ..." inside cmd /k, which this file's other
+    REM comments warn about - the ComfyUI path is fine but the pattern is not.
+    start "ComfyUI :%COMFYUI_PORT% (images)" /D "%COMFYUI_DIR%" cmd /k ".\python_embeded\python.exe -I -W ignore::FutureWarning ComfyUI\main.py --windows-standalone-build --port %COMFYUI_PORT% --disable-auto-launch %COMFYUI_ARGS%"
+    REM 300s: a cold start loads 25 custom node packs before it binds the port.
+    call :wait_for %COMFYUI_PORT% 300 ComfyUI
     goto :after_images
 )
 
@@ -203,7 +253,13 @@ echo   ready
 echo ===============================================
 echo   frontend   %TM_URL%
 echo   backend    http://localhost:%TALEMATE_BACKEND_PORT%
-if not "%SKIP_IMAGES%"=="1" echo   images     http://localhost:%KCPP_PORT%/sdui/
+if "%SKIP_IMAGES%"=="1"     goto :skip_images_url
+if "%USE_COMFYUI%"=="1" (
+    echo   images     http://localhost:%COMFYUI_PORT%/  ^(ComfyUI^)
+) else (
+    echo   images     http://localhost:%KCPP_PORT%/sdui/  ^(KoboldCpp^)
+)
+:skip_images_url
 echo.
 echo   Each service runs in its own window.
 echo   Close a window to stop that service.
