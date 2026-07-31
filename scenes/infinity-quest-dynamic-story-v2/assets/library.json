@@ -119,138 +119,6 @@
         }
       }
     },
-    "dc8eafc59c5a9ffaa8db057a47ce3d8e92262fddb26f8eaba81aa56aeba2b8c0": {
-      "id": "dc8eafc59c5a9ffaa8db057a47ce3d8e92262fddb26f8eaba81aa56aeba2b8c0",
-      "file_type": "png",
-      "media_type": "image/png",
-      "meta": {
-        "name": null,
-        "vis_type": "SCENE_ILLUSTRATION",
-        "gen_type": "TEXT_TO_IMAGE",
-        "character_name": null,
-        "prompt": "score_9, score_8_up, score_7_up, semi-realistic, detailed painterly rendering, realistic anatomy, cinematic lighting, sharp focus, starship interior, deep space, science fiction, sleek modern design, holographic displays, artificial lighting, metallic surfaces, crew quarters, navigation console, human male, dark hair with grey temples, brown eyes, six feet tall, broad-shouldered muscular build, weathered face, standard-issue black EVA suit with silver rank markings on collar, close-cropped hair, The user controlled character - always has the head / face rendered completely in shadows, alien woman, deep violet skin with geometric facial markings, indigo hair pulled back in a secure style, large dark eyes with no visible iris, lean angular build, four-fingered hands, fitted dark blue-grey utility suit, tool loops and pockets on belt, Cold metal floor plating, Violet alien skin, Blue-white flickering screens, Geometric patterns on forearms, Dark circles under human eyes, White knuckles on console edge, Starlight Nomad interior, Corrupted data stream, Derelict structure outside viewports, Harsh overhead light, Sterile space, Bare feet, Casual alert stance, Console display, Framed moment, Elmer Farstield, Kaira, Starship control room, Data stream analysis, Processing information, Night shift exhaustion, Trust between officers, Derelict civilization, Entropy and madness, Organic corruption, Technical failure, Suspense",
-        "negative_prompt": "text, watermark, low quality, blurry, deformed, extra limbs, bad hands, bad anatomy",
-        "format": "LANDSCAPE",
-        "resolution": {
-          "width": 1216,
-          "height": 832
-        },
-        "sampler_settings": {
-          "steps": 40,
-          "seed": null
-        },
-        "reference_assets": [],
-        "tags": [],
-        "reference": [],
-        "analysis": null,
-        "cover_bbox": {
-          "x": 0.0,
-          "y": 0.0,
-          "w": 1.0,
-          "h": 1.0
-        }
-      }
-    },
-    "899eb450166db35c249fd91139cadcd45933842ba62bfa9ef696effc2c700697": {
-      "id": "899eb450166db35c249fd91139cadcd45933842ba62bfa9ef696effc2c700697",
-      "file_type": "png",
-      "media_type": "image/png",
-      "meta": {
-        "name": null,
-        "vis_type": "SCENE_ILLUSTRATION",
-        "gen_type": "TEXT_TO_IMAGE",
-        "character_name": null,
-        "prompt": "score_9, score_8_up, score_7_up, semi-realistic, detailed painterly rendering, realistic anatomy, cinematic lighting, sharp focus, (male, human, olive skin with some weathering, dark brown hair grey at temples, brown eyes, broad-shouldered build, six feet tall, fit but not muscular, close-cropped hair:1.3), nude, standing",
-        "negative_prompt": "text, watermark, low quality, blurry, deformed, extra limbs, bad hands, bad anatomy",
-        "format": "LANDSCAPE",
-        "resolution": {
-          "width": 1216,
-          "height": 832
-        },
-        "sampler_settings": {
-          "steps": 40,
-          "seed": null
-        },
-        "reference_assets": [],
-        "tags": [],
-        "reference": [],
-        "analysis": null,
-        "cover_bbox": {
-          "x": 0.0,
-          "y": 0.0,
-          "w": 1.0,
-          "h": 1.0
-        }
-      }
-    },
-    "9b8b6073b1d7f30f8ab5694375d1f4d28af30cd63e293251e55707e46e0b0511": {
-      "id": "9b8b6073b1d7f30f8ab5694375d1f4d28af30cd63e293251e55707e46e0b0511",
-      "file_type": "png",
-      "media_type": "image/png",
-      "meta": {
-        "name": null,
-        "vis_type": "SCENE_ILLUSTRATION",
-        "gen_type": "IMAGE_EDIT",
-        "character_name": null,
-        "prompt": "score_9, score_8_up, score_7_up, semi-realistic, detailed painterly rendering, realistic anatomy, cinematic lighting, sharp focus, (male, human, olive skin with some weathering, dark brown hair grey at temples, brown eyes, broad-shouldered build, six feet tall, fit but not muscular, close-cropped hair, head / face shadows:1.3)",
-        "negative_prompt": "text, watermark, low quality, blurry, deformed, extra limbs, bad hands, bad anatomy",
-        "format": "LANDSCAPE",
-        "resolution": {
-          "width": 1216,
-          "height": 832
-        },
-        "sampler_settings": {
-          "steps": 40,
-          "seed": null
-        },
-        "reference_assets": [
-          "2f2ec12f46906aad086471e560d00ec13ce85f53e414f0477294ccc4ff00419c",
-          "2f2ec12f46906aad086471e560d00ec13ce85f53e414f0477294ccc4ff00419c",
-          "2f2ec12f46906aad086471e560d00ec13ce85f53e414f0477294ccc4ff00419c"
-        ],
-        "tags": [],
-        "reference": [],
-        "analysis": null,
-        "cover_bbox": {
-          "x": 0.0,
-          "y": 0.0,
-          "w": 1.0,
-          "h": 1.0
-        }
-      }
-    },
-    "598d52b38009cd4526a4c5d8d8e4596838b6ad7c9bbd9b24c1f9fc4caf31da03": {
-      "id": "598d52b38009cd4526a4c5d8d8e4596838b6ad7c9bbd9b24c1f9fc4caf31da03",
-      "file_type": "png",
-      "media_type": "image/png",
-      "meta": {
-        "name": null,
-        "vis_type": "SCENE_ILLUSTRATION",
-        "gen_type": "TEXT_TO_IMAGE",
-        "character_name": null,
-        "prompt": "score_9, score_8_up, score_7_up, semi-realistic, detailed painterly rendering, realistic anatomy, cinematic lighting, sharp focus, control room, sci-fi, holographic displays, metallic surfaces, blue-white lighting, sleek panels, (male, human, olive skin with some weathering, dark brown hair grey at temples, brown eyes, broad-shouldered build, six feet tall, fit but not muscular, close-cropped hair, head / face shadows:1.3), a second figure, failing systems, corrupted data stream, intermittent lighting, first officer, captain, nudity, defiant posture, environmental systems, leak, alarm, cosmic expanse, pinprick stars, data fragments, dying stars, console, utility suit, strip, freeze frame, groaning ship, metal stress, atmosphere adjustment, warning, immediate attention",
-        "negative_prompt": "text, watermark, low quality, blurry, deformed, extra limbs, bad hands, bad anatomy, clothing",
-        "format": "LANDSCAPE",
-        "resolution": {
-          "width": 1216,
-          "height": 832
-        },
-        "sampler_settings": {
-          "steps": 40,
-          "seed": null
-        },
-        "reference_assets": [],
-        "tags": [],
-        "reference": [],
-        "analysis": null,
-        "cover_bbox": {
-          "x": 0.0,
-          "y": 0.0,
-          "w": 1.0,
-          "h": 1.0
-        }
-      }
-    },
     "5ab2572e914f50ed599dbc17b054d5859ee033028a90ef7e6f6418be9644a64c": {
       "id": "5ab2572e914f50ed599dbc17b054d5859ee033028a90ef7e6f6418be9644a64c",
       "file_type": "png",
@@ -439,6 +307,239 @@
           "seed": null
         },
         "reference_assets": [],
+        "tags": [],
+        "reference": [],
+        "analysis": null,
+        "cover_bbox": {
+          "x": 0.0,
+          "y": 0.0,
+          "w": 1.0,
+          "h": 1.0
+        }
+      }
+    },
+    "70678e84d51d6b8d50a6c4f11d82c20faaf35c8c633365c62c0dab208626efb0": {
+      "id": "70678e84d51d6b8d50a6c4f11d82c20faaf35c8c633365c62c0dab208626efb0",
+      "file_type": "png",
+      "media_type": "image/png",
+      "meta": {
+        "name": "Kaira-3",
+        "vis_type": "CHARACTER_CARD",
+        "gen_type": "IMAGE_EDIT",
+        "character_name": "Kaira",
+        "prompt": "1girl, score_9, score_8_up, score_7_up, semi-realistic, detailed painterly rendering, realistic anatomy, cinematic lighting, sharp focus, solo, looking at viewer, control room, sci-fi, holographic displays, metallic surfaces, blue-white lighting, sleek panels, (violet skin, geometric facial markings, indigo hair, large black eyes, tall stature, four-fingered hands:1.3), Kaira, female Altrusian, geometric patterns, deep indigo hair, large dark eyes, lean frame, angular, bare breasts, combat trousers, pulse pistol, emergency lighting, sweat, cold air, bent over console, data streams, desperate focus, suggestive pose, derelict structure visible through viewscreen, metal and crystal flowing, rhythmic pulsing, fractures in glass, blue emergency strips, beacons, constant symbols, corrupted noise, stress, Zak's hand on shoulder, comfort, goosebumps, warm, solid, ship groaning, profile image, character showcase, single character",
+        "negative_prompt": "text, watermark, low quality, blurry, deformed, extra limbs, bad hands, bad anatomy, irris, other characters, human skin, human ears, ordinary skin tone, 1boy, male focus",
+        "format": "PORTRAIT",
+        "resolution": {
+          "width": 832,
+          "height": 1216
+        },
+        "sampler_settings": {
+          "steps": 40,
+          "seed": null
+        },
+        "reference_assets": [
+          "2a2d07de2e420983bf68fbb5190d1a3ef4087fc111d708026bc0cb40f0e7711f"
+        ],
+        "tags": [],
+        "reference": [],
+        "analysis": null,
+        "cover_bbox": {
+          "x": 0.0,
+          "y": 0.0,
+          "w": 1.0,
+          "h": 1.0
+        }
+      }
+    },
+    "69d6f0366389ed864f0cccdbcfe5262a4f63897aad82c18b372451cfab742ac3": {
+      "id": "69d6f0366389ed864f0cccdbcfe5262a4f63897aad82c18b372451cfab742ac3",
+      "file_type": "jpeg",
+      "media_type": "image/jpeg",
+      "meta": {
+        "name": null,
+        "vis_type": "SCENE_BACKGROUND",
+        "gen_type": "UPLOAD",
+        "character_name": null,
+        "prompt": null,
+        "negative_prompt": null,
+        "format": "PORTRAIT",
+        "resolution": {
+          "width": 574,
+          "height": 745
+        },
+        "sampler_settings": null,
+        "reference_assets": [],
+        "tags": [],
+        "reference": [],
+        "analysis": null,
+        "cover_bbox": {
+          "x": 0.0,
+          "y": 0.0,
+          "w": 1.0,
+          "h": 1.0
+        }
+      }
+    },
+    "6dcba3e82cdae74335c50fd1445a6eb864589f2298d63f4a86c152893c79d7ed": {
+      "id": "6dcba3e82cdae74335c50fd1445a6eb864589f2298d63f4a86c152893c79d7ed",
+      "file_type": "png",
+      "media_type": "image/png",
+      "meta": {
+        "name": null,
+        "vis_type": "SCENE_ILLUSTRATION",
+        "gen_type": "IMAGE_EDIT",
+        "character_name": null,
+        "prompt": "score_9, score_8_up, score_7_up, semi-realistic, detailed painterly rendering, realistic anatomy, cinematic lighting, sharp focus, 1girl, rating_questionable, violet skin, geometric facial markings, indigo hair, large black eyes, tall stature, four-fingered hands, topless, bare breasts, nipples, sweaty body, glistening skin, grey-blue combat trousers, weapon harness, holstered pistol, boots, athletic, muscular, standing at console, hands on holographic interface, control room, sci-fi, holographic displays, metallic surfaces, blue-white lighting, sleek panels, dim emergency lighting, visible breath, tense posture, focused expression, dilated pupils, sweat dripping down torso",
+        "negative_prompt": "1boy, fully clothed, barefoot, relaxed posture, smiling, bright lighting, outdoors, shoes, sitting, lying down, text, watermark, low quality, blurry, deformed, extra limbs, bad hands, bad anatomy",
+        "format": "LANDSCAPE",
+        "resolution": {
+          "width": 1216,
+          "height": 832
+        },
+        "sampler_settings": {
+          "steps": 40,
+          "seed": null
+        },
+        "reference_assets": [
+          "69d6f0366389ed864f0cccdbcfe5262a4f63897aad82c18b372451cfab742ac3"
+        ],
+        "tags": [],
+        "reference": [],
+        "analysis": null,
+        "cover_bbox": {
+          "x": 0.0,
+          "y": 0.0,
+          "w": 1.0,
+          "h": 1.0
+        }
+      }
+    },
+    "719bfa85c622e10ab7f0b14e5e042f41878844c821e7066bc4b8e5f336240cc7": {
+      "id": "719bfa85c622e10ab7f0b14e5e042f41878844c821e7066bc4b8e5f336240cc7",
+      "file_type": "png",
+      "media_type": "image/png",
+      "meta": {
+        "name": null,
+        "vis_type": "CHARACTER_CARD",
+        "gen_type": "IMAGE_EDIT",
+        "character_name": "Kaira",
+        "prompt": "score_9, score_8_up, score_7_up, semi-realistic, detailed painterly rendering, realistic anatomy, cinematic lighting, sharp focus, solo, looking at viewer, 1girl, rating_questionable, violet skin, geometric facial markings, indigo hair, large black eyes, tall stature, four-fingered hands, (sitting slumped against console:1.3), grey-blue combat trousers, topless, weapon harness, sweat, control room, holographic displays, metallic surfaces, blue-white lighting, sleek panels",
+        "negative_prompt": "1boy, shirt, bra, lying down, standing, happy, relaxed, smiling, text, watermark, low quality, blurry, deformed, extra limbs, bad hands, bad anatomy",
+        "format": "PORTRAIT",
+        "resolution": {
+          "width": 832,
+          "height": 1216
+        },
+        "sampler_settings": {
+          "steps": 40,
+          "seed": null
+        },
+        "reference_assets": [
+          "1efbe22434d3e0c718f880bedaf7be82fc0ab0f961c4aa67368be6b8096ee0a6"
+        ],
+        "tags": [],
+        "reference": [],
+        "analysis": null,
+        "cover_bbox": {
+          "x": 0.0,
+          "y": 0.0,
+          "w": 1.0,
+          "h": 1.0
+        }
+      }
+    },
+    "1502646b6955a9832e6cfa769dbc36d62d3e42019cde6a0a66a919c8c8f6de9d": {
+      "id": "1502646b6955a9832e6cfa769dbc36d62d3e42019cde6a0a66a919c8c8f6de9d",
+      "file_type": "png",
+      "media_type": "image/png",
+      "meta": {
+        "name": null,
+        "vis_type": "CHARACTER_CARD",
+        "gen_type": "IMAGE_EDIT",
+        "character_name": "Kaira",
+        "prompt": "score_9, score_8_up, score_7_up, semi-realistic, detailed painterly rendering, realistic anatomy, cinematic lighting, sharp focus, solo, looking at viewer, female, rating_questionable, violet skin, geometric facial markings, indigo hair, large black eyes, tall stature, four-fingered hands, (sitting slumped against console:1.3), grey-blue combat trousers, weapon harness, topless, control room, sci-fi, metallic surfaces, blue-white lighting, dim, sweat",
+        "negative_prompt": "male, shirt, bra, jacket, standing, lying down, smiling, bright lighting, cheerful, text, watermark, low quality, blurry, deformed, extra limbs, bad hands, bad anatomy",
+        "format": "PORTRAIT",
+        "resolution": {
+          "width": 832,
+          "height": 1216
+        },
+        "sampler_settings": {
+          "steps": 40,
+          "seed": null
+        },
+        "reference_assets": [
+          "1efbe22434d3e0c718f880bedaf7be82fc0ab0f961c4aa67368be6b8096ee0a6"
+        ],
+        "tags": [],
+        "reference": [],
+        "analysis": null,
+        "cover_bbox": {
+          "x": 0.0,
+          "y": 0.0,
+          "w": 1.0,
+          "h": 1.0
+        }
+      }
+    },
+    "16d9b018f4c83d3488f4785640fc819e4efcadd422850917890b9ce3abc23774": {
+      "id": "16d9b018f4c83d3488f4785640fc819e4efcadd422850917890b9ce3abc23774",
+      "file_type": "png",
+      "media_type": "image/png",
+      "meta": {
+        "name": null,
+        "vis_type": "SCENE_ILLUSTRATION",
+        "gen_type": "IMAGE_EDIT",
+        "character_name": null,
+        "prompt": "score_9, score_8_up, score_7_up, semi-realistic, detailed painterly rendering, realistic anatomy, cinematic lighting, sharp focus, 1girl, violet skin, geometric facial markings, indigo hair, large black eyes, tall stature, four-fingered hands, rating_questionable, (kneeling on metal floor looking up:1.3), grey-blue combat trousers, weapon harness, topless, sweating, control room, holographic displays, metallic surfaces, blue-white lighting",
+        "negative_prompt": "shirt, bra, jacket, fully clothed, bright lighting, smiling, clean skin, standing upright, relaxed posture, text, watermark, low quality, blurry, deformed, extra limbs, bad hands, bad anatomy",
+        "format": "LANDSCAPE",
+        "resolution": {
+          "width": 1216,
+          "height": 832
+        },
+        "sampler_settings": {
+          "steps": 40,
+          "seed": null
+        },
+        "reference_assets": [
+          "1efbe22434d3e0c718f880bedaf7be82fc0ab0f961c4aa67368be6b8096ee0a6"
+        ],
+        "tags": [],
+        "reference": [],
+        "analysis": null,
+        "cover_bbox": {
+          "x": 0.0,
+          "y": 0.0,
+          "w": 1.0,
+          "h": 1.0
+        }
+      }
+    },
+    "bae88158fe8c9ee4381e57cda34d43165023d8e0b8ac0406a66bdf50dec1a9bd": {
+      "id": "bae88158fe8c9ee4381e57cda34d43165023d8e0b8ac0406a66bdf50dec1a9bd",
+      "file_type": "png",
+      "media_type": "image/png",
+      "meta": {
+        "name": null,
+        "vis_type": "SCENE_ILLUSTRATION",
+        "gen_type": "IMAGE_EDIT",
+        "character_name": null,
+        "prompt": "score_9, score_8_up, score_7_up, semi-realistic, detailed painterly rendering, realistic anatomy, cinematic lighting, sharp focus, rating_questionable, 1girl, violet skin, geometric facial markings, indigo hair, large black eyes, tall stature, four-fingered hands, sitting cross-legged on floor looking up, grey-blue combat trousers bunched at hips, weapon harness, exposed breasts, erect nipples, sweaty skin, control room, holographic displays, metallic surfaces, blue-white lighting, dim emergency lighting, glowing violet forearm patterns",
+        "negative_prompt": "1boy, male, fully clothed, smiling, standing, bright lighting, multiple characters, text, watermark, low quality, blurry, deformed, extra limbs, bad hands, bad anatomy",
+        "format": "LANDSCAPE",
+        "resolution": {
+          "width": 1216,
+          "height": 832
+        },
+        "sampler_settings": {
+          "steps": 40,
+          "seed": null
+        },
+        "reference_assets": [
+          "1efbe22434d3e0c718f880bedaf7be82fc0ab0f961c4aa67368be6b8096ee0a6"
+        ],
         "tags": [],
         "reference": [],
         "analysis": null,
