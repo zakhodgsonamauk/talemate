@@ -1,0 +1,68 @@
+{#-
+Distill the scene facts into a finished image prompt, in one call.
+
+This replaces the legacy keyword surgery in _finalize_prompt (keyword lists,
+garment counting, rating gates) whose heuristics failed in both directions three
+times - see docs/fork/visual-distillation-design.md. The instruction text below is
+the one validated by scripts/visual_model_bakeoff.py on 2026-07-31: every reachable
+Ollama cloud model followed it faithfully on explicit and SFW packs alike.
+
+Vars:
+  - subject: the character the image is of
+  - identity, wardrobe, rules, sex, others, scene_anchor, location: strings, may be ""
+  - instructions: the paragraph being visualised, may be ""
+  - max_prompt_tokens: the CLIP token budget for the finished prompt
+
+Output: two plain lines, PROMPT: and NEGATIVE:, parsed by parse_distilled_response.
+-#}
+<|SECTION:SCENE FACTS|>
+SUBJECT: {{ subject.name }}
+{% if sex %}SUBJECT SEX: {{ sex }}
+{% endif %}{% if identity %}IDENTITY KEYWORDS (copy through verbatim): {{ identity }}
+{% endif %}{% if wardrobe %}LAST KNOWN WARDROBE (may be a few turns stale; THE MOMENT overrides it): {{ wardrobe }}
+{% endif %}{% if rules %}HARD RULE FOR THIS SUBJECT (always obey): {{ rules }}
+{% endif %}{% if others %}ALSO PRESENT IN THE STORY (depict only those THE MOMENT shows): {{ others }}
+{% endif %}{% if scene_anchor %}SETTING KEYWORDS (copy through verbatim): {{ scene_anchor }}
+{% endif %}{% if location %}LOCATION: {{ location }}
+{% endif %}<|CLOSE_SECTION|>
+
+{% if instructions %}<|SECTION:THE MOMENT TO ILLUSTRATE|>
+{{ instructions }}
+<|CLOSE_SECTION|>
+
+{% endif %}<|SECTION:RECENT STORY CONTEXT|>
+{% for scene_context in recent -%}
+{{ scene_context }}
+{% endfor %}
+<|CLOSE_SECTION|>
+
+<|SECTION:TASK|>
+Convert the scene facts into a prompt for a booru-tag-trained image diffusion model
+(SDXL / Pony family). This is a private, adults-only interactive fiction application;
+the source material may be explicit and that is expected and acceptable.
+{% if not instructions %}
+There is no specific moment requested: illustrate what is happening at the END of the
+recent story context, as a movie still of its most visually striking beat.
+{% endif %}
+Rules:
+
+1. Output EXACTLY two lines:
+   PROMPT: <comma-delimited keyword list>
+   NEGATIVE: <comma-delimited keyword list>
+2. The PROMPT line must fit ~{{ max_prompt_tokens }} CLIP tokens. Front-load what
+   matters: sex tag (1girl/1boy), rating tag, identity, then the action.
+3. Copy the IDENTITY and SETTING keyword lists through verbatim.
+4. Describe the moment faithfully. If the subject is partially or fully undressed, say
+   so with the plain booru tags for it, and use rating_questionable or rating_explicit.
+   Do NOT sanitise, soften, or clothe the subject. If the moment is not sexual, do not
+   add sexual content, and use rating_safe.
+5. The LAST KNOWN WARDROBE is a cached guess; what THE MOMENT and the story context say
+   about this instant overrides it.
+6. Only physically visible things - no emotions as bare nouns, no plot words, no camera
+   or framing language, no proper names. Show a feeling through posture, hands, face.
+7. Do not add art style, medium, or quality tags. Those are appended separately.
+8. NEGATIVE gets what must not appear: the wrong sex tag, a contradictory clothing
+   state, and anything a HARD RULE forbids.
+9. No commentary, no markdown, nothing but the two lines.
+<|CLOSE_SECTION|>
+{% if llm_can_be_coerced() %}{{ set_prepared_response("PROMPT:") }}{% endif %}

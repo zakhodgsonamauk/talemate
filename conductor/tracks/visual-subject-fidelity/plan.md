@@ -2,6 +2,16 @@
 
 **Spec**: `conductor/tracks/visual-subject-fidelity/spec.md`
 
+> **Direction change, 2026-07-31.** Prompt distillation
+> (`docs/fork/visual-distillation-design.md`) hands the scene facts to one capable
+> cloud model and uses its finished prompt, superseding the keyword-surgery approach
+> this plan iterates on. When distillation is enabled, **T16 disappears entirely**
+> (the dressed/undressed question is the model's to answer) and **T6/T7/T8 are
+> covered by the distillation instruction** — verify live before closing them. The
+> legacy pipeline remains the fallback, so the completed tasks below stay
+> load-bearing for local-only sessions. Do not extend the gate stack further;
+> extend `visual/distill-image-prompt.jinja2`.
+
 Ordered so each step is independently verifiable, and so the cause of any improvement is
 attributable. That is why IPAdapter is untouched until the end and why the budget reduction
 comes last.

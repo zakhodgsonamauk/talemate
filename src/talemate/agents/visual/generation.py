@@ -14,11 +14,13 @@ from talemate.agents.base import (
 import talemate.emit.async_signals as async_signals
 from talemate.emit import emit
 from talemate.context import active_scene
+from talemate.prompts import Prompt
 from .anchors import _is_wardrobe_token, _mention_count, condense_visual_rule
 from .schema import (
     GEN_TYPE,
     PROMPT_TYPE,
     SEED_MODE,
+    VIS_TYPE,
     GenerationResponse,
     BackendStatusType,
     GenerationRequest,
@@ -165,6 +167,26 @@ _CLOTHING_WORDS = {
     "clothing",
     "fully clothed",
 }
+
+
+def parse_distilled_response(text: str) -> tuple[str | None, str | None]:
+    """
+    The PROMPT and NEGATIVE lines from a distillation response.
+
+    Tolerates markdown bolding and stray fencing around the labels, because that is
+    what models actually emit, but nothing looser: a response that cannot state
+    `PROMPT:` on its own line has not followed the contract and the caller falls back
+    to the legacy pipeline rather than guessing.
+    """
+    positive = negative = None
+    for line in (text or "").splitlines():
+        line = line.strip().strip("*`").strip()
+        upper = line.upper()
+        if upper.startswith("PROMPT:") and positive is None:
+            positive = line[len("PROMPT:") :].strip("*` ").strip()
+        elif upper.startswith("NEGATIVE:") and negative is None:
+            negative = line[len("NEGATIVE:") :].strip("*` ").strip()
+    return positive or None, negative or None
 
 # Word-boundary matching matters here: "female" contains "male" and "woman" contains
 # "man", so substring tests invert the sex. \b prevents both.
@@ -530,6 +552,19 @@ class GenerationMixin:
         if getattr(backend, "prompt_type", PROMPT_TYPE.KEYWORDS) != PROMPT_TYPE.KEYWORDS:
             return
 
+        # A distilled prompt is final. This runs twice per image - once from the
+        # FinalizePrompt preview node, once from generate - and the second pass must
+        # neither pay a second LLM call nor shred the finished prompt through the
+        # legacy keyword surgery below.
+        if request.distilled:
+            return
+
+        if getattr(self, "distillation_enabled", False):
+            if await self._distill_prompt(request):
+                request.distilled = True
+                return
+            # Distillation declined or failed - the legacy pipeline is the fallback.
+
         original = request.prompt
         # Regenerate re-submits a previous request, so the prompt may already be
         # weighted. Strip first or emphasis compounds on every pass.
@@ -562,6 +597,124 @@ class GenerationMixin:
                 before=estimate_prompt_tokens(original),
                 after=estimate_prompt_tokens(request.prompt),
             )
+
+    @set_processing
+    async def _distill_prompt(self, request: GenerationRequest) -> bool:
+        """
+        Write the finished prompt in one LLM call from the scene facts.
+
+        The alternative to the legacy pipeline below, whose keyword lists and boolean
+        gates reason over a prompt describing everyone present and have failed in both
+        directions repeatedly. Here the facts go in structured - subject identity,
+        wardrobe, rules, setting, the moment - and the model returns the final
+        positive and negative prompts. Validated across Ollama cloud models by
+        scripts/visual_model_bakeoff.py; see docs/fork/visual-distillation-design.md.
+
+        Returns False without touching the request when anything is missing or the
+        response breaks the two-line contract, so the caller can fall back. An image
+        with a legacy prompt beats no image.
+        """
+        scene = active_scene.get()
+        if not scene or request.vis_type in VIS_TYPES_WITHOUT_CAST:
+            return False
+
+        characters = list(getattr(self, "characters", None) or scene.characters)
+        keywords = [
+            kw for kw in strip_emphasis(request.prompt or "").split(",") if kw.strip()
+        ]
+        subject = self._choose_subject(characters, keywords, request)
+        if not subject:
+            return False
+
+        identity = await self.character_anchor(subject)
+        wardrobe = await self.refresh_wardrobe(scene, subject)
+        rules = condense_visual_rule(subject.visual_rules)
+        sex = character_sex(subject)
+        setting = await self.scene_anchor(scene)
+        location = getattr(getattr(scene, "world_state", None), "location", None)
+        others = ", ".join(
+            f"{c.name} ({character_sex(c) or 'sex unknown'})"
+            for c in characters
+            if c is not subject
+        )
+
+        # Computed here rather than in the template: context_history routes through
+        # the summarizer agent, and a missing or broken summarizer must degrade to a
+        # recap-less distillation, not a failed image.
+        try:
+            recent = list(scene.context_history(budget=600))
+        except Exception as e:
+            log.warning("distill_prompt.no_context_history", error=str(e))
+            recent = []
+
+        try:
+            raw, _ = await Prompt.request(
+                "visual.distill-image-prompt",
+                self.client,
+                # Parametric kind: "visualize" alone caps the response at 150 tokens,
+                # which a thinking model spends before writing a single keyword.
+                "visualize_long",
+                vars={
+                    "scene": scene,
+                    "recent": recent,
+                    "subject": subject,
+                    "identity": identity or "",
+                    "wardrobe": wardrobe or "",
+                    "rules": rules or "",
+                    "sex": sex or "",
+                    "others": others,
+                    "scene_anchor": setting or "",
+                    "location": location or "",
+                    "instructions": (request.instructions or "").strip(),
+                    "max_prompt_tokens": self._max_prompt_tokens(),
+                },
+            )
+        except Exception as e:
+            log.warning("distill_prompt.failed", subject=subject.name, error=str(e))
+            return False
+
+        positive, negative = parse_distilled_response(raw)
+        if not positive:
+            log.warning(
+                "distill_prompt.unparseable",
+                subject=subject.name,
+                response=(raw or "")[:200],
+            )
+            return False
+
+        # The style templates were already flattened into the incoming prompt string,
+        # where they can no longer be told apart from the LLM keywords - so they are
+        # re-fetched from their source and re-applied around the distilled core.
+        style_positive: list[str] = []
+        style_negative: list[str] = []
+        for vis_type in (VIS_TYPE.UNSPECIFIED, request.vis_type):
+            style = self.style_template(vis_type)
+            if style:
+                style_positive.extend(style.positive_keywords or [])
+                style_negative.extend(style.negative_keywords or [])
+
+        positive_keywords = [
+            normalize_keyword(kw)
+            for kw in [*style_positive, *positive.split(",")]
+            if kw.strip()
+        ]
+        negative_keywords = [
+            kw.strip()
+            for kw in [*(negative or "").split(","), *style_negative]
+            if kw.strip()
+        ]
+
+        request.prompt = ", ".join(dict.fromkeys(positive_keywords))
+        request.negative_prompt = ", ".join(dict.fromkeys(negative_keywords))
+
+        log.debug(
+            "distill_prompt",
+            subject=subject.name,
+            tokens=estimate_prompt_tokens(request.prompt),
+            prompt=request.prompt,
+            negative=request.negative_prompt,
+        )
+        return True
 
     async def _drop_absent_character_anchors(
         self, keywords: list[str], request: GenerationRequest
@@ -1360,7 +1513,9 @@ class GenerationMixin:
 
         response.backend_name = backend.name
 
-        task = asyncio.create_task(backend.generate(request, response))
+        # Routed through the VRAM handoff so an enabled toggle can clear the text
+        # model off the GPU for the duration of the generation.
+        task = asyncio.create_task(self._backend_generate(backend, request, response))
         task.add_done_callback(lambda fut: asyncio.create_task(on_done(fut)))
 
         # Track task for cancellation support
@@ -1385,7 +1540,8 @@ class GenerationMixin:
 
         response.backend_name = backend.name
 
-        task = asyncio.create_task(backend.generate(request, response))
+        # Same handoff routing as text-to-image; edit workflows hold even more VRAM.
+        task = asyncio.create_task(self._backend_generate(backend, request, response))
         task.add_done_callback(lambda fut: asyncio.create_task(on_done(fut)))
 
         # Track task for cancellation support

@@ -334,6 +334,12 @@ class GenerationRequest(pydantic.BaseModel):
     sampler_settings: SamplerSettings = pydantic.Field(default=SamplerSettings())
     id: str = pydantic.Field(default_factory=lambda: str(uuid.uuid4()))
 
+    # Set once the prompt has been written by the distillation path. Both the
+    # FinalizePrompt graph node and `generate` run _finalize_prompt over the same
+    # request; without this marker the second pass would pay a second LLM call and
+    # then shred the distilled prompt through the legacy keyword surgery.
+    distilled: bool = False
+
     agent_config: dict[str, Any] = pydantic.Field(default={})
 
     extra_config: dict[str, int | float | str | bool] = pydantic.Field(

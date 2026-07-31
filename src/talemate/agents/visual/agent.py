@@ -25,6 +25,7 @@ from .anchors import AnchorMixin
 from .references import ReferenceMixin
 from .style import StyleMixin
 from .generation import GenerationMixin
+from .vram import VRAMHandoffMixin
 from .analyze import AnalysisMixin
 from .backends.comfyui import ComfyUIMixin
 from .backends.automatic1111 import Automatic1111Mixin
@@ -58,6 +59,7 @@ class VisualAgent(
     ReferenceMixin,
     StyleMixin,
     GenerationMixin,
+    VRAMHandoffMixin,
     AnalysisMixin,
     ComfyUIMixin,
     Automatic1111Mixin,
@@ -136,6 +138,13 @@ class VisualAgent(
                         max=900,
                         step=10,
                         description="Timeout in seconds. If the backend does not generate an image within this time, it will be considered failed.",
+                        scene_overridable=False,
+                    ),
+                    "vram_handoff": AgentActionConfig(
+                        type="bool",
+                        value=False,
+                        label="Free text-model VRAM during generation",
+                        description="Unload local Ollama text models before each image generation and load them back after. For single-GPU machines where the text and image models cannot share VRAM; costs a few seconds of model reload per image.",
                         scene_overridable=False,
                     ),
                     "automatic_setup": AgentActionConfig(
@@ -235,6 +244,37 @@ class VisualAgent(
                         note=AgentActionNote(
                             color="warning",
                             text="Requires an image editing backend whose workflow accepts references - for ComfyUI, one with 'Talemate Reference N' nodes. Without one this does nothing.",
+                        ),
+                    ),
+                },
+            ),
+            "_distillation": AgentAction(
+                enabled=True,
+                container=True,
+                label="Prompt Distillation",
+                description="Hands the scene facts to the agent's text model in one call and uses its finished keyword prompt, instead of assembling one from keyword lists and rules.",
+                icon="mdi-flask-outline",
+                config={
+                    "enabled": AgentActionConfig(
+                        type="bool",
+                        value=False,
+                        label="Distill image prompts with the LLM",
+                        description=(
+                            "One call per image: subject identity, wardrobe, rules, "
+                            "setting and the moment being illustrated go in, the final "
+                            "positive and negative prompts come out. Replaces the "
+                            "keyword-list post-processing entirely; if the call fails, "
+                            "the old pipeline runs instead."
+                        ),
+                        note=AgentActionNote(
+                            color="warning",
+                            text=(
+                                "Needs a capable, uncensored text model on this agent's "
+                                "client - a weak model here reintroduces every prompt "
+                                "problem this exists to fix. Bake-off evidence (2026-07-31): "
+                                "glm-5.2:cloud on Ollama. The story prose in view of the "
+                                "call leaves the machine when the client is a cloud model."
+                            ),
                         ),
                     ),
                 },
@@ -482,6 +522,13 @@ class VisualAgent(
     @property
     def automatic_setup(self) -> bool:
         return self.actions["_config"].config["automatic_setup"].value
+
+    @property
+    def distillation_enabled(self) -> bool:
+        try:
+            return bool(self.resolve_config("_distillation", "enabled"))
+        except Exception:
+            return False
 
     @property
     def fallback_prompt_type(self) -> PROMPT_TYPE:
