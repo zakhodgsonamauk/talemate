@@ -1,0 +1,20 @@
+{
+  "version": 3,
+  "track_id": "model-aware-prompting",
+  "name": "Model-aware prompt generation (prompt profiles)",
+  "type": "feature",
+  "status": "planned",
+  "superpower_enhanced": true,
+  "created_at": "2026-08-01",
+  "loop_state": {
+    "current_step": "EVALUATE_PLAN",
+    "step_status": "NOT_STARTED",
+    "fix_cycle_count": 0,
+    "checkpoints": {
+      "PLAN": {
+        "status": "PASSED"
+      }
+    }
+  },
+  "notes": "Spec authored in-session 2026-08-01 from user-supplied dialect guides (Pony four-section format incl. score_6_up + required art style; Juggernaut XI/XII component-ordered NL <=75 tokens) and the live mismatch evidence (flow visual:revisualize:fcbc1f - Pony prompt sent to Juggernaut XI). Key inversion: resolve checkpoint -> profile BEFORE distillation. Depends on nothing; touches the distillation path shipped by the visual perf work (pending-key must gain profile id)."
+}
