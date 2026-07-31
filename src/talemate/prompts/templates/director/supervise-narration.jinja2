@@ -1,0 +1,66 @@
+{#-
+Extractors:
+  - response: AsIsExtractor()
+-#}
+{# STATIC CONTEXT #}
+{% set rendered_context_content %}
+<|SECTION:CONTEXT|>
+{% with include_scenario_premise=True %}
+{% include "extra-context-static.jinja2" %}
+{% endwith %}
+<|CLOSE_SECTION|>
+{% endset %}
+{# VOLATILE CONTEXT #}
+{% set volatile_context_text %}
+{% with sub_instruction="" %}{% include "memory-context.jinja2" %}{% endwith %}
+{% include "world-state-snapshot.jinja2" %}
+{% include "extra-context-dynamic.jinja2" %}
+{% endset %}
+{# SCENE HISTORY - use whatever budget remains, this is the director's edge over the narrator #}
+{% set budget = max_tokens - 1500 - count_tokens(rendered_context_content) - count_tokens(volatile_context_text) - count_tokens(draft) - response_length %}
+{{ rendered_context_content }}
+{{ volatile_context_text }}
+{% include "writing-style-instructions.jinja2" %}
+<|SECTION:SCENE|>
+{% for scene_line in scene.context_history(budget=budget, min_dialogue=20, sections=False) -%}
+{{ scene_line }}
+{% endfor %}
+<|CLOSE_SECTION|>
+<|SECTION:DRAFT NARRATION|>
+A smaller writing model has produced the following draft narration, intended to be appended to the current moment of the scene:
+
+```draft
+{{ draft }}
+```
+<|CLOSE_SECTION|>
+<|SECTION:TASK|>
+{% if mode == "author" %}
+You are the story's director. The draft above tells you WHAT is supposed to happen next - treat it only as a statement of intent. Write your own, better narration for that moment.
+
+Requirements:
+- Advance the story with specific, purposeful events or actions - never restate or pad what the scene history already establishes.
+- Do not reuse story beats, imagery, distinctive phrases or information that already appear in the scene history.
+- Stay consistent with established facts, characters, tone and the writing style.
+- Keep roughly the draft's length and scope. Write only narration - no direct dialogue lines for characters, no commentary, no analysis.
+
+Respond with your narration wrapped in <NARRATION></NARRATION> tags. Respond with nothing else.
+{% else %}
+You are the story's director reviewing the draft before it is committed to the scene. You can see far more scene history than the writing model could.
+
+Check the draft against the full scene history:
+- Repetition: does it repeat story beats, imagery, distinctive phrases or information that were already established?
+- Stalling: does it fail to move the scene forward, merely re-describing the current state?
+- Contradiction: does it conflict with established facts, characters, tone or the writing style?
+{% if guidance %}
+Additional review criteria:
+{{ guidance }}
+{% endif %}
+
+If the draft is acceptable, respond with exactly: PASS
+
+Otherwise write a corrected replacement. Preserve the draft's intent, length and scope - fix only what is broken: cut repeated material, replace stalled passages with forward motion, resolve contradictions. Write only narration - no direct dialogue lines for characters, no commentary.
+
+Respond either with PASS or with the replacement narration wrapped in <NARRATION></NARRATION> tags. Respond with nothing else.
+{% endif %}
+{% include "response-length.jinja2" %}
+<|CLOSE_SECTION|>

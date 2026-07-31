@@ -25,6 +25,7 @@ from .auto_direct import AutoDirectMixin
 from .websocket_handler import DirectorWebsocketHandler
 from .chat.mixin import DirectorChatMixin
 from .character_management import CharacterManagementMixin
+from .narration_supervision import NarrationSupervisionMixin
 from .scene_direction.mixin import SceneDirectionMixin
 from .plan.mixin import PlanMixin
 import talemate.agents.director.nodes  # noqa: F401
@@ -43,6 +44,7 @@ class DirectorAgent(
     GuideSceneMixin,
     MemoryRAGMixin,
     GenerateChoicesMixin,
+    NarrationSupervisionMixin,
     AutoDirectMixin,
     LegacySceneInstructionsMixin,
     CharacterManagementMixin,
@@ -98,6 +100,7 @@ class DirectorAgent(
         DirectorChatMixin.add_actions(actions)
         SceneDirectionMixin.add_scene_direction_actions(actions)
         PlanMixin.add_plan_actions(actions)
+        NarrationSupervisionMixin.add_narration_supervision_actions(actions)
         return actions
 
     @classmethod
