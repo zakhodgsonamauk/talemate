@@ -226,6 +226,65 @@ classification, or an explicit per-scene setting. Decide before implementing.
 suit it, and an explicit scene still uses the uncensored profile. **Deps**: T12, and T13 if
 its finding changes the workflow.
 
+### [ ] T15 — Another character's traits are leaking into the subject's prompt
+
+**Root cause of the second failed verification, and the highest-value defect on this track.**
+
+The subject was Zak, a human male. His prompt contained `purple skin`, `bare chest`,
+`Altrusian`, `geometric patterns on arms`, `combat trousers`, `pulse pistol` — all Kaira's.
+Two consequences, not one:
+
+1. The image is wrong on its own terms: contradictory adjectives on the subject.
+2. It *disarmed a guardrail*. `bare chest` is an undress phrase, so the dressed test read
+   the scene as wanting undress and suppressed every nudity negative. The explicit output
+   followed from another character's trait.
+
+`_drop_secondary_traits` exists for exactly this and did not catch it. The reason is
+visible in `_primary_and_secondary`: traits are matched from each character's **anchor
+tokens**, and the LLM paraphrases — it writes `purple skin` where Kaira's anchor says
+`deep violet skin`. Word-level matching (`words_of`, len > 3) catches `violet` but not
+`purple`, and nothing at all catches `Altrusian` unless it happens to be in her anchor.
+
+Candidate approaches, to be chosen after reading the existing matcher:
+- Widen the per-character vocabulary beyond the anchor to the full attribute set, so
+  species and gear terms are matchable.
+- Drop traits that contradict the subject's own attributes — a human subject cannot have
+  `purple skin`, whatever wrote it.
+- Both, since they fail differently.
+
+**Acceptance**: a two-character scene produces a subject prompt containing none of the
+other character's identity, species or gear vocabulary, including paraphrases. Unit-tested
+against the observed prompt. **Deps**: none — independent of the pose work.
+
+### [ ] T16 — Decide "is the subject dressed" from the subject, not from keyword lists
+
+The keyword approach has now failed twice in one session, in both directions: `bare metal`
+read as undress, and a leaked `bare chest` disarming the negatives for a fully dressed man.
+Counting garments against undress phrases is a stopgap, not an answer — it reasons over the
+whole prompt, which describes everyone present, when the question is about one person.
+
+The right signal already exists and is per-character. `character.visual_wardrobe`
+(`anchors.py:41`, `WARDROBE_QUESTION`, refreshed every `DEFAULT_WARDROBE_INTERVAL` = 10
+turns) is an LLM-written statement of what *that* character is wearing, and
+`_suppress_stale_wardrobe` already reasons about it against what the scene says now.
+
+Design:
+- Ask the question of the **subject**: is this character, right now, dressed? Read
+  `visual_wardrobe` first, then what the scene says about them this moment — the precedence
+  `_suppress_stale_wardrobe` already establishes, where the scene wins because undressing is
+  a single beat the reinforcement will not notice for several more.
+- Because it is scoped to one character, another character's `bare chest` can never reach
+  it. That alone fixes the observed failure.
+- Escalate to an explicit LLM judgement only when those sources are absent or conflict. A
+  per-image call to the cloud model is affordable but should not be the default path for a
+  question already answered on an interval.
+- Keep the keyword counting as the last-resort fallback for scenes with no reinforcement
+  data at all, and say so in the code rather than leaving it as the primary mechanism.
+
+**Acceptance**: the observed contaminated prompt yields nudity negatives, a deliberate
+undress beat does not, and neither outcome depends on vocabulary lists. **Deps**: T12. Best
+done alongside T15, since both concern attributing prompt content to the right character.
+
 ---
 
 ## Phase 6 — Close out

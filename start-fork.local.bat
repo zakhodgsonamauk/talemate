@@ -54,6 +54,14 @@ REM ---- Ports ----------------------------------------------
 REM set "TALEMATE_BACKEND_PORT=5050"
 REM set "TALEMATE_FRONTEND_PORT=8082"
 
+REM ---- Ollama concurrency ---------------------------------
+REM Ollama serialises requests by default. That is fine today: the scene loop awaits the
+REM director's turn before generating actor output, so the cloud director and the local
+REM model never overlap. It becomes necessary when the director starts thinking in the
+REM background (autonomous-story T24) - cloud inference uses no local VRAM, so the
+REM parallelism is free once the daemon allows it.
+REM set "OLLAMA_NUM_PARALLEL=2"
+
 REM ---- Switches -------------------------------------------
 REM Fall back to KoboldCpp instead of ComfyUI. Read after this file is called,
 REM so setting it here works.

@@ -2148,3 +2148,88 @@ async def test_overlapping_negative_sets_are_not_emitted_twice(styling_agent):
 
     tags = [t.strip() for t in request.negative_prompt.split(",") if t.strip()]
     assert len(tags) == len(set(tags)), f"duplicate negatives: {request.negative_prompt}"
+
+
+# The observed prompt, trimmed: a fully dressed male subject whose keyword list had
+# picked up another character's "bare chest". A veto-style undress check switched off
+# every nudity negative and the generation came back explicit.
+CONTAMINATED_DRESSED_PROMPT = (
+    "Zak, standing, maintenance uniform, dark blue shirt, grey-blue pants, tool belt, "
+    "scuffed boots, diagnostic tools, purple skin, bare chest, geometric patterns, "
+    "Altrusian, combat trousers, reactor controls"
+)
+
+
+async def test_one_leaked_undress_word_does_not_disarm_a_dressed_subject(styling_agent):
+    """Weight of evidence: five garments against one stray phrase is dressed."""
+    from talemate.context import active_scene
+
+    styling_agent.kaira.base_attributes["gender"] = "male"
+    request = _request(CONTAMINATED_DRESSED_PROMPT + ", Kaira")
+
+    token = active_scene.set(styling_agent.scene)
+    try:
+        await styling_agent._finalize_prompt(request)
+    finally:
+        active_scene.reset(token)
+
+    assert "exposed genitals" in request.negative_prompt, (
+        "a single leaked undress phrase suppressed the nudity negatives again"
+    )
+
+
+async def test_a_deliberate_undress_beat_still_wins(styling_agent):
+    """One garment against one undress phrase - the scene keeps the benefit of the doubt."""
+    from talemate.context import active_scene
+
+    styling_agent.kaira.base_attributes["gender"] = "female"
+    request = _request(", ".join([KAIRA_ANCHOR, "Kaira", "unbuttoning her shirt"]))
+
+    token = active_scene.set(styling_agent.scene)
+    try:
+        await styling_agent._finalize_prompt(request)
+    finally:
+        active_scene.reset(token)
+
+    assert "nude" not in (request.negative_prompt or "")
+
+
+async def test_bare_metal_is_not_an_undress_signal(styling_agent):
+    """"bare" alone was too weak - it appears in scenery, not only on people."""
+    from talemate.context import active_scene
+
+    styling_agent.kaira.base_attributes["gender"] = "female"
+    request = _request(
+        ", ".join([KAIRA_ANCHOR, "Kaira", "uniform", "bare metal walls", "vacuum exposure"])
+    )
+
+    token = active_scene.set(styling_agent.scene)
+    try:
+        await styling_agent._finalize_prompt(request)
+    finally:
+        active_scene.reset(token)
+
+    assert "exposed genitals" in request.negative_prompt
+
+
+async def test_sex_conditioning_survives_a_paraphrased_anchor(styling_agent):
+    """The LLM writes "purple skin" where the anchor says "violet skin".
+
+    Sex conditioning used to hang off `_primary_and_secondary`, which records the
+    subject only after confirming the anchor's own wording is in the prompt. That
+    guard is correct for deciding whose traits to protect and wrong for deciding
+    who is being drawn, so a paraphrase switched sex conditioning off entirely.
+    """
+    from talemate.context import active_scene
+
+    styling_agent.kaira.base_attributes["gender"] = "female"
+    request = _request("Kaira, purple skin, indigo hair, uniform, boots, console")
+
+    token = active_scene.set(styling_agent.scene)
+    try:
+        await styling_agent._finalize_prompt(request)
+    finally:
+        active_scene.reset(token)
+
+    assert request.negative_prompt, "no negatives at all - sex conditioning did not run"
+    assert "1boy" in request.negative_prompt

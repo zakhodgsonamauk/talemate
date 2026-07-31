@@ -59,8 +59,20 @@ REM after a run (~10.9GB measured with SDXL + IP-Adapter), and Rocinante-12B
 REM wants ~8.6GB, which does not fit in 16GB together. Set to "" to disable.
 if not defined COMFYUI_ARGS      set "COMFYUI_ARGS=--reserve-vram 5"
 
+REM TALEMATE_DEBUG turns on the [debug] log lines. They are what make the visual prompt
+REM path diagnosable - choose_subject, sex_tags.added, species_negatives.added and the
+REM finalize_prompt token counts are all debug level, and without them a wrong image gives
+REM you nothing to go on.
 set "TALEMATE_DEBUG=1"
 set "COREPACK_ENABLE_DOWNLOAD_PROMPT=0"
+
+REM Python writes its startup banner and log lines through stdout. On Windows that stream
+REM defaults to the console codepage, so the moment anything redirects it to a file the
+REM first non-ASCII character raises UnicodeEncodeError and the process dies during
+REM startup. utf-8 makes redirection safe; unbuffered keeps a redirected log current
+REM rather than trickling out a block at a time.
+set "PYTHONIOENCODING=utf-8"
+set "PYTHONUNBUFFERED=1"
 
 REM Machine-specific overrides (model paths, ports, OLLAMA_MODELS) live in
 REM start-fork.local.bat, which is untracked. Keeps this file generic.

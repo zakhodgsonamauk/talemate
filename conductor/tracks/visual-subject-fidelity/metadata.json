@@ -23,8 +23,8 @@
       "T2",
       "T12"
     ],
-    "next_task": "T3 re-verify by generation, then T13",
-    "next_task_note": "T12 shipped. Re-generate to see whether the anatomy negatives alone fix the explicitness - if they do, T14 may be unnecessary. T13 (reference background leak) is arguably the higher-value defect for scene illustrations."
+    "next_task": "T15 + T16 together",
+    "next_task_note": "T12 shipped but was defeated in live use by T15 (trait leak). T15 is the root cause and T16 replaces the brittle keyword test with the per-character wardrobe signal that already exists. Do them together - both concern attributing prompt content to the right character."
   },
   "cannot_self_certify": {
     "reason": "diffusion output can only be judged by looking at it",
@@ -155,6 +155,22 @@
         "T12"
       ],
       "note": "Plumbing exists: comfyui.py:1000-1012 resolves a per-gen-type handler carrying workflow AND model, and set_main_model (:190) overwrites ckpt_name at request time. But a checkpoint is not swappable alone - Pony needs score tags, steps 30, cfg 5-7, DPM++ 2M Karras; sd_xl_turbo needs no score tags, steps ~6, cfg ~1, Euler a (recorded in start-fork.local.bat). The unit is a profile: checkpoint + sampler + style tags. Installed: CyberRealisticPony_V9, CyberRealistic_PonySemi_V5 (both uncensored), sd_xl_turbo_1.0_fp16 (censored). Open question: what selects the profile - undress intent (already computed by T12), content classification, or an explicit per-scene setting."
+    },
+    {
+      "id": "T15",
+      "name": "Another character's traits leak into the subject's prompt - ROOT CAUSE",
+      "status": "pending",
+      "deps": [],
+      "note": "Subject was a human male; his prompt carried purple skin, bare chest, Altrusian, geometric patterns on arms, combat trousers, pulse pistol - all another character's. Two consequences: contradictory adjectives on the subject, AND it disarmed a guardrail, because 'bare chest' is an undress phrase so the dressed test suppressed every nudity negative. _drop_secondary_traits matches from anchor tokens and the LLM paraphrases - it writes 'purple skin' where the anchor says 'deep violet skin', and nothing catches 'Altrusian' at all."
+    },
+    {
+      "id": "T16",
+      "name": "Decide 'is the subject dressed' from the subject, not keyword lists",
+      "status": "pending",
+      "deps": [
+        "T12"
+      ],
+      "note": "Keyword matching failed twice in one session in both directions: 'bare metal' read as undress, and a leaked 'bare chest' disarmed the negatives for a fully dressed man. Counting garments vs undress phrases is a stopgap that reasons over a prompt describing everyone present, when the question concerns one person. character.visual_wardrobe (anchors.py:41, refreshed every 10 turns) is already a per-character LLM-written answer, and _suppress_stale_wardrobe already establishes the precedence where the scene beats the reinforcement. Scoping the question to the subject makes another character's 'bare chest' unreachable. Escalate to an explicit LLM judgement only when those sources are absent or conflict; keep keyword counting as last-resort fallback only."
     }
   ],
   "problems": {
@@ -164,7 +180,9 @@
     "P4": "The prompt runs far past useful attention. image_max_tokens is 250 against a DEFAULT_MAX_PROMPT_TOKENS of 77; the observed prompt measured ~196 tokens with the action words near token 95, and style.py:39 already records that beyond ~155 tokens roughly half the prompt is past where the encoder meaningfully attends",
     "P5": "The action is atomised and unweighted. 'Leaning over the console' arrives as 'standing, lean, hands hovering, interface' with the subject-object relationship destroyed, while the appearance anchor carries :1.3 and the action carries nothing. Roughly 40 tokens are unrenderable abstractions crowding out what does draw",
     "P6": "Nudity negatives were incomplete: a subject wearing jeans and a tank top was rendered with trousers open and genitals exposed, which 'nude, naked, topless' do not describe",
-    "P7": "The reference image's background leaks into the generation - a reactor-room prompt produced an outdoor garden, because the reference photo was taken outdoors"
+    "P7": "The reference image's background leaks into the generation - a reactor-room prompt produced an outdoor garden, because the reference photo was taken outdoors",
+    "P8": "Another character's traits leak into the subject's prompt because _drop_secondary_traits matches anchor tokens while the LLM paraphrases them; this also disarmed the nudity negatives, since the leaked 'bare chest' read as undress intent",
+    "P9": "Sex conditioning silently did nothing whenever the LLM paraphrased the anchor, because it read _primary_character, which _primary_and_secondary only sets after confirming the anchor's own wording appears in the prompt"
   },
   "decisions": [
     "Sex is expressed as booru tags (1boy / male focus / 1girl), not natural language. The checkpoint family is tag-trained; 'human male' carries little signal. This is the same principle visual-reference-closure recorded for negatives, applied to the positive, which nobody had done.",
@@ -175,6 +193,8 @@
     "IPAdapter stays untouched until R1-R5 are verified. Changing text conditioning and reference strength together makes any result unattributable.",
     "Not conflated with visual-reference-closure T1/T2, the still-unimplemented duplication guardrails. Same file, different defect.",
     "Undress intent in the prompt suppresses the nudity negatives even when a garment is named. 'unbuttoning his shirt' names a garment while describing its removal; the scene text is the authority in both directions, not just when it says they are dressed.",
-    "Model switching is a profile, not a checkpoint name: Pony and SDXL-Turbo need different sampler settings and different style tags, so swapping ckpt_name alone produces mush. Recorded before implementing T14."
+    "Model switching is a profile, not a checkpoint name: Pony and SDXL-Turbo need different sampler settings and different style tags, so swapping ckpt_name alone produces mush. Recorded before implementing T14.",
+    "Dressed-or-not is decided by weight of evidence rather than a single word, as an interim measure: one leaked undress phrase must not disarm the negatives for a subject wearing four garments, while a deliberate undress beat (one garment, one undress phrase) still wins on a tie.",
+    "The keyword lists are acknowledged as the wrong instrument (user, 2026-07-31). T16 replaces them with the per-character visual_wardrobe reinforcement, which is already LLM-written and already refreshed on an interval, rather than adding a per-image LLM call for a question that is answered elsewhere."
   ]
 }

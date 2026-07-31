@@ -88,13 +88,17 @@ NUDITY_NEGATIVES = (
     "nsfw",
 )
 
-# Words in the prompt that mean the scene intends undress. Their presence suppresses the
+# Phrases in the prompt that mean the scene intends undress. Their presence suppresses the
 # nudity negatives even when clothing is also mentioned - "unbuttoning his shirt" names a
 # garment while describing its removal, and negating that would fight the scene.
+#
+# Every entry must be unambiguous on its own. A bare "bare" was tried and had to be removed:
+# it matched another character's leaked "bare chest" in a prompt whose subject was fully
+# dressed, silently switching off every nudity negative. "exposed" went the same way - the
+# prompt also carried "vacuum exposure". Where a stem is ambiguous, the phrase is spelled out.
 _UNDRESS_INTENT_WORDS = {
     "nude",
     "naked",
-    "bare",
     "topless",
     "bottomless",
     "shirtless",
@@ -106,11 +110,14 @@ _UNDRESS_INTENT_WORDS = {
     "unzipping",
     "unzipped",
     "stripping",
-    "exposed",
-    "nipples",
     "cleavage",
     "lingerie",
     "underwear",
+    "bare chest",
+    "bare torso",
+    "bare shoulders",
+    "bare breasts",
+    "exposed skin",
 }
 
 _CLOTHING_WORDS = {
@@ -750,10 +757,13 @@ class GenerationMixin:
         if not scene or request.vis_type in VIS_TYPES_WITHOUT_CAST:
             return None
 
-        # Same determination the species negatives use - the subject on screen, not
-        # simply the first of the cast.
-        await self._primary_and_secondary(keywords, request)
-        primary = getattr(self, "_primary_character", None)
+        # Chosen directly rather than through `_primary_and_secondary`, which only records
+        # the subject once it has confirmed the anchor's own wording is present in the
+        # prompt. That guard is right for deciding whose traits to protect, but wrong here:
+        # the LLM paraphrases anchors - "purple skin" where the anchor says "violet skin" -
+        # and sex conditioning would silently do nothing every time it did.
+        characters = list(getattr(self, "characters", None) or scene.characters)
+        primary = self._choose_subject(characters, keywords, request)
         if not primary:
             return None
 
@@ -807,14 +817,26 @@ class GenerationMixin:
 
         collect(SEX_NEGATIVES.get(sex, ()))
 
-        # Only claim they are dressed if the prompt says so, and only if it does not also
-        # describe undress. The scene text is the authority in both directions.
-        lowered = [keyword.lower() for keyword in keywords]
-        wearing = any(word in keyword for keyword in lowered for word in _CLOTHING_WORDS)
-        undressing = any(
-            word in keyword for keyword in lowered for word in _UNDRESS_INTENT_WORDS
-        )
-        dressed = wearing and not undressing
+        # Whether they are dressed is decided by weight of evidence, not by a single word.
+        #
+        # A veto was tried and failed: one leaked "bare chest" from another character
+        # switched off every nudity negative for a subject wearing a uniform, a shirt,
+        # trousers and a tool belt, and the result was explicit. Counting instead means a
+        # deliberate undress beat still wins - "unbuttoning her shirt" is one garment
+        # against one undress phrase - while a fully dressed subject survives a stray word.
+        # A tie goes to undress, so the scene keeps the benefit of the doubt.
+        # Each keyword is classified once, undress first: "unbuttoning her shirt" names a
+        # garment while describing its removal, and counting it on both sides would let it
+        # vote against itself.
+        garments = 0
+        undress = 0
+        for keyword in (k.lower() for k in keywords):
+            if any(word in keyword for word in _UNDRESS_INTENT_WORDS):
+                undress += 1
+            elif any(word in keyword for word in _CLOTHING_WORDS):
+                garments += 1
+
+        dressed = garments > undress
         if dressed:
             collect(NUDITY_NEGATIVES)
 
