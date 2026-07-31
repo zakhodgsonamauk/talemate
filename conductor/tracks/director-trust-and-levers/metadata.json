@@ -1,0 +1,14 @@
+{
+  "version": 3,
+  "track_id": "director-trust-and-levers",
+  "name": "Director trust and autonomy levers",
+  "type": "feature",
+  "status": "planned",
+  "superpower_enhanced": true,
+  "created": "2026-07-31",
+  "loop_state": {
+    "current_step": "EXECUTE",
+    "step_status": "IN_PROGRESS"
+  },
+  "notes": "Spec and plan authored in-session from live debugging context (2026-07-31). Plan step and plan evaluation intentionally pre-completed: designs were validated against source during the session itself. Execution should start directly. Sibling track autonomous-story owns the deep scene-loop rework - see spec 'Relationship' section."
+}

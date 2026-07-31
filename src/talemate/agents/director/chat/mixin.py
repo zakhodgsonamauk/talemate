@@ -1,7 +1,10 @@
+import re
+
 import structlog
 from typing import Any, Literal, TYPE_CHECKING, Callable, Awaitable
 
 import talemate.instance as instance
+import talemate.util as util
 from talemate.agents.base import set_processing, AgentAction, AgentActionConfig
 from talemate.emit import emit
 from talemate.game.engine.nodes.core import GraphState
@@ -31,6 +34,8 @@ if TYPE_CHECKING:
     from talemate.tale_mate import Scene
 
 log = structlog.get_logger("talemate.agent.director.chat")
+
+REDACTED_PATTERN = re.compile(r"<REDACTED>(.*?)(?:</REDACTED>|$)", re.S)
 
 
 class DirectorChatMixin:
@@ -493,16 +498,88 @@ class DirectorChatMixin:
             log.error("director.chat.serialize_history.error", error=e)
             return None
 
+    def _serialize_chat_message_for_prompt(
+        self, message: Any
+    ) -> DirectorChatMessage | DirectorChatActionResultMessage | None:
+        """
+        Like _serialize_chat_message, but swaps in the unredacted text so the
+        director's own prompt history keeps planning continuity. Copies the
+        model - the stored (redacted) message is never mutated.
+        """
+        item = self._serialize_chat_message(message)
+        if item is not None and getattr(item, "unredacted_message", None):
+            item = item.model_copy(update={"message": item.unredacted_message})
+        return item
+
     def chat_history_for_prompt(self, chat_id: str) -> list[Any]:
         """Prepare chat history for the prompt template."""
         chat = self.chat_get(chat_id)
         if not chat:
             return []
         return action_utils.serialize_history(
-            chat.messages, self._serialize_chat_message
+            chat.messages, self._serialize_chat_message_for_prompt
         )
 
     # === Generation ===
+
+    @set_processing
+    async def chat_redact_message(self, chat: DirectorChat, text: str) -> str:
+        """
+        nospoilers redaction gate: pass a draft director reply through a
+        second generation that removes anything the player has not already
+        witnessed in the scene.
+
+        Returns the redacted text. On any failure returns the original text -
+        the gate must never block the reply.
+        """
+        try:
+            draft_tokens = util.count_tokens(text)
+            response_length = min(max(512, draft_tokens * 2), 1024)
+
+            response, _ = await Prompt.request(
+                "director.redact-spoilers",
+                self.client,
+                f"direction_{response_length}",
+                vars={
+                    "scene": self.scene,
+                    "max_tokens": self.client.max_token_length,
+                    "draft": text,
+                    "response_length": response_length,
+                },
+            )
+
+            if not response:
+                return text
+
+            match = REDACTED_PATTERN.search(response)
+            if match:
+                redacted = match.group(1).strip()
+                return redacted or text
+
+            return text
+        except Exception as e:
+            log.error("director.chat.redact.error", error=e)
+            return text
+
+    async def _chat_build_director_message(
+        self, chat_id: str, text: str
+    ) -> DirectorChatMessage:
+        """
+        Build the DirectorChatMessage for a director reply, applying the
+        nospoilers redaction gate when the chat is in nospoilers mode.
+
+        When the gate rewrites the text, the redacted version becomes the
+        displayed `message` and the original is kept in `unredacted_message`
+        for the director's own prompt history.
+        """
+        chat = self.chat_get(chat_id)
+        if chat and chat.mode == "nospoilers":
+            redacted = (await self.chat_redact_message(chat, text)).strip()
+            if redacted and redacted != text.strip():
+                return DirectorChatMessage(
+                    message=redacted, unredacted_message=text, source="director"
+                )
+        return DirectorChatMessage(message=text, source="director")
 
     async def chat_generate_next(
         self,
@@ -614,7 +691,9 @@ class DirectorChatMixin:
                 if parsed_response:
                     await self.chat_append_message(
                         chat_id,
-                        DirectorChatMessage(message=parsed_response, source="director"),
+                        await self._chat_build_director_message(
+                            chat_id, parsed_response
+                        ),
                         on_update=on_update,
                     )
             else:
@@ -710,7 +789,7 @@ class DirectorChatMixin:
             if follow_parsed:
                 await self.chat_append_message(
                     chat_id,
-                    DirectorChatMessage(message=follow_parsed, source="director"),
+                    await self._chat_build_director_message(chat_id, follow_parsed),
                     on_update=on_update,
                 )
 

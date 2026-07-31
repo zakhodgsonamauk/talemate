@@ -47,11 +47,16 @@ class DirectorChatResponse(pydantic.BaseModel):
 class DirectorChatMessage(ActionCoreMessage):
     """
     Chat message - extends base with user source and asset support.
+
+    `unredacted_message` holds the director's original text when the
+    nospoilers redaction gate rewrote `message` for display - the director's
+    own prompt history uses it to keep planning continuity.
     """
 
     source: Literal["director", "user"]
     type: Literal["text", "action_result", "asset_view"] = "text"
     asset_id: str | None = None
+    unredacted_message: str | None = None
 
 
 class DirectorChatFunctionSelected(pydantic.BaseModel):

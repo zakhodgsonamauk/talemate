@@ -1,0 +1,35 @@
+{#-
+Extractors:
+  - response: AsIsExtractor()
+-#}
+{# SCENE HISTORY - only what the player has already witnessed #}
+{% set budget = min(3072, max_tokens - 1024 - count_tokens(draft) - response_length) %}
+<|SECTION:SCENE|>
+{% for scene_line in scene.context_history(budget=budget, min_dialogue=10, sections=False) -%}
+{{ scene_line }}
+{% endfor %}
+<|CLOSE_SECTION|>
+<|SECTION:DRAFT REPLY|>
+The story's director wrote the following draft reply to the player. The player wants to steer the story without learning what will happen.
+
+```draft
+{{ draft }}
+```
+<|CLOSE_SECTION|>
+<|SECTION:TASK|>
+Rewrite the draft reply for the player. Remove or vaguely paraphrase anything the player has not already witnessed in the scene above:
+
+- Planned or future events, or hints at their nature
+- Arc/beat positions, structure, or how much of the story remains
+- Hidden roles, motives, secrets or relationships not yet shown in the scene
+- Menus of possible outcomes ("I could do X or Y - which do you prefer?") - replace with a vague confirmation that the director will act
+- Details of things the director created or changed, beyond what the player themselves asked for
+- Hidden state changes or dice results the player has not seen
+
+Keep: acknowledgments, tone, any questions that do not reveal hidden information, and everything the player already knows from the scene. Keep it to one short reply. Preserve the draft's light markdown style.
+
+If the draft reveals nothing, return it unchanged.
+
+Respond with the rewritten reply wrapped in <REDACTED></REDACTED> tags. Respond with nothing else.
+<|CLOSE_SECTION|>
+{{ set_prepared_response("<REDACTED>") }}
