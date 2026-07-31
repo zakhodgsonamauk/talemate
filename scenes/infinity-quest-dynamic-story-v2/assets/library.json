@@ -20,7 +20,13 @@
         "reference_assets": [],
         "tags": [],
         "reference": [],
-        "analysis": null
+        "analysis": null,
+        "cover_bbox": {
+          "x": 0.0,
+          "y": 0.0,
+          "w": 1.0,
+          "h": 1.0
+        }
       }
     },
     "2a2d07de2e420983bf68fbb5190d1a3ef4087fc111d708026bc0cb40f0e7711f": {
@@ -40,12 +46,19 @@
           "height": 1344
         },
         "sampler_settings": {
-          "steps": 40
+          "steps": 40,
+          "seed": null
         },
         "reference_assets": [],
         "tags": [],
         "reference": [],
-        "analysis": null
+        "analysis": null,
+        "cover_bbox": {
+          "x": 0.0,
+          "y": 0.0,
+          "w": 1.0,
+          "h": 1.0
+        }
       }
     },
     "2f2ec12f46906aad086471e560d00ec13ce85f53e414f0477294ccc4ff00419c": {
@@ -68,7 +81,13 @@
         "reference_assets": [],
         "tags": [],
         "reference": [],
-        "analysis": null
+        "analysis": null,
+        "cover_bbox": {
+          "x": 0.0,
+          "y": 0.0,
+          "w": 1.0,
+          "h": 1.0
+        }
       }
     },
     "b3ad0c59ac4873e3b4323500ba00f70db6ec3d6ac45d9e97c0f64e38837a8c1a": {
@@ -91,7 +110,344 @@
         "reference_assets": [],
         "tags": [],
         "reference": [],
-        "analysis": null
+        "analysis": null,
+        "cover_bbox": {
+          "x": 0.0,
+          "y": 0.0,
+          "w": 1.0,
+          "h": 1.0
+        }
+      }
+    },
+    "dc8eafc59c5a9ffaa8db057a47ce3d8e92262fddb26f8eaba81aa56aeba2b8c0": {
+      "id": "dc8eafc59c5a9ffaa8db057a47ce3d8e92262fddb26f8eaba81aa56aeba2b8c0",
+      "file_type": "png",
+      "media_type": "image/png",
+      "meta": {
+        "name": null,
+        "vis_type": "SCENE_ILLUSTRATION",
+        "gen_type": "TEXT_TO_IMAGE",
+        "character_name": null,
+        "prompt": "score_9, score_8_up, score_7_up, semi-realistic, detailed painterly rendering, realistic anatomy, cinematic lighting, sharp focus, starship interior, deep space, science fiction, sleek modern design, holographic displays, artificial lighting, metallic surfaces, crew quarters, navigation console, human male, dark hair with grey temples, brown eyes, six feet tall, broad-shouldered muscular build, weathered face, standard-issue black EVA suit with silver rank markings on collar, close-cropped hair, The user controlled character - always has the head / face rendered completely in shadows, alien woman, deep violet skin with geometric facial markings, indigo hair pulled back in a secure style, large dark eyes with no visible iris, lean angular build, four-fingered hands, fitted dark blue-grey utility suit, tool loops and pockets on belt, Cold metal floor plating, Violet alien skin, Blue-white flickering screens, Geometric patterns on forearms, Dark circles under human eyes, White knuckles on console edge, Starlight Nomad interior, Corrupted data stream, Derelict structure outside viewports, Harsh overhead light, Sterile space, Bare feet, Casual alert stance, Console display, Framed moment, Elmer Farstield, Kaira, Starship control room, Data stream analysis, Processing information, Night shift exhaustion, Trust between officers, Derelict civilization, Entropy and madness, Organic corruption, Technical failure, Suspense",
+        "negative_prompt": "text, watermark, low quality, blurry, deformed, extra limbs, bad hands, bad anatomy",
+        "format": "LANDSCAPE",
+        "resolution": {
+          "width": 1216,
+          "height": 832
+        },
+        "sampler_settings": {
+          "steps": 40,
+          "seed": null
+        },
+        "reference_assets": [],
+        "tags": [],
+        "reference": [],
+        "analysis": null,
+        "cover_bbox": {
+          "x": 0.0,
+          "y": 0.0,
+          "w": 1.0,
+          "h": 1.0
+        }
+      }
+    },
+    "899eb450166db35c249fd91139cadcd45933842ba62bfa9ef696effc2c700697": {
+      "id": "899eb450166db35c249fd91139cadcd45933842ba62bfa9ef696effc2c700697",
+      "file_type": "png",
+      "media_type": "image/png",
+      "meta": {
+        "name": null,
+        "vis_type": "SCENE_ILLUSTRATION",
+        "gen_type": "TEXT_TO_IMAGE",
+        "character_name": null,
+        "prompt": "score_9, score_8_up, score_7_up, semi-realistic, detailed painterly rendering, realistic anatomy, cinematic lighting, sharp focus, (male, human, olive skin with some weathering, dark brown hair grey at temples, brown eyes, broad-shouldered build, six feet tall, fit but not muscular, close-cropped hair:1.3), nude, standing",
+        "negative_prompt": "text, watermark, low quality, blurry, deformed, extra limbs, bad hands, bad anatomy",
+        "format": "LANDSCAPE",
+        "resolution": {
+          "width": 1216,
+          "height": 832
+        },
+        "sampler_settings": {
+          "steps": 40,
+          "seed": null
+        },
+        "reference_assets": [],
+        "tags": [],
+        "reference": [],
+        "analysis": null,
+        "cover_bbox": {
+          "x": 0.0,
+          "y": 0.0,
+          "w": 1.0,
+          "h": 1.0
+        }
+      }
+    },
+    "9b8b6073b1d7f30f8ab5694375d1f4d28af30cd63e293251e55707e46e0b0511": {
+      "id": "9b8b6073b1d7f30f8ab5694375d1f4d28af30cd63e293251e55707e46e0b0511",
+      "file_type": "png",
+      "media_type": "image/png",
+      "meta": {
+        "name": null,
+        "vis_type": "SCENE_ILLUSTRATION",
+        "gen_type": "IMAGE_EDIT",
+        "character_name": null,
+        "prompt": "score_9, score_8_up, score_7_up, semi-realistic, detailed painterly rendering, realistic anatomy, cinematic lighting, sharp focus, (male, human, olive skin with some weathering, dark brown hair grey at temples, brown eyes, broad-shouldered build, six feet tall, fit but not muscular, close-cropped hair, head / face shadows:1.3)",
+        "negative_prompt": "text, watermark, low quality, blurry, deformed, extra limbs, bad hands, bad anatomy",
+        "format": "LANDSCAPE",
+        "resolution": {
+          "width": 1216,
+          "height": 832
+        },
+        "sampler_settings": {
+          "steps": 40,
+          "seed": null
+        },
+        "reference_assets": [
+          "2f2ec12f46906aad086471e560d00ec13ce85f53e414f0477294ccc4ff00419c",
+          "2f2ec12f46906aad086471e560d00ec13ce85f53e414f0477294ccc4ff00419c",
+          "2f2ec12f46906aad086471e560d00ec13ce85f53e414f0477294ccc4ff00419c"
+        ],
+        "tags": [],
+        "reference": [],
+        "analysis": null,
+        "cover_bbox": {
+          "x": 0.0,
+          "y": 0.0,
+          "w": 1.0,
+          "h": 1.0
+        }
+      }
+    },
+    "598d52b38009cd4526a4c5d8d8e4596838b6ad7c9bbd9b24c1f9fc4caf31da03": {
+      "id": "598d52b38009cd4526a4c5d8d8e4596838b6ad7c9bbd9b24c1f9fc4caf31da03",
+      "file_type": "png",
+      "media_type": "image/png",
+      "meta": {
+        "name": null,
+        "vis_type": "SCENE_ILLUSTRATION",
+        "gen_type": "TEXT_TO_IMAGE",
+        "character_name": null,
+        "prompt": "score_9, score_8_up, score_7_up, semi-realistic, detailed painterly rendering, realistic anatomy, cinematic lighting, sharp focus, control room, sci-fi, holographic displays, metallic surfaces, blue-white lighting, sleek panels, (male, human, olive skin with some weathering, dark brown hair grey at temples, brown eyes, broad-shouldered build, six feet tall, fit but not muscular, close-cropped hair, head / face shadows:1.3), a second figure, failing systems, corrupted data stream, intermittent lighting, first officer, captain, nudity, defiant posture, environmental systems, leak, alarm, cosmic expanse, pinprick stars, data fragments, dying stars, console, utility suit, strip, freeze frame, groaning ship, metal stress, atmosphere adjustment, warning, immediate attention",
+        "negative_prompt": "text, watermark, low quality, blurry, deformed, extra limbs, bad hands, bad anatomy, clothing",
+        "format": "LANDSCAPE",
+        "resolution": {
+          "width": 1216,
+          "height": 832
+        },
+        "sampler_settings": {
+          "steps": 40,
+          "seed": null
+        },
+        "reference_assets": [],
+        "tags": [],
+        "reference": [],
+        "analysis": null,
+        "cover_bbox": {
+          "x": 0.0,
+          "y": 0.0,
+          "w": 1.0,
+          "h": 1.0
+        }
+      }
+    },
+    "5ab2572e914f50ed599dbc17b054d5859ee033028a90ef7e6f6418be9644a64c": {
+      "id": "5ab2572e914f50ed599dbc17b054d5859ee033028a90ef7e6f6418be9644a64c",
+      "file_type": "png",
+      "media_type": "image/png",
+      "meta": {
+        "name": null,
+        "vis_type": "CHARACTER_CARD",
+        "gen_type": "IMAGE_EDIT",
+        "character_name": "Kaira",
+        "prompt": "score_9, score_8_up, score_7_up, semi-realistic, detailed painterly rendering, realistic anatomy, cinematic lighting, sharp focus, solo, looking at viewer, control room, sci-fi, holographic displays, metallic surfaces, blue-white lighting, sleek panels, (violet skin, geometric facial markings, indigo hair, large black eyes, tall stature, four-fingered hands:1.3), Kaira, dark violet skin, deep blue emergency lighting, shadows pooling, combat trousers, weapon harness, pulse pistol, composed expression, neutral face, large eyes scanning, cold air, breath fogging, emergency lighting, derelict station data stream, runes on viewscreen, ship groaning, engineering bay sound, fifteen degrees below freezing, head to upper body view, single character",
+        "negative_prompt": "text, watermark, low quality, blurry, deformed, extra limbs, bad hands, bad anatomy, other characters, UI elements, labels, human skin, human ears, ordinary skin tone",
+        "format": "PORTRAIT",
+        "resolution": {
+          "width": 832,
+          "height": 1216
+        },
+        "sampler_settings": {
+          "steps": 40,
+          "seed": null
+        },
+        "reference_assets": [
+          "2a2d07de2e420983bf68fbb5190d1a3ef4087fc111d708026bc0cb40f0e7711f",
+          "2a2d07de2e420983bf68fbb5190d1a3ef4087fc111d708026bc0cb40f0e7711f",
+          "2a2d07de2e420983bf68fbb5190d1a3ef4087fc111d708026bc0cb40f0e7711f"
+        ],
+        "tags": [],
+        "reference": [],
+        "analysis": null,
+        "cover_bbox": {
+          "x": 0.0,
+          "y": 0.0,
+          "w": 1.0,
+          "h": 1.0
+        }
+      }
+    },
+    "c508a22b798978a0bcc034d5ebc8c1a1211d81f3538c15b29b8ccf23ee6a922d": {
+      "id": "c508a22b798978a0bcc034d5ebc8c1a1211d81f3538c15b29b8ccf23ee6a922d",
+      "file_type": "jpeg",
+      "media_type": "image/jpeg",
+      "meta": {
+        "name": "cover_88c1a6c2-8",
+        "vis_type": "CHARACTER_CARD",
+        "gen_type": "UPLOAD",
+        "character_name": "Zak",
+        "prompt": null,
+        "negative_prompt": null,
+        "format": "SQUARE",
+        "resolution": {
+          "width": 1365,
+          "height": 1365
+        },
+        "sampler_settings": null,
+        "reference_assets": [],
+        "tags": [],
+        "reference": [],
+        "analysis": null,
+        "cover_bbox": {
+          "x": 0.0,
+          "y": 0.0,
+          "w": 1.0,
+          "h": 1.0
+        }
+      }
+    },
+    "e7396e471194628c5ad86e141f9cb3a9a4c427b9d5d4c040cd8c9b800d7c860d": {
+      "id": "e7396e471194628c5ad86e141f9cb3a9a4c427b9d5d4c040cd8c9b800d7c860d",
+      "file_type": "png",
+      "media_type": "image/png",
+      "meta": {
+        "name": null,
+        "vis_type": "CHARACTER_CARD",
+        "gen_type": "IMAGE_EDIT",
+        "character_name": "Kaira",
+        "prompt": "score_9, score_8_up, score_7_up, semi-realistic, detailed painterly rendering, realistic anatomy, cinematic lighting, sharp focus, solo, looking at viewer, control room, sci-fi, holographic displays, metallic surfaces, blue-white lighting, sleek panels, (violet skin, geometric facial markings, indigo hair, large black eyes, tall stature, four-fingered hands:1.3), violet-skinned Altrusian female, standing in emergency lighting, deep blue glow on skin, wearing combat trousers and weapon harness, pulse pistol at ribs, large dark eyes tracking movement, standing beside human captain, derelict space station visible through viewscreen, cold temperature, ship systems whining, presence felt through ship, static-like awareness, ready to move, serene expression, leaning slightly forward, metal floor, leather creaking",
+        "negative_prompt": "text, watermark, low quality, blurry, deformed, extra limbs, bad hands, bad anatomy, human skin, human ears, ordinary skin tone",
+        "format": "PORTRAIT",
+        "resolution": {
+          "width": 832,
+          "height": 1216
+        },
+        "sampler_settings": {
+          "steps": 40,
+          "seed": null
+        },
+        "reference_assets": [
+          "2a2d07de2e420983bf68fbb5190d1a3ef4087fc111d708026bc0cb40f0e7711f"
+        ],
+        "tags": [],
+        "reference": [],
+        "analysis": null,
+        "cover_bbox": {
+          "x": 0.0,
+          "y": 0.0,
+          "w": 1.0,
+          "h": 1.0
+        }
+      }
+    },
+    "6a847a4f7da6aac037f25f1de409687af7803132485e0263538aea9e21e4df28": {
+      "id": "6a847a4f7da6aac037f25f1de409687af7803132485e0263538aea9e21e4df28",
+      "file_type": "png",
+      "media_type": "image/png",
+      "meta": {
+        "name": null,
+        "vis_type": "CHARACTER_CARD",
+        "gen_type": "IMAGE_EDIT",
+        "character_name": "Kaira",
+        "prompt": "score_9, score_8_up, score_7_up, semi-realistic, detailed painterly rendering, realistic anatomy, cinematic lighting, sharp focus, solo, looking at viewer, control room, sci-fi, holographic displays, metallic surfaces, blue-white lighting, sleek panels, (violet skin, geometric facial markings, indigo hair, large black eyes, tall stature, four-fingered hands:1.3), combat trousers, weapon harness, pulse pistol holstered, clean dark skin, unmarked, utility jumpsuit, fitted, tool loops on belt, magnetic boots, clean condition, grey-blue combat trousers, black weapon harness with holstered pulse pistol, bare torso showing geometric patterns on violet skin, visibly sweating from exertion, fixed intense stare at console displays, Kaira, geometric patterns, large eyes, bare torso, sweat, emergency lighting, console, pulse pistol, cold air, rapid succession, warnings, structural integrity, life support, core temperature, frozen metal, condensation, precision, desperation, survival",
+        "negative_prompt": "text, watermark, low quality, blurry, deformed, extra limbs, bad hands, bad anatomy, visible injuries, human skin, human ears, ordinary skin tone",
+        "format": "PORTRAIT",
+        "resolution": {
+          "width": 832,
+          "height": 1216
+        },
+        "sampler_settings": {
+          "steps": 40,
+          "seed": null
+        },
+        "reference_assets": [
+          "2a2d07de2e420983bf68fbb5190d1a3ef4087fc111d708026bc0cb40f0e7711f"
+        ],
+        "tags": [],
+        "reference": [],
+        "analysis": null,
+        "cover_bbox": {
+          "x": 0.0,
+          "y": 0.0,
+          "w": 1.0,
+          "h": 1.0
+        }
+      }
+    },
+    "cf0c1a89f7f1fe095e95f66c0003f168b93429506d7ef049de3eab9ca683b90e": {
+      "id": "cf0c1a89f7f1fe095e95f66c0003f168b93429506d7ef049de3eab9ca683b90e",
+      "file_type": "png",
+      "media_type": "image/png",
+      "meta": {
+        "name": null,
+        "vis_type": "CHARACTER_CARD",
+        "gen_type": "IMAGE_EDIT",
+        "character_name": "Kaira",
+        "prompt": "score_9, score_8_up, score_7_up, semi-realistic, detailed painterly rendering, realistic anatomy, cinematic lighting, sharp focus, solo, looking at viewer, control room, sci-fi, holographic displays, metallic surfaces, blue-white lighting, sleek panels, (violet skin, geometric facial markings, indigo hair, large black eyes, tall stature, four-fingered hands:1.3), violet-skinned altrusian female, bare torso glistening with sweat, tactical harness with pulse pistols, geometric patterns on forearms pulsing violet light, leaning over console, emergency lighting blue shadows, metal console edge digging into hip, large dark eyes fixed on displays, warning symbols flashing across screens, structural integrity 67%, life support 82%, core temperature critical descent, fingers typing commands, sweat beads running down torso, condensation in air, cold metal, tactical gear, violet geometric markings, tactical equipment",
+        "negative_prompt": "text, watermark, low quality, blurry, deformed, extra limbs, bad hands, bad anatomy, background characters, human skin, human ears, ordinary skin tone",
+        "format": "PORTRAIT",
+        "resolution": {
+          "width": 832,
+          "height": 1216
+        },
+        "sampler_settings": {
+          "steps": 40,
+          "seed": null
+        },
+        "reference_assets": [
+          "2a2d07de2e420983bf68fbb5190d1a3ef4087fc111d708026bc0cb40f0e7711f"
+        ],
+        "tags": [],
+        "reference": [],
+        "analysis": null,
+        "cover_bbox": {
+          "x": 0.0,
+          "y": 0.0,
+          "w": 1.0,
+          "h": 1.0
+        }
+      }
+    },
+    "1efbe22434d3e0c718f880bedaf7be82fc0ab0f961c4aa67368be6b8096ee0a6": {
+      "id": "1efbe22434d3e0c718f880bedaf7be82fc0ab0f961c4aa67368be6b8096ee0a6",
+      "file_type": "png",
+      "media_type": "image/png",
+      "meta": {
+        "name": "Kaira-2",
+        "vis_type": "CHARACTER_CARD",
+        "gen_type": "IMAGE_EDIT",
+        "character_name": "Kaira",
+        "prompt": "score_9, score_8_up, score_7_up, semi-realistic, detailed painterly rendering, realistic anatomy, cinematic lighting, sharp focus, solo, woman bent-over control panel, control room, sci-fi, holographic displays, metallic surfaces, blue-white lighting, sleek panels, (violet skin, geometric facial markings, indigo hair, large black eyes, tall stature, four-fingered hands:1.3), violet-skinned altrusian female, bare torso glistening with sweat, tactical harness with pulse pistols, geometric patterns on forearms pulsing violet light, emergency lighting blue shadows, sweat beads running down torso, condensation in air, cold metal, tactical gear, violet geometric markings, tactical equipment",
+        "negative_prompt": "text, watermark, low quality, blurry, deformed, extra limbs, bad hands, bad anatomy, background characters, human skin, human ears, ordinary skin tone",
+        "format": "PORTRAIT",
+        "resolution": {
+          "width": 832,
+          "height": 1216
+        },
+        "sampler_settings": {
+          "steps": 40,
+          "seed": null
+        },
+        "reference_assets": [],
+        "tags": [],
+        "reference": [],
+        "analysis": null,
+        "cover_bbox": {
+          "x": 0.0,
+          "y": 0.0,
+          "w": 1.0,
+          "h": 1.0
+        }
       }
     }
   }
