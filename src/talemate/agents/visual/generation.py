@@ -539,6 +539,18 @@ class GenerationMixin:
         2. Drop anchors for characters who are not in the shot.
         3. Trim to the token budget.
         """
+        # The pending distillation carries a complete prompt of its own and the
+        # graph's local keyword write can come up EMPTY on the prompt-only
+        # (Adjust & Visualize) path - so consume it before the empty-prompt
+        # bail below, or the finished prompt is silently thrown away and the
+        # preview modal shows nothing (observed live, flow visual:visualize:652e00).
+        if (
+            getattr(self, "distillation_enabled", False)
+            and not request.distilled
+            and await self._consume_pending_distillation(request)
+        ):
+            request.distilled = True
+
         if not request.prompt:
             return
 
@@ -560,11 +572,8 @@ class GenerationMixin:
             return
 
         if getattr(self, "distillation_enabled", False):
-            # A task pre-started at template render time runs in parallel with the
-            # local keyword write; consume it rather than paying the call again.
-            if await self._consume_pending_distillation(request):
-                request.distilled = True
-                return
+            # The pending task was already consumed (or absent) above; distill
+            # fresh from the scene facts.
             if await self._distill_prompt(request):
                 request.distilled = True
                 return
