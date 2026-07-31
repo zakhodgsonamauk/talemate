@@ -210,6 +210,17 @@ class General(pydantic.BaseModel):
     release_gpu_cache_on_scene_load: bool = True
 
 
+class DebugLogConfig(pydantic.BaseModel):
+    """Rotating JSONL debug file sink (see talemate.debuglog)."""
+
+    enabled: bool = True
+    # relative paths resolve against the talemate project root
+    path: str = "logs/talemate-debug.jsonl"
+    level: str = "DEBUG"
+    max_mb: int = pydantic.Field(default=20, ge=1)
+    backups: int = pydantic.Field(default=5, ge=0)
+
+
 class StateReinforcementTemplate(pydantic.BaseModel):
     name: str
     query: str
@@ -694,6 +705,8 @@ class Config(pydantic.BaseModel):
     prompts: PromptsConfig = PromptsConfig()
 
     agent_actions: AgentActionsConfig = AgentActionsConfig()
+
+    debug_log: DebugLogConfig = DebugLogConfig()
 
     dirty: bool = pydantic.Field(default=False, exclude=True)
 

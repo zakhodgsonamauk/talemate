@@ -224,6 +224,19 @@ def run_server(args):
 
     config = talemate.config.cleanup()
 
+    # Now that the config is loaded (and only now - loading it before the
+    # client registry imports above would corrupt client validation), attach
+    # the JSONL debug file sink. Console output is unchanged.
+    from talemate.debuglog import configure_structlog
+
+    configure_structlog(console_level=log_level, debug_log=config.debug_log)
+    if config.debug_log.enabled:
+        log.info(
+            "debug log sink enabled",
+            path=config.debug_log.path,
+            level=config.debug_log.level,
+        )
+
     if config.game.world_state.templates.state_reinforcement:
         Collection.create_from_legacy_config(config)
 

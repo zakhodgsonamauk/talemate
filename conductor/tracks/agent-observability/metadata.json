@@ -1,0 +1,24 @@
+{
+  "version": 3,
+  "track_id": "agent-observability",
+  "name": "Agent observability - structured debug logging",
+  "type": "infrastructure",
+  "status": "in_progress",
+  "superpower_enhanced": true,
+  "created_at": "2026-07-31",
+  "loop_state": {
+    "current_step": "EXECUTE",
+    "step_status": "IN_PROGRESS",
+    "fix_cycle_count": 0,
+    "checkpoints": {
+      "PLAN": {
+        "status": "PASSED"
+      },
+      "EVALUATE_PLAN": {
+        "status": "PASSED",
+        "notes": "No overlap with active tracks (conductor registry files only; commits stage explicit paths). DAG order sound. Design refinement within T1 scope: structlog does not route through stdlib logging here, so the file sink is a processor-tee spliced before the default ConsoleRenderer; wrapper filter drops to DEBUG and console-level filtering moves into a processor (console bytes unchanged). Config must not be loaded before client registry imports (validate_client_type returns None for unknown types) - sink configured in run_server after config.cleanup()."
+      }
+    }
+  },
+  "notes": "Spec/plan authored in-session from the failed Adjust & Visualize diagnosis (2026-07-31): debug-level decision events invisible, no LLM call attribution/durations, no flow correlation. Motivating bug (blank prompt / wrong reference) is deliberately out of scope - this track makes that diagnosis cheap."
+}
