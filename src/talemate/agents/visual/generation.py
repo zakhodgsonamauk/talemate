@@ -560,6 +560,11 @@ class GenerationMixin:
             return
 
         if getattr(self, "distillation_enabled", False):
+            # A task pre-started at template render time runs in parallel with the
+            # local keyword write; consume it rather than paying the call again.
+            if await self._consume_pending_distillation(request):
+                request.distilled = True
+                return
             if await self._distill_prompt(request):
                 request.distilled = True
                 return
@@ -597,6 +602,102 @@ class GenerationMixin:
                 before=estimate_prompt_tokens(original),
                 after=estimate_prompt_tokens(request.prompt),
             )
+
+    async def begin_prompt_distillation(
+        self,
+        vis_type: str | None = None,
+        instructions: str | None = None,
+        character_name: str | None = None,
+    ) -> str:
+        """
+        Start the distillation call in parallel with the local keyword write.
+
+        Called from the generate-image template via the `agent_action` template
+        global. The template renders before the graph's local LLM call, and the
+        two calls have no data dependency - distillation reads the fact pack, not
+        the local keywords - so running them sequentially was pure wall-clock
+        waste. nest_asyncio means the render runs nested on the main loop, so the
+        task created here outlives the render.
+
+        Skipped when there is neither an instructions paragraph nor an explicit
+        character: without those, subject choice at this point would fall through
+        to scene order, and the late path can at least read the local keywords.
+
+        Returns "" so the template call renders as nothing.
+        """
+        if not getattr(self, "distillation_enabled", False):
+            return ""
+
+        instructions = (instructions or "").strip()
+        character_name = (character_name or "").strip()
+        if not instructions and not character_name:
+            return ""
+
+        try:
+            vt = VIS_TYPE(vis_type)
+        except (ValueError, TypeError):
+            return ""
+        if vt in VIS_TYPES_WITHOUT_CAST:
+            return ""
+
+        request = GenerationRequest(
+            prompt="",
+            vis_type=vt,
+            instructions=instructions or None,
+            character_name=character_name or None,
+        )
+        key = (vt, character_name, instructions)
+
+        # Replace, and cancel, any pending task a previous compose abandoned.
+        stale = getattr(self, "_pending_distillation", None)
+        if stale:
+            stale[2].cancel()
+
+        task = asyncio.create_task(self._distill_prompt(request))
+        self._pending_distillation = (key, request, task)
+        log.debug("distill_prompt.prestarted", vis_type=str(vt), subject=character_name)
+        return ""
+
+    async def _consume_pending_distillation(self, request: GenerationRequest) -> bool:
+        """
+        Use the distillation that begin_prompt_distillation started, if it matches.
+
+        Matching is on (vis_type, character_name, instructions) - the identity of
+        the ask. A mismatch means the pending task belongs to some other request
+        (or the ask changed between compose and finalize); it is cancelled and the
+        caller distills fresh rather than serving the wrong prompt.
+        """
+        pending = getattr(self, "_pending_distillation", None)
+        if not pending:
+            return False
+        self._pending_distillation = None
+
+        key, pre_request, task = pending
+        expected = (
+            request.vis_type,
+            (request.character_name or "").strip(),
+            (request.instructions or "").strip(),
+        )
+        if key != expected:
+            task.cancel()
+            log.debug("distill_prompt.pending_mismatch", pending=str(key[0]))
+            return False
+
+        try:
+            ok = await task
+        except asyncio.CancelledError:
+            return False
+        except Exception as e:
+            log.warning("distill_prompt.pending_failed", error=str(e))
+            return False
+
+        if not ok:
+            return False
+
+        request.prompt = pre_request.prompt
+        request.negative_prompt = pre_request.negative_prompt
+        log.debug("distill_prompt.pending_consumed", subject=key[1] or None)
+        return True
 
     @set_processing
     async def _distill_prompt(self, request: GenerationRequest) -> bool:

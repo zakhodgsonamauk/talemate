@@ -1,3 +1,9 @@
+{#- Fire the distillation call now, in parallel with the local keyword write this
+    template is being rendered for. The two have no data dependency - distillation
+    reads the fact pack, not the keywords - and running them back to back made
+    prompt building slower than image generation. _finalize_prompt consumes the
+    task; a no-op when distillation is off or nothing identifies the subject. -#}
+{% if agent_config("visual._distillation.enabled") %}{% set _ = agent_action("visual", "begin_prompt_distillation", vis_type=vis_type|default(''), instructions=(visual_prompt.instructions if visual_prompt is defined and visual_prompt.instructions else instructions|default('')), character_name=character_name|default('')) %}{% endif %}
 {% set general_context %}
 <|SECTION:GENERAL CONTEXT|>
 {% include "extra-context.jinja2" %}

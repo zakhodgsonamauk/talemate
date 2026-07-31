@@ -255,6 +255,103 @@ async def test_distilled_output_is_deduped(agent):
     assert negative_tokens.count("1boy") == 1
 
 
+# === parallel pre-start: distillation overlaps the local keyword write ===
+
+
+INSTRUCTIONS = "Kaira leans over the console."
+
+
+async def _begin(agent, **kwargs):
+    """begin_prompt_distillation inside scene context, as the template render is."""
+    from talemate.context import active_scene
+
+    token = active_scene.set(agent.scene)
+    try:
+        await agent.begin_prompt_distillation(**kwargs)
+    finally:
+        active_scene.reset(token)
+
+
+async def test_prestarted_distillation_is_consumed_not_repeated(agent):
+    """The whole point: one cloud call per image, started early."""
+    with _stub_llm(DISTILLED) as stub:
+        await _begin(
+            agent, vis_type=VIS_TYPE.SCENE_ILLUSTRATION, instructions=INSTRUCTIONS
+        )
+        request = _request(instructions=INSTRUCTIONS)
+        await _finalize(agent, request)
+
+    assert stub.call_count == 1, "finalize paid a second distillation call"
+    assert request.distilled is True
+    assert "topless" in request.prompt
+    assert "fully clothed" in request.negative_prompt
+
+
+async def test_mismatched_pending_task_is_discarded(agent):
+    """A pending task for a different ask must not serve the wrong prompt."""
+    with _stub_llm(DISTILLED) as stub:
+        await _begin(
+            agent,
+            vis_type=VIS_TYPE.SCENE_ILLUSTRATION,
+            instructions="Something else entirely.",
+        )
+        request = _request(instructions=INSTRUCTIONS)
+        await _finalize(agent, request)
+
+    # The mismatched task may or may not have run before cancellation; what is
+    # pinned is that finalize distilled fresh for the actual request.
+    assert request.distilled is True
+    assert stub.call_count >= 1
+    assert agent._pending_distillation is None
+
+
+async def test_prestart_declines_without_subject_evidence(agent):
+    """No instructions and no character: subject choice this early would fall
+    through to scene order, so the late path (which can read keywords) runs."""
+    with _stub_llm(DISTILLED) as stub:
+        await _begin(agent, vis_type=VIS_TYPE.SCENE_ILLUSTRATION)
+
+    assert getattr(agent, "_pending_distillation", None) is None
+    assert stub.call_count == 0
+
+
+async def test_prestart_is_a_noop_when_distillation_is_off(agent):
+    agent.actions["_distillation"].config["enabled"].value = False
+
+    with _stub_llm(DISTILLED) as stub:
+        await _begin(
+            agent, vis_type=VIS_TYPE.SCENE_ILLUSTRATION, instructions=INSTRUCTIONS
+        )
+
+    assert getattr(agent, "_pending_distillation", None) is None
+    assert stub.call_count == 0
+
+
+async def test_a_failed_pending_task_falls_back_to_a_fresh_distillation(agent):
+    from unittest.mock import AsyncMock, patch
+
+    calls = {"n": 0}
+
+    async def flaky(*args, **kwargs):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("cloud fell over")
+        return (DISTILLED, {})
+
+    with patch(
+        "talemate.agents.visual.generation.Prompt.request",
+        new=AsyncMock(side_effect=flaky),
+    ):
+        await _begin(
+            agent, vis_type=VIS_TYPE.SCENE_ILLUSTRATION, instructions=INSTRUCTIONS
+        )
+        request = _request(instructions=INSTRUCTIONS)
+        await _finalize(agent, request)
+
+    assert request.distilled is True, "second attempt should have succeeded"
+    assert "topless" in request.prompt
+
+
 async def test_the_template_renders_with_real_scene_objects(agent):
     """The Prompt.request stub means no other test ever renders the jinja - a typo in
     the template would otherwise only be found live."""
