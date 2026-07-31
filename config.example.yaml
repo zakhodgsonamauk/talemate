@@ -1,5 +1,64 @@
 agents: {}
 clients: {}
+
+## Clients
+##
+## Real client config lives in config.yaml, which is gitignored. The block below
+## documents the split this fork is built around, because it is not obvious and it
+## does not survive a fresh clone.
+##
+## Two Ollama clients against the SAME daemon: a local model writes the prose, and
+## a large cloud model does the directing. Ollama Cloud needs no API key here - pull
+## a ":cloud" model into a signed-in local daemon (`ollama pull gpt-oss:120b-cloud`)
+## and it appears alongside local models on localhost:11434.
+##
+#clients:
+#  Ollama:
+#    type: ollama
+#    api_url: http://localhost:11434
+#    model: hf.co/TheDrummer/Rocinante-X-12B-v1-GGUF:Q4_K_M
+#    max_token_length: 8192          # KV cache is ~160KB/token on a Nemo-12B;
+#    enabled: true                   # 16384 costs ~1.3GB more VRAM than 8192
+#
+#  OllamaCloudDirector:
+#    type: ollama
+#    api_url: http://localhost:11434 # same daemon - it proxies cloud models
+#    model: deepseek-v4-pro:cloud
+#    max_token_length: 32768         # costs no local VRAM
+#    enabled: true
+#    # Cloud-hosted models may honour neither raw completion nor options.num_ctx,
+#    # so let the API apply its own chat template instead of Talemate's.
+#    api_handles_prompt_template: true
+#    # REQUIRED for reasoning models. Thinking tokens are drawn from the same
+#    # budget as the reply, so without a reason budget the visible response comes
+#    # back EMPTY and the director silently does nothing.
+#    reason_enabled: true
+#    reason_tokens: 2048
+#
+## Route only the director at the cloud model; everything else stays local.
+#agents:
+#  director:
+#    client: OllamaCloudDirector
+#    actions:
+#      scene_direction:
+#        enabled: true
+#        config:
+#          # Give the director summaries and world state instead of verbatim
+#          # dialogue. Enable this before pointing the director at a remote or
+#          # censored model - it is what keeps the prose on your own machine, and
+#          # it also stops a refusal mid-turn from stalling the story.
+#          abstract_context:
+#            value: true
+#  conversation:
+#    client: Ollama
+#  narrator:
+#    client: Ollama
+#
+## Note: censorship follows the MODEL, not "cloud". Talemate already tracks this
+## per client via decensor_enabled, which is False for anthropic/openai/openrouter/
+## deepseek-direct and swaps in a tamer system prompt. Among Ollama Cloud models
+## gpt-oss:120b-cloud is heavily safety-trained; deepseek and kimi are far more
+## permissive. With abstract_context on, the director never sees prose either way.
 creator:
   content_context:
   - a fun and engaging slice of life story
