@@ -653,7 +653,7 @@
       "base_type": "core/Node"
     },
     "350fd066-a186-4e2a-91f3-a66518e28a02": {
-      "title": "NOT",
+      "title": "IF can_edit_images",
       "id": "350fd066-a186-4e2a-91f3-a66518e28a02",
       "properties": {
         "pass_through": false
@@ -771,22 +771,6 @@
       "collapsed": true,
       "inherited": false,
       "registry": "agents/GetAgent",
-      "base_type": "core/Node"
-    },
-    "7a185200-6bb9-4128-8780-9f7eb44c5d40": {
-      "title": "GET local.prompt_only",
-      "id": "7a185200-6bb9-4128-8780-9f7eb44c5d40",
-      "properties": {
-        "name": "prompt_only",
-        "scope": "local"
-      },
-      "x": 11,
-      "y": 930,
-      "width": 210,
-      "height": 122,
-      "collapsed": true,
-      "inherited": false,
-      "registry": "state/GetState",
       "base_type": "core/Node"
     },
     "3a36e1e5-5163-4eb0-a964-908d1a702a85": {
@@ -1069,19 +1053,6 @@
       "collapsed": true,
       "inherited": false,
       "registry": "state/GetState",
-      "base_type": "core/Node"
-    },
-    "ea3fee4f-64c9-4f1a-8e48-0e8f7463aded": {
-      "title": "AND Router",
-      "id": "ea3fee4f-64c9-4f1a-8e48-0e8f7463aded",
-      "properties": {},
-      "x": 377,
-      "y": 835,
-      "width": 140,
-      "height": 106,
-      "collapsed": false,
-      "inherited": false,
-      "registry": "core/ANDRouter",
       "base_type": "core/Node"
     },
     "44ff7cbc-de63-4b93-b55c-9fafc9943fe9": {
@@ -2366,8 +2337,8 @@
     "00ac4a53-ce70-48e6-9906-bfd3b00be1b3.no": [
       "a0bd07d2-ed9e-49d2-96ed-e8aeb1c11e64.state"
     ],
-    "350fd066-a186-4e2a-91f3-a66518e28a02.no": [
-      "ea3fee4f-64c9-4f1a-8e48-0e8f7463aded.b"
+    "350fd066-a186-4e2a-91f3-a66518e28a02.yes": [
+      "d82d74cf-ca65-4153-8079-e451db87da05.state"
     ],
     "b97de153-620c-4c04-abb0-027192f69c6f.value": [
       "a9e15387-117a-4828-946c-d2118484e879.reference_assets"
@@ -2376,7 +2347,7 @@
       "b97de153-620c-4c04-abb0-027192f69c6f.default"
     ],
     "d7892c3e-f4ac-48fb-9e21-8325c81855f5.can_edit_images": [
-      "ea3fee4f-64c9-4f1a-8e48-0e8f7463aded.a"
+      "350fd066-a186-4e2a-91f3-a66518e28a02.value"
     ],
     "1d55f958-d780-4110-9703-34baf27ca3aa.value": [
       "a9e15387-117a-4828-946c-d2118484e879.state"
@@ -2390,9 +2361,6 @@
     "056e59ff-2a71-471d-85ff-1ab8b6f63180.agent": [
       "38690310-cba0-477d-b8a2-3ee04bcce7c0.agent"
     ],
-    "7a185200-6bb9-4128-8780-9f7eb44c5d40.value": [
-      "350fd066-a186-4e2a-91f3-a66518e28a02.value"
-    ],
     "3a36e1e5-5163-4eb0-a964-908d1a702a85.value": [
       "71ca94c2-2411-4ccf-bd7a-d8a62c535c8f.prompt"
     ],
@@ -2401,9 +2369,6 @@
     ],
     "d47aad5f-c05e-4112-9bf8-5061ca8b0cd0.value": [
       "4d8ccb0c-3072-4696-a693-31c6713e0c31.state"
-    ],
-    "a0bd07d2-ed9e-49d2-96ed-e8aeb1c11e64.generation_request": [
-      "5e682ce4-f25c-4b32-a039-fa66e5375b91.value"
     ],
     "0ccc227a-e1f4-4efd-b95e-155b67934835.value": [
       "377aac50-4577-4234-b846-a95a9ca71551.value"
@@ -2447,9 +2412,6 @@
     ],
     "767d1fa0-db26-48de-9e58-3b39214a43eb.value": [
       "d82d74cf-ca65-4153-8079-e451db87da05.vis_type"
-    ],
-    "ea3fee4f-64c9-4f1a-8e48-0e8f7463aded.yes": [
-      "d82d74cf-ca65-4153-8079-e451db87da05.state"
     ],
     "44ff7cbc-de63-4b93-b55c-9fafc9943fe9.value": [
       "9dd2f2e6-34ad-425e-a1cc-7c3caf3f6c3e.value"
@@ -2616,7 +2578,8 @@
       "8bc181ea-b7c6-4284-a6c5-e937f7c05051.value"
     ],
     "1b1a1945-713b-47b6-b762-9a6e94c73522.generation_request": [
-      "a0bd07d2-ed9e-49d2-96ed-e8aeb1c11e64.generation_request"
+      "a0bd07d2-ed9e-49d2-96ed-e8aeb1c11e64.generation_request",
+      "5e682ce4-f25c-4b32-a039-fa66e5375b91.value"
     ],
     "27885e51-cb28-4472-94f3-4d295d98c246.value": [
       "1b1a1945-713b-47b6-b762-9a6e94c73522.asset_attachment_context"

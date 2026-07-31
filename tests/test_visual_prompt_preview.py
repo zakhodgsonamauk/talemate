@@ -31,15 +31,16 @@ from talemate.game.engine.nodes.registry import import_talemate_node_definitions
 
 from _node_test_helpers import run_node
 
-MODULE_PATH = os.path.join(
+MODULES_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
     "src",
     "talemate",
     "agents",
     "visual",
     "modules",
-    "wsh-visualize.json",
 )
+MODULE_PATH = os.path.join(MODULES_DIR, "wsh-visualize.json")
+COMPOSER_PATH = os.path.join(MODULES_DIR, "generate-visual-asset.json")
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -50,6 +51,12 @@ def load_node_definitions():
 @pytest.fixture(scope="module")
 def graph() -> Graph:
     loaded, _ = load_graph_from_file(MODULE_PATH)
+    return loaded
+
+
+@pytest.fixture(scope="module")
+def composer() -> Graph:
+    loaded, _ = load_graph_from_file(COMPOSER_PATH)
     return loaded
 
 
@@ -160,6 +167,10 @@ class TestPayload:
             # for CHARACTER_CARD and OBJECT_ILLUSTRATION — the real path takes
             # PORTRAIT for both from VIS_TYPE_TO_FORMAT.
             "format",
+            # Without this the modal opens with no references, generates
+            # TEXT_TO_IMAGE, and a refined prompt saying "Elena (IMAGE 1)"
+            # points at an image that was never sent.
+            "reference_assets",
         }
 
     @pytest.mark.parametrize(
@@ -176,6 +187,7 @@ class TestPayload:
             # fills in, so it needs pinning as much as the prompt does.
             ("message_ids", "core/Coallesce", "value"),
             ("format", "data/Get", "value"),
+            ("reference_assets", "data/Get", "value"),
         ],
     )
     def test_each_payload_value_comes_from_the_expected_source(
@@ -204,6 +216,84 @@ class TestPayload:
         upstream, socket = source_of(get, "object")
         assert upstream.registry == "agents/visual/FinalizePrompt"
         assert socket == "generation_request"
+
+    def test_reference_assets_are_read_off_the_generation_request(self, graph):
+        """Same shape as format: SelectBackend already resolved the reference
+        asset ids into the request, so the payload reads them from the
+        finalised request rather than re-deriving them."""
+        pair = next(
+            n
+            for n in nodes_of(graph, "data/MakeKeyValuePair")
+            if n.get_property("key") == "reference_assets"
+        )
+        get, _ = source_of(pair, "value")
+        assert get.get_property("attribute") == "reference_assets"
+        upstream, socket = source_of(get, "object")
+        assert upstream.registry == "agents/visual/FinalizePrompt"
+        assert socket == "generation_request"
+
+
+class TestReferencesRunForPreview:
+    """The composer's reference stage — Determine Visual References, image
+    analysis, and the Refine Visual Prompt LLM pass that rewrites the
+    descriptive prompt around them — used to be gated on `NOT prompt_only`.
+    That gate predates the preview feature: it was an optimisation for the
+    no-backend chat dump, but the adjust flow also sends prompt_only=true, so
+    the modal previewed the unrefined first-pass prompt while plain Visualize
+    generated from the refined one.
+
+    The gate must depend on backend capability alone. Skipping references when
+    the backend cannot edit images is correct; skipping them because nothing
+    will be generated *right now* is not, because the preview's whole job is to
+    show what generation would use.
+    """
+
+    def test_reference_determination_is_gated_on_backend_capability_only(
+        self, composer
+    ):
+        refs = nodes_of(composer, "agents/visual/determineVisualReferences")
+        assert len(refs) == 1
+        gate, socket = source_of(refs[0], "state")
+        assert gate.registry == "core/Switch"
+        assert socket == "yes"
+        backend, backend_socket = source_of(gate, "value")
+        assert backend.registry == "agents/visual/BackendStatus"
+        assert backend_socket == "can_edit_images"
+
+    def test_nothing_upstream_of_the_references_gate_reads_prompt_only(
+        self, composer
+    ):
+        """Transitive guard: re-introducing prompt_only anywhere on the gate's
+        input chain would silently split the two buttons apart again."""
+        refs = nodes_of(composer, "agents/visual/determineVisualReferences")[0]
+        seen = set()
+        frontier = [refs]
+        while frontier:
+            node = frontier.pop()
+            if node.id in seen:
+                continue
+            seen.add(node.id)
+            if node.registry == "state/GetState":
+                assert node.get_property("name") != "prompt_only", (
+                    "references gate reads prompt_only again"
+                )
+            for socket in node.inputs:
+                source = getattr(socket, "source", None)
+                if source:
+                    frontier.append(source.node)
+
+    def test_image_generation_is_still_gated_on_prompt_only(self, composer):
+        """The overreach guard: dropping prompt_only from the references gate
+        must not drop it from the generation gate, or prompt_only would
+        generate images."""
+        gen = nodes_of(composer, "agents/visual/GenerateImage")
+        assert len(gen) == 1
+        gate, socket = source_of(gen[0], "state")
+        assert gate.registry == "core/Switch"
+        assert socket == "no"
+        get, _ = source_of(gate, "value")
+        assert get.registry == "state/GetState"
+        assert get.get_property("name") == "prompt_only"
 
 
 class TestFinalisation:
@@ -436,3 +526,40 @@ class TestMissingFlagIsSafe:
 
         outputs = await run_node(AsBool(), inputs={"value": None, "default": False})
         assert outputs["value"] is False
+
+
+class TestPromptOnlyProducesARequest:
+    """The Adjust & Visualize path must still yield a GenerationRequest.
+
+    Observed live: "Error in node Finalize Visual Prompt input generation_request:
+    Value is not set: None". `wsh-visualize.json` gates `Finalize Visual Prompt` on
+    `prompt_only AND return_prompt` — deliberately, so the modal shows the *finalised*
+    prompt plus the format and reference assets. But the composer only stored
+    `local.generation_request` from `Generate Image`, which is itself gated on NOT
+    prompt_only. So on the one path that needs the request, nothing produced it.
+
+    The request is now stored as soon as it is built. `GenerateImage` returns the same
+    object it receives (`nodes.py:651`) and `agent.generate` mutates it in place, so the
+    generate path is unaffected.
+    """
+
+    def test_the_request_is_stored_from_the_builder_not_from_generation(self, composer):
+        setter = next(
+            n
+            for n in nodes_of(composer, "state/SetState")
+            if n.get_property("name") == "generation_request"
+        )
+        source = setter.get_input_socket("value").source
+        assert source is not None, "nothing sets local.generation_request"
+        assert source.node.registry == "agents/visual/GenerationRequest", (
+            "the request is stored from "
+            f"{source.node.registry}; if that is GenerateImage it will be None whenever "
+            "generation is skipped, which is exactly the prompt-only path"
+        )
+
+    def test_generate_image_still_receives_the_request(self, composer):
+        """Repointing the setter must not have detached generation itself."""
+        generate = next(iter(nodes_of(composer, "agents/visual/GenerateImage")))
+        source = generate.get_input_socket("generation_request").source
+        assert source is not None
+        assert source.node.registry == "agents/visual/GenerationRequest"

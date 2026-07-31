@@ -4,7 +4,7 @@
   "name": "Visualize with prompt adjustment: edit the composed prompt before generating",
   "type": "feature",
   "created": "2026-07-30",
-  "status": "planned",
+  "status": "in progress (taken over)",
   "brainstormed_with_user": "2026-07-30",
   "superpower_enhanced": true,
   "loop_state": {
@@ -13,21 +13,101 @@
     "fix_cycle_count": 0,
     "max_fix_cycles": 5,
     "checkpoints": {
-      "PLAN": { "status": "SELF_VERIFIED", "note": "Load-bearing claims re-verified against source before execution; the dispatched loop-plan-evaluator never returned a verdict." },
-      "EXECUTE": { "status": "DONE_PENDING_E2E" }
-    }
+      "PLAN": {
+        "status": "SELF_VERIFIED",
+        "note": "Load-bearing claims re-verified against source before execution; the dispatched loop-plan-evaluator never returned a verdict."
+      },
+      "EXECUTE": {
+        "status": "DONE_PENDING_E2E"
+      }
+    },
+    "next_task": "T7/T8 live verification, then the vis-type modal",
+    "next_task_note": "Handed over. Fixed: SET local.generation_request now reads from Visual Generation Request rather than Generate Image, so the prompt-only path produces a request for Finalize. Requested next: a mid-step modal that asks for the vis type BEFORE prompt generation, then composes, then lets the user edit and send. That also dissolves the CHARACTER_CARD vs SCENE_ILLUSTRATION tension - visual-subject-fidelity T4 fixed framing by switching to SCENE_ILLUSTRATION and thereby lost subject focus, because a scene illustration invites the whole cast. Letting the user choose is the better answer than guessing."
   },
   "tasks": [
-    { "id": "T1", "name": "return_prompt flag + gate rework (de-risk JSON surgery)", "status": "completed", "deps": [], "note": "Superseded in approach: a second core/Switch cannot nest, so the old gate was replaced by two core/ANDRouter nodes. See decisions." },
-    { "id": "T2", "name": "DictCollector payload + websocket/WebsocketResponse prompt_preview leg - AC2, AC3, AC4", "status": "completed", "deps": ["T1"], "note": "12 nodes added, 1 removed: 50 nodes / 53 edge groups. Verified by loading through load_graph_from_file and asserting resolved socket sources." },
-    { "id": "T3", "name": "Investigate how VisualLibraryGenerate mounts outside VisualLibrary (blocks T4)", "status": "completed", "deps": [], "note": "Answer: it cannot be reused in place - the only instance is at VisualLibraryQueue.vue:89, inside VisualLibrary's closed dialog and a tab. A second instance is mounted in TalemateApp.vue, which already holds every prop, and is opened via provide/inject like openVisualLibraryWithAsset." },
-    { "id": "T4", "name": "Optional asset_attachment_context passthrough on VisualLibraryGenerate", "status": "completed", "deps": ["T3"] },
-    { "id": "T5", "name": "Second chip in MessageToolbar - AC1", "status": "completed", "deps": [], "note": "Gated on the existing showVisualize prop, so ContextInvestigationMessage.vue needed no change at all." },
-    { "id": "T6", "name": "SceneMessages request/response plumbing + spinner hygiene - AC5, AC10", "status": "completed", "deps": ["T2", "T3", "T5"] },
-    { "id": "T7", "name": "Generate through visual/generate and attach to message - AC6, AC7", "status": "blocked", "deps": ["T4", "T6"], "note": "Needs a live image backend and the single websocket. Not attempted: a second session is active on this repo and starting the backend/ComfyUI would contend for both the websocket and the GPU." },
-    { "id": "T8", "name": "Verify hand edits survive to asset metadata - AC8", "status": "blocked", "deps": ["T7"], "note": "Same reason as T7." },
-    { "id": "T9", "name": "Regression pass - AC9", "status": "completed", "deps": [], "note": "Full suite: 5706 passed, 7 pre-existing failures confirmed unrelated by re-running them with the graph change reverted (identical 7). Visual suite 155 passed including the new guard. Frontend vite build clean." },
-    { "id": "T10", "name": "Docs for return_prompt/prompt_preview + separate commits", "status": "pending", "deps": ["T7", "T8"] }
+    {
+      "id": "T1",
+      "name": "return_prompt flag + gate rework (de-risk JSON surgery)",
+      "status": "completed",
+      "deps": [],
+      "note": "Superseded in approach: a second core/Switch cannot nest, so the old gate was replaced by two core/ANDRouter nodes. See decisions."
+    },
+    {
+      "id": "T2",
+      "name": "DictCollector payload + websocket/WebsocketResponse prompt_preview leg - AC2, AC3, AC4",
+      "status": "completed",
+      "deps": [
+        "T1"
+      ],
+      "note": "12 nodes added, 1 removed: 50 nodes / 53 edge groups. Verified by loading through load_graph_from_file and asserting resolved socket sources."
+    },
+    {
+      "id": "T3",
+      "name": "Investigate how VisualLibraryGenerate mounts outside VisualLibrary (blocks T4)",
+      "status": "completed",
+      "deps": [],
+      "note": "Answer: it cannot be reused in place - the only instance is at VisualLibraryQueue.vue:89, inside VisualLibrary's closed dialog and a tab. A second instance is mounted in TalemateApp.vue, which already holds every prop, and is opened via provide/inject like openVisualLibraryWithAsset."
+    },
+    {
+      "id": "T4",
+      "name": "Optional asset_attachment_context passthrough on VisualLibraryGenerate",
+      "status": "completed",
+      "deps": [
+        "T3"
+      ]
+    },
+    {
+      "id": "T5",
+      "name": "Second chip in MessageToolbar - AC1",
+      "status": "completed",
+      "deps": [],
+      "note": "Gated on the existing showVisualize prop, so ContextInvestigationMessage.vue needed no change at all."
+    },
+    {
+      "id": "T6",
+      "name": "SceneMessages request/response plumbing + spinner hygiene - AC5, AC10",
+      "status": "completed",
+      "deps": [
+        "T2",
+        "T3",
+        "T5"
+      ]
+    },
+    {
+      "id": "T7",
+      "name": "Generate through visual/generate and attach to message - AC6, AC7",
+      "status": "pending",
+      "deps": [
+        "T4",
+        "T6"
+      ],
+      "note": "Needs a live image backend and the single websocket. Not attempted: a second session is active on this repo and starting the backend/ComfyUI would contend for both the websocket and the GPU. | UNBLOCKED 2026-07-31: the contention that blocked this is gone. Also fixed the defect that would have failed it: the Adjust & Visualize path reached Finalize Visual Prompt with generation_request=None, because the composer stored local.generation_request from Generate Image, which is gated on NOT prompt_only. It is now stored from the builder."
+    },
+    {
+      "id": "T8",
+      "name": "Verify hand edits survive to asset metadata - AC8",
+      "status": "pending",
+      "deps": [
+        "T7"
+      ],
+      "note": "Same reason as T7. | UNBLOCKED 2026-07-31: the contention that blocked this is gone. Also fixed the defect that would have failed it: the Adjust & Visualize path reached Finalize Visual Prompt with generation_request=None, because the composer stored local.generation_request from Generate Image, which is gated on NOT prompt_only. It is now stored from the builder."
+    },
+    {
+      "id": "T9",
+      "name": "Regression pass - AC9",
+      "status": "completed",
+      "deps": [],
+      "note": "Full suite: 5706 passed, 7 pre-existing failures confirmed unrelated by re-running them with the graph change reverted (identical 7). Visual suite 155 passed including the new guard. Frontend vite build clean."
+    },
+    {
+      "id": "T10",
+      "name": "Docs for return_prompt/prompt_preview + separate commits",
+      "status": "pending",
+      "deps": [
+        "T7",
+        "T8"
+      ]
+    }
   ],
   "prompt_generation_source_of_truth": {
     "audited": "2026-07-31, in response to 'do we have a single source of truth now?'",
@@ -58,6 +138,15 @@
     "fallback_untouched": "Without return_prompt the system message still reads UnpackPrompt's pre-finalise text, so no-flag behaviour is unchanged. Pinned by test_the_no_flag_fallback_is_left_pre_finalise.",
     "requires": "Backend restart - nodes.py registration and the graph change are both loaded at startup. No frontend rebuild needed for this round (bundle hash unchanged; only Python and graph JSON changed).",
     "lesson": "Static verification proved the wiring was what I intended and could not tell me the intent was wrong. Two graph-level halves of one pipeline looked like one shared path from inside the graph. A single live generation surfaced it immediately - which is exactly the risk the still-blocked E2E tasks carry."
+  },
+  "correction_from_live_use_2": {
+    "reported": "2026-07-31: 'very different initial prompt' between Visualize and Adjust & Visualize on the same narrated paragraph, Visualize being the correct one.",
+    "root_cause": "Same failure class as the first correction \u2014 a composition stage the preview branch silently skips \u2014 but one stage earlier. In generate-visual-asset.json the reference pipeline (determineVisualReferences -> AnalyzeImages -> Refine Visual Prompt, which REWRITES the descriptive prompt around the selected references and replaces visual_prompt.parts at Stage 5) was gated on ANDRouter(can_edit_images, NOT prompt_only). The gate predates the adjust feature: it was an optimisation for the no-backend chat dump. The adjust flow also sends prompt_only=true, so the modal previewed the unrefined first-pass prompt while plain Visualize generated from the refined one. Not an LLM-variance issue - a whole second LLM pass was skipped.",
+    "second_symptom": "The prompt_preview payload carried no reference_assets, so the modal's Generate went out TEXT_TO_IMAGE with zero references - and a refined prompt citing 'IMAGE 1' would have pointed at an image that was never sent. The modal already read r.reference_assets from the initial request; nothing populated it.",
+    "fix": "(1) generate-visual-asset.json: gate is now the repurposed core/Switch 350fd066 ('IF can_edit_images') fed straight from BackendStatus.can_edit_images, .yes -> determineVisualReferences.state; the ANDRouter ea3fee4f and the GET local.prompt_only feeder 7a185200 were deleted. Skipping references when the backend cannot edit images is still correct; skipping them because nothing generates right now was the bug. (2) wsh-visualize.json: payload gains KV reference_assets read off FinalizePrompt's finalised generation_request (nodes b7d1ef00-...-0010/0011, DictCollector item6). (3) SceneMessages.vue passes reference_assets through to the modal (omit-if-empty). GenerateImage's own NOT prompt_only gate is untouched, pinned by an overreach-guard test.",
+    "cost_accepted": "Preview now runs reference selection, optional image analysis, and the refine LLM pass - slower, but that is the true cost of showing the true prompt.",
+    "tests": "TDD: 5 new/changed assertions watched failing first. test_visual_prompt_preview.py now also loads the composer graph: TestReferencesRunForPreview pins the gate source (BackendStatus.can_edit_images), a transitive no-prompt_only-upstream guard, and that GenerateImage stays gated on prompt_only. Payload tests extended for reference_assets from the finalised request. 37 pass in file; full suite 5764 passed with the same 7 pre-existing unrelated failures.",
+    "requires": "Backend restart (both graph JSONs load at startup) and frontend rebuild (SceneMessages.vue changed; vite build clean)."
   },
   "adversarial_review": {
     "reviewer": "independent subagent, frontend-focused (the node-graph half was already self-verified by execution)",
@@ -140,7 +229,14 @@
   },
   "coordination": {
     "other_session": "A second Claude session is editing the visual agent's Python (agent.py, generation.py, style.py, references.py, backends/comfyui.py).",
-    "this_track_writes": ["src/talemate/agents/visual/modules/wsh-visualize.json", "talemate_frontend/src/components/MessageToolbar.vue", "talemate_frontend/src/components/ContextInvestigationMessage.vue", "talemate_frontend/src/components/SceneMessages.vue", "talemate_frontend/src/components/VisualLibraryGenerate.vue"],
+    "this_track_writes": [
+      "src/talemate/agents/visual/modules/wsh-visualize.json",
+      "talemate_frontend/src/components/MessageToolbar.vue",
+      "talemate_frontend/src/components/ContextInvestigationMessage.vue",
+      "talemate_frontend/src/components/SceneMessages.vue",
+      "talemate_frontend/src/components/VisualLibraryGenerate.vue"
+    ],
     "overlap": "none expected; generation.py is read-only for this track, so re-read it rather than trusting recorded line numbers"
-  }
+  },
+  "taken_over": "2026-07-31: the originating session was closed and this track was handed to the autonomous-story/visual-subject-fidelity session. T7 and T8 were blocked only because that session could not start the backend or ComfyUI - the other session held both the websocket and the GPU. Not a technical blocker; they are now unblocked."
 }

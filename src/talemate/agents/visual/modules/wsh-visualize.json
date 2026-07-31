@@ -810,6 +810,10 @@
         {
           "name": "item5",
           "type": "*"
+        },
+        {
+          "name": "item6",
+          "type": "*"
         }
       ]
     },
@@ -853,6 +857,37 @@
       },
       "x": 2000,
       "y": 1400,
+      "width": 210,
+      "height": 122,
+      "collapsed": true,
+      "inherited": false,
+      "registry": "data/MakeKeyValuePair",
+      "base_type": "core/Node"
+    },
+    "b7d1ef00-0000-4000-8000-000000000010": {
+      "title": "GET obj.reference_assets",
+      "id": "b7d1ef00-0000-4000-8000-000000000010",
+      "properties": {
+        "attribute": "reference_assets"
+      },
+      "x": 1700,
+      "y": 1480,
+      "width": 210,
+      "height": 98,
+      "collapsed": true,
+      "inherited": false,
+      "registry": "data/Get",
+      "base_type": "core/Node"
+    },
+    "b7d1ef00-0000-4000-8000-000000000011": {
+      "title": "KV reference_assets",
+      "id": "b7d1ef00-0000-4000-8000-000000000011",
+      "properties": {
+        "key": "reference_assets",
+        "value": ""
+      },
+      "x": 2000,
+      "y": 1480,
       "width": 210,
       "height": 122,
       "collapsed": true,
@@ -1067,7 +1102,14 @@
       "b7d1ef00-0000-4000-8000-000000000007.value"
     ],
     "b7d1ef00-0000-4000-8000-00000000000f.generation_request": [
-      "b7d1ef00-0000-4000-8000-00000000000d.object"
+      "b7d1ef00-0000-4000-8000-00000000000d.object",
+      "b7d1ef00-0000-4000-8000-000000000010.object"
+    ],
+    "b7d1ef00-0000-4000-8000-000000000010.value": [
+      "b7d1ef00-0000-4000-8000-000000000011.value"
+    ],
+    "b7d1ef00-0000-4000-8000-000000000011.kv": [
+      "b7d1ef00-0000-4000-8000-00000000000b.item6"
     ],
     "b7d1ef00-0000-4000-8000-00000000000f.state": [
       "b7d1ef00-0000-4000-8000-00000000000c.state"

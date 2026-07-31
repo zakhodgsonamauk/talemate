@@ -782,6 +782,12 @@ export default {
                     for (const key of ['vis_type', 'character_name', 'format']) {
                         if (data[key]) preview[key] = data[key];
                     }
+                    // References the composer selected — the refined prompt
+                    // may cite them ("IMAGE 1"), and without them the modal
+                    // would generate TEXT_TO_IMAGE instead of IMAGE_EDIT.
+                    if (Array.isArray(data.reference_assets) && data.reference_assets.length) {
+                        preview.reference_assets = data.reference_assets;
+                    }
                     this.applyVisualPromptPreview(messageId, preview);
                 }
             }
