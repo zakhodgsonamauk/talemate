@@ -2076,7 +2076,10 @@
         "data": {
           "character.attribute": 192,
           "character.detail": 512,
-          "character.description": 512
+          "character.description": 512,
+          "character.visual_rules": 384,
+          "character.acting_instructions": 512,
+          "character.example_dialogue": 512
         }
       },
       "x": 220,
