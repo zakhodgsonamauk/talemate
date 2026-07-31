@@ -631,13 +631,16 @@ class GenerationMixin:
         instructions = (instructions or "").strip()
         character_name = (character_name or "").strip()
         if not instructions and not character_name:
+            log.debug("distill_prompt.prestart_declined", reason="no subject evidence")
             return ""
 
         try:
             vt = VIS_TYPE(vis_type)
         except (ValueError, TypeError):
+            log.debug("distill_prompt.prestart_declined", reason="bad vis_type", vis_type=vis_type)
             return ""
         if vt in VIS_TYPES_WITHOUT_CAST:
+            log.debug("distill_prompt.prestart_declined", reason="castless vis_type", vis_type=str(vt))
             return ""
 
         request = GenerationRequest(
@@ -680,7 +683,13 @@ class GenerationMixin:
         )
         if key != expected:
             task.cancel()
-            log.debug("distill_prompt.pending_mismatch", pending=str(key[0]))
+            # Both keys in full: a mismatch here silently costs the parallelism,
+            # so the log has to show exactly which component disagreed.
+            log.warning(
+                "distill_prompt.pending_mismatch",
+                pending={"vis_type": str(key[0]), "character": key[1], "instructions": key[2][:80]},
+                expected={"vis_type": str(expected[0]), "character": expected[1], "instructions": expected[2][:80]},
+            )
             return False
 
         try:
