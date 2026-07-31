@@ -777,39 +777,57 @@ class GenerationMixin:
                     fallback=getattr(self.client, "name", None),
                 )
 
-        try:
-            raw, _ = await Prompt.request(
-                "visual.distill-image-prompt",
-                client,
-                # Parametric kind: "visualize" alone caps the response at 150 tokens,
-                # which a thinking model spends before writing a single keyword.
-                "visualize_long",
-                vars={
-                    "scene": scene,
-                    "recent": recent,
-                    "subject": subject,
-                    "identity": identity or "",
-                    "wardrobe": wardrobe or "",
-                    "rules": rules or "",
-                    "sex": sex or "",
-                    "others": others,
-                    "scene_anchor": setting or "",
-                    "location": location or "",
-                    "instructions": (request.instructions or "").strip(),
-                    "max_prompt_tokens": self._max_prompt_tokens(),
-                },
-            )
-        except Exception as e:
-            log.warning("distill_prompt.failed", subject=subject.name, error=str(e))
-            return False
+        prompt_vars = {
+            "scene": scene,
+            "recent": recent,
+            "subject": subject,
+            "identity": identity or "",
+            "wardrobe": wardrobe or "",
+            "rules": rules or "",
+            "sex": sex or "",
+            "others": others,
+            "scene_anchor": setting or "",
+            "location": location or "",
+            "instructions": (request.instructions or "").strip(),
+            "max_prompt_tokens": self._max_prompt_tokens(),
+        }
 
-        positive, negative = parse_distilled_response(raw)
-        if not positive:
+        # Two attempts: cloud models refuse borderline content flakily rather than
+        # consistently - observed live, the same prompt refused once and answered
+        # cleanly on the next call. A refusal parses as no PROMPT: line, so one
+        # retry converts most of them; a second failure falls through to legacy.
+        positive = negative = None
+        for attempt in range(2):
+            try:
+                raw, _ = await Prompt.request(
+                    "visual.distill-image-prompt",
+                    client,
+                    # Parametric kind: "visualize" alone caps the response at 150
+                    # tokens, which a thinking model spends before writing a
+                    # single keyword.
+                    "visualize_long",
+                    vars=dict(prompt_vars),
+                )
+            except Exception as e:
+                log.warning(
+                    "distill_prompt.failed",
+                    subject=subject.name,
+                    attempt=attempt + 1,
+                    error=str(e),
+                )
+                continue
+
+            positive, negative = parse_distilled_response(raw)
+            if positive:
+                break
             log.warning(
                 "distill_prompt.unparseable",
                 subject=subject.name,
+                attempt=attempt + 1,
                 response=(raw or "")[:200],
             )
+
+        if not positive:
             return False
 
         # The style templates were already flattened into the incoming prompt string,

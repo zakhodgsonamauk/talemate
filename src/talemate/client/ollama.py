@@ -217,13 +217,21 @@ class OllamaClient(ClientBase):
 
         options["num_ctx"] = self.max_token_length
 
-        # Use generate endpoint for completion
+        # Use generate endpoint for completion.
+        #
+        # think=False when reasoning is off: hybrid-thinking models (glm, minimax,
+        # qwen3) think by DEFAULT on Ollama, so a client with reason_enabled=false
+        # was silently paying thinking latency on every call and the tokens were
+        # discarded server-side. Measured on the visual distillation call: 12.1s
+        # thinking vs 5-9s without. Harmless on non-thinking models - Ollama
+        # accepts and ignores it (verified against Rocinante).
         stream = await client.generate(
             model=self.model_name,
             prompt=prompt.strip(),
             options=options,
             raw=self.can_be_coerced,
             stream=True,
+            think=False if not self.reason_enabled else None,
         )
 
         response = ""
