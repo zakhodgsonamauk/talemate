@@ -1235,7 +1235,17 @@ export default {
                     return null;
                 }
                 case 'visual-character':
-                    return { vis_type: VIS_TYPE.CHARACTER_CARD, character_name: args.character, instructions };
+                    // A SCENE_ILLUSTRATION of one character, not a CHARACTER_CARD. This
+                    // sub_type is "Visual description of {character} in the current
+                    // moment" - a moment, not an identity portrait. Asking for a card
+                    // forced FORMAT_TYPE.PORTRAIT and injected the card style's
+                    // "solo, looking at viewer", so a character leaning over a console
+                    // came back as a head-and-shoulders shot staring at the camera, and
+                    // whatever the moment actually described was framed out.
+                    // `character_name` is kept so reference conditioning and subject
+                    // selection still resolve to them - REFERENCE_VIS_TYPES covers
+                    // SCENE_ILLUSTRATION as well as CHARACTER_CARD.
+                    return { vis_type: VIS_TYPE.SCENE_ILLUSTRATION, character_name: args.character, instructions };
                 case 'visual-scene':
                     return { vis_type: VIS_TYPE.SCENE_ILLUSTRATION, instructions };
                 default:

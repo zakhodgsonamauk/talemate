@@ -21,6 +21,7 @@
     "completed_tasks": [
       "T1",
       "T2",
+      "T4",
       "T12",
       "T13",
       "T15",
@@ -28,8 +29,8 @@
       "T18",
       "T19"
     ],
-    "next_task": "verify T19 by generation; if still explicit, T14",
-    "next_task_note": "T15 and T19 shipped. T19 is the final text-side lever - if the image is still explicit with the score tags gone, every prompt-level control has been tried and verified in the delivered payload, and the checkpoint must change (T14). Remaining after that: T16 (subject-scoped dressed test), T4/T5 (camera-gaze tag), T6/T7/T8 (pose and budget, now unblocked), T11 docs."
+    "next_task": "verify T4 by generation; attachment is a config setting, user handling",
+    "next_task_note": "T4 shipped and the frontend was rebuilt (frontend_wsgi.py:17 serves talemate_frontend/dist, so a .vue edit has no effect until pnpm build). T5 marked not needed. IMPORTANT for T14: every judgement of the checkpoint so far was made on forced-portrait, looking-at-viewer, character-sheet-derived prompts - not a fair trial. Re-assess the model only after seeing landscape scene illustrations. Attachment: not a code bug - appearance.scene.auto_attach_assets is False in config (scene_assets.py:367 gates on it), user is handling."
   },
   "cannot_self_certify": {
     "reason": "diffusion output can only be judged by looking at it",
@@ -69,16 +70,18 @@
     {
       "id": "T4",
       "name": "Establish why a scene moment became a CHARACTER_CARD",
-      "status": "pending",
-      "deps": []
+      "status": "completed",
+      "deps": [],
+      "note": "ANSWERED: vis_type comes from the frontend (wsh-visualize.json reads GET obj.vis_type), and buildVisualizeRequest (SceneMessages.vue:1223) mapped message sub_type 'visual-character' to CHARACTER_CARD. But that sub_type means 'Visual description of {character} in the current moment' (scene_message.py:623) - a moment, not an identity portrait. The mapping forced FORMAT_TYPE.PORTRAIT (schema.py:92) and injected the card style's positive_keywords ['solo','looking at viewer'] from visual-styles.yaml, while SCENE_ILLUSTRATION carries none. It also routes message display through the 'card' asset kind rather than 'scene_illustration' (SceneMessages.vue:427 vs :453)."
     },
     {
       "id": "T5",
       "name": "Remove the camera-gaze tag from action prompts - AC5",
-      "status": "pending",
+      "status": "not needed",
       "deps": [
         "T4"
-      ]
+      ],
+      "note": "Superseded by T4. The plan was to conditionally strip 'looking at viewer' from action prompts. With the correct vis_type it is never injected - SCENE_ILLUSTRATION has positive_keywords: [] - so the cause is fixed rather than the symptom filtered."
     },
     {
       "id": "T6",
@@ -218,7 +221,9 @@
     "P10": "IPAdapter was overriding the text conditioning: ip-adapter-plus at weight 0.8, ease out, end_at 0.8, K+V transfers composition and background as well as identity, so an outdoor reference photo put a reactor-room scene in a garden and suppressed prompt detail",
     "P11": "A malformed LLM response aborted the whole visualize action, because retries covered only empty responses - not responses missing a required section",
     "P12": "The Pony score tags bias toward explicit output: score_9/score_8_up select for highly-rated booru images, a corpus that skews explicit, so the positive prompt fought its own negatives",
-    "P13": "_drop_secondary_traits only knew each character's derived anchor - a condensed appearance line with no species and no equipment - so another character's species, gear and paraphrased colours leaked onto the subject unmatched"
+    "P13": "_drop_secondary_traits only knew each character's derived anchor - a condensed appearance line with no species and no equipment - so another character's species, gear and paraphrased colours leaked onto the subject unmatched",
+    "P14": "Visualizing a narrative paragraph produced a CHARACTER_CARD, forcing portrait format and injecting 'solo, looking at viewer', so the moment being described was framed out - which also explains why an explicit paragraph produced a non-explicit image",
+    "P15": "Images were never embedded next to their paragraph because appearance.scene.auto_attach_assets is False; scene_assets.py:367 gates smart_attach_asset on it even when the attachment context names explicit message_ids"
   },
   "decisions": [
     "Sex is expressed as booru tags (1boy / male focus / 1girl), not natural language. The checkpoint family is tag-trained; 'human male' carries little signal. This is the same principle visual-reference-closure recorded for negatives, applied to the positive, which nobody had done.",
@@ -236,6 +241,8 @@
     "Extraction failure gets its own retry allowance rather than raising the shared `attempts` default, because generate-visual-asset.json pins attempts: 1 and changing the default would alter every other graph.",
     "Rating tags are gated on the dressed determination but NOT on sex resolution. Rating is independent of sex, and sex resolution has failed twice already - coupling them would risk losing the rating control too.",
     "cfg raised to 8 only on the SDXL/Pony workflows. qwen_image, qwen_image_edit and z_image_turbo keep cfg 1 because their distilled models require it; raising it there would wreck them.",
-    "Secondary vocabulary is widened from base_attributes (species, appearance, gear) rather than by loosening the match test, because loosening it would start dropping the subject's own traits. Shared words stay in the secondary set so the all-words-attributable test still catches 'purple skin', where only 'purple' is exclusively the other character's."
+    "Secondary vocabulary is widened from base_attributes (species, appearance, gear) rather than by loosening the match test, because loosening it would start dropping the subject's own traits. Shared words stay in the secondary set so the all-words-attributable test still catches 'purple skin', where only 'purple' is exclusively the other character's.",
+    "'visual-character' maps to SCENE_ILLUSTRATION with character_name preserved, not CHARACTER_CARD. The sub_type describes a moment, not an identity. character_name keeps reference conditioning working since REFERENCE_VIS_TYPES (references.py:45) covers SCENE_ILLUSTRATION too. CHARACTER_CARD is left for deliberate card generation - CoverImage.vue:114 and SceneToolsVisual.vue:187.",
+    "Frontend changes require `pnpm build`: frontend_wsgi.py:17 serves the built dist, so editing a .vue file alone changes nothing at runtime. dist is gitignored, so only source is committed."
   ]
 }
