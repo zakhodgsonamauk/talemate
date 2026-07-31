@@ -41,11 +41,13 @@ class FakeAgent(ReferenceMixin):
         return self._can_edit
 
 
-def make_scene(characters, covers=None, cards=None, tagged=None):
+def make_scene(characters, covers=None, cards=None, tagged=None, owners=None):
     """A scene stub whose assets answer the questions the mixin asks."""
     covers = covers or {}
     cards = cards or {}
     tagged = tagged or {}
+    # asset_id -> character_name (or None for unowned style/scene refs)
+    owners = owners or {}
 
     def validate_asset_id(asset_id):
         return asset_id in covers.values()
@@ -59,10 +61,19 @@ def make_scene(characters, covers=None, cards=None, tagged=None):
             return []
         return cards.get(character_name, [])
 
+    def get_asset(asset_id):
+        if asset_id not in owners:
+            raise KeyError(asset_id)
+        return SimpleNamespace(
+            meta=SimpleNamespace(character_name=owners[asset_id])
+        )
+
     return SimpleNamespace(
         characters=characters,
         assets=SimpleNamespace(
-            validate_asset_id=validate_asset_id, search_assets=search_assets
+            validate_asset_id=validate_asset_id,
+            search_assets=search_assets,
+            get_asset=get_asset,
         ),
     )
 
@@ -158,17 +169,95 @@ async def test_disabled_config_attaches_nothing(kaira, illustration_request, sce
 
 
 @pytest.mark.asyncio
-async def test_caller_supplied_reference_is_not_overridden(
+async def test_inline_reference_is_not_overridden(
     kaira, illustration_request, scene_ctx
 ):
     """A user editing an image chose that reference deliberately."""
+    scene_ctx(make_scene([kaira], covers={"Kaira": KAIRA_COVER}))
+    illustration_request.inline_reference = "base64data"
+    agent = FakeAgent()
+
+    await agent.attach_character_references(illustration_request)
+
+    assert illustration_request.reference_assets == []
+
+
+@pytest.mark.asyncio
+async def test_supplied_reference_matching_subject_is_kept(
+    kaira, illustration_request, scene_ctx
+):
+    """The adjust flow's select_reference picked one of the subject's own cards."""
+    scene_ctx(
+        make_scene(
+            [kaira],
+            covers={"Kaira": KAIRA_COVER},
+            owners={KAIRA_CARD: "Kaira"},
+        )
+    )
+    illustration_request.reference_assets = [KAIRA_CARD]
+    agent = FakeAgent()
+
+    await agent.attach_character_references(illustration_request)
+
+    assert illustration_request.reference_assets == [KAIRA_CARD]
+
+
+@pytest.mark.asyncio
+async def test_supplied_reference_for_wrong_character_is_replaced(
+    kaira, illustration_request, scene_ctx
+):
+    """The observed live failure: select_reference free-matched the wrong
+    character's card (Hannah's, with blank metadata) for a Kaira shot. Wrong-
+    owner references are dropped and the subject's own cover attached."""
+    hannah_card = "e" * 64
+    scene_ctx(
+        make_scene(
+            [kaira, character("Hannah")],
+            covers={"Kaira": KAIRA_COVER},
+            owners={hannah_card: "Hannah"},
+        )
+    )
+    illustration_request.reference_assets = [hannah_card]
+    agent = FakeAgent()
+
+    await agent.attach_character_references(illustration_request)
+
+    assert illustration_request.reference_assets == [KAIRA_COVER]
+
+
+@pytest.mark.asyncio
+async def test_supplied_unowned_reference_is_kept(
+    kaira, illustration_request, scene_ctx
+):
+    """Style/scene references with no character owner are legitimate."""
+    style_ref = "f" * 64
+    scene_ctx(
+        make_scene(
+            [kaira],
+            covers={"Kaira": KAIRA_COVER},
+            owners={style_ref: None},
+        )
+    )
+    illustration_request.reference_assets = [style_ref]
+    agent = FakeAgent()
+
+    await agent.attach_character_references(illustration_request)
+
+    assert illustration_request.reference_assets == [style_ref]
+
+
+@pytest.mark.asyncio
+async def test_supplied_unknown_reference_is_replaced(
+    kaira, illustration_request, scene_ctx
+):
+    """An asset id that does not exist cannot be trusted - fall back to the subject."""
     scene_ctx(make_scene([kaira], covers={"Kaira": KAIRA_COVER}))
     illustration_request.reference_assets = ["deadbeef"]
     agent = FakeAgent()
 
     await agent.attach_character_references(illustration_request)
 
-    assert illustration_request.reference_assets == ["deadbeef"]
+    assert illustration_request.reference_assets == [KAIRA_COVER]
 
 
 @pytest.mark.asyncio

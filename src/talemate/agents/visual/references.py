@@ -306,7 +306,7 @@ class ReferenceMixin:
         if not self._references_enabled():
             return
 
-        if request.reference_assets or request.inline_reference:
+        if request.inline_reference:
             # An explicit reference - a user editing an image - always wins.
             log.debug("attach_character_references.caller_supplied")
             return
@@ -334,6 +334,48 @@ class ReferenceMixin:
             return
 
         subject = self._subject(request)
+
+        if request.reference_assets:
+            # Pre-populated references come from the adjust flow's
+            # select_reference LLM, which free-matches over the whole asset
+            # library and has picked the wrong character off empty asset
+            # metadata before (observed live: Hannah's blank card chosen for
+            # a Kaira shot). Validate against the resolved subject instead of
+            # trusting it; assets with no character owner (style/scene refs)
+            # are kept.
+            if not subject:
+                log.debug("attach_character_references.caller_supplied")
+                return
+
+            kept: list[str] = []
+            dropped: list[str] = []
+            for asset_id in request.reference_assets:
+                try:
+                    owner = scene.assets.get_asset(asset_id).meta.character_name
+                except Exception:
+                    dropped.append(asset_id)
+                    continue
+                if owner and owner.lower() != subject.name.lower():
+                    dropped.append(asset_id)
+                else:
+                    kept.append(asset_id)
+
+            if dropped:
+                log.info(
+                    "attach_character_references.dropped_wrong_subject",
+                    subject=subject.name,
+                    dropped=[asset_id[:10] for asset_id in dropped],
+                    kept=[asset_id[:10] for asset_id in kept],
+                )
+
+            if kept:
+                request.reference_assets = kept
+                return
+
+            # every supplied reference belonged to someone else - fall
+            # through and attach the subject's own cards instead
+            request.reference_assets = []
+
         if not subject:
             log.debug("attach_character_references.no_subject")
             return

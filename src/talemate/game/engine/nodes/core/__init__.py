@@ -790,7 +790,24 @@ class NodeBase(pydantic.BaseModel):
                 or socket.value is UNRESOLVED
             ):
                 if self.get_property(socket.name) is UNRESOLVED:
-                    if state.verbosity >= NodeVerbosity.VERBOSE:
+                    if (
+                        socket.source is not None
+                        and not socket.source.deactivated
+                        and socket.value is UNRESOLVED
+                    ):
+                        # An ACTIVE source that produced no value - genuine
+                        # starvation, unlike the routine deactivated-branch
+                        # skips. This is the silent failure mode of graph
+                        # bugs, so it logs unconditionally (debug sink).
+                        log.debug(
+                            "node.skipped.starved_input",
+                            node=self.title,
+                            registry=self.registry,
+                            input=socket.name,
+                            source_node=getattr(socket.source, "node", None)
+                            and socket.source.node.title,
+                        )
+                    elif state.verbosity >= NodeVerbosity.VERBOSE:
                         log.warning(
                             f"Node {self.title} input {socket.name} is not available, missing socket {socket.name}"
                         )
