@@ -1,0 +1,67 @@
+{
+  "version": 3,
+  "track_id": "visual-reference-closure",
+  "name": "Close out reference conditioning: guardrails, canonical cover, commits",
+  "type": "feature",
+  "created": "2026-07-30",
+  "status": "planned",
+  "design_doc": "docs/fork/visual-reference-consistency-design.md",
+  "follows": "visual-reference-consistency",
+  "supersedes": "scene-scroll-and-image-quality (abandoned - see spec appendix)",
+  "superpower_enhanced": true,
+  "reviewed_by": "second-opinion panel panel-20260730-202854-32de (kimi-k2.7-code, glm-5.2, nemotron-3-ultra)",
+  "loop_state": {
+    "current_step": "EVALUATE_PLAN",
+    "step_status": "NOT_STARTED",
+    "fix_cycle_count": 0,
+    "max_fix_cycles": 5,
+    "superpower_enhanced": true,
+    "checkpoints": {
+      "PLAN": { "status": "PENDING" }
+    }
+  },
+  "tasks": [
+    { "id": "T1", "name": "Static tag-shaped duplication negatives in fork-styles.yaml", "status": "pending", "deps": [] },
+    { "id": "T2", "name": "Count-aware negatives beside _add_species_negatives + unit tests", "status": "pending", "deps": ["T1"] },
+    { "id": "T3", "name": "Verify single-subject and two-character generations - AC3, AC4, AC5, AC6", "status": "pending", "deps": ["T2"] },
+    { "id": "T4", "name": "photoreal_pony decision, recorded - AC7", "status": "pending", "deps": ["T1"] },
+    { "id": "T5", "name": "Canonical Kaira cover - AC8 (user-blocked, must not gate T7a)", "status": "pending", "deps": ["T3"] },
+    { "id": "T6a", "name": "Docs: guardrails + design-doc amendment + decision log", "status": "pending", "deps": ["T3", "T4"] },
+    { "id": "T6b", "name": "Docs: canonical-cover outcome", "status": "pending", "deps": ["T5"] },
+    { "id": "T7a", "name": "Commits: emphasis fix, feature, guardrails, docs, launcher - AC9", "status": "pending", "deps": ["T6a"] },
+    { "id": "T7b", "name": "Commit the canonical cover", "status": "pending", "deps": ["T5", "T6b"] }
+  ],
+  "problems": {
+    "P1": "Illustration negatives carry no anti-duplication terms, so live generations produced two-to-four copies of the subject; the checkpoint is booru-tag trained so natural-language negatives are weak, and character count is variable so blanket count tags would fight legitimate multi-character shots",
+    "P2": "Kaira's cover is a glamour portrait, and reference conditioning reproduces its framing along with her identity",
+    "P3": "A day of visual-reference work is uncommitted, mixed in with disposable generated-asset churn that must not be committed"
+  },
+  "decisions": [
+    "Negatives are tag-shaped, not natural language: CyberRealisticPony_V9 is booru-trained and responds to tags. Panel review was unanimous that the first draft's natural-language terms were too weak.",
+    "'twins' is excluded - it would suppress a legitimate twin.",
+    "Count tags are injected dynamically, not put in the template. '2girls' means exactly two and 'multiple girls' means three or more; MAX_CHARACTERS_IN_FRAME is 3, so a static negative would fight legitimate shots. Reuses the in-frame evidence the reference selector already computes.",
+    "Positives stay untouched: an existing test pins the Semi-Real (Pony) positive tag set surviving the sanitiser.",
+    "The commit chain forks so the user-blocked canonical-cover task cannot gate the rest. The predecessor track had all commits behind that task while its own risk note said they must not be - the panel caught the contradiction.",
+    "The strip_emphasis change is one commit, not two. It appears nowhere in HEAD: the call and the import belong to the same uncommitted behaviour fix. An earlier draft claimed a committed NameError - that was wrong.",
+    "Generated assets and library.json are never committed; they are disposable test output."
+  ],
+  "constraints": {
+    "new_npm_dependencies": 0,
+    "positive_keywords_changed": false,
+    "note": "AC3/AC4/AC6/AC8 need real generations: ComfyUI up, and only one frontend connected - the backend accepts a single websocket, so an open browser tab elsewhere locks Playwright out."
+  },
+  "risks": [
+    "Diffusion negatives are guidance, not guarantees. AC3 may need a second iteration with different terms; budget for one.",
+    "T2 touches the prompt finaliser, already amended twice by the previous track. Run the whole anchor suite, not just the new tests.",
+    "AC6 has no existing precedent - nothing currently pins negative-side assembly - so it must be verified from real asset metadata.",
+    "Even a neutral reference can leak camera framing at the shipped IP-Adapter weight, so AC8 checks framing as well as pose.",
+    "Commit hygiene is the quiet risk: `git add -A` would sweep in generated-asset churn."
+  ],
+  "open_gaps": [
+    "Whether .mcp.json should be committed - it names a local MCP server. Decide in T7a.",
+    "Whether config.yaml is gitignored in this fork; confirm rather than assume."
+  ],
+  "dropped": {
+    "scene_pane_scrolling": "The predecessor track's headline item. Measurements were real but the conclusion was wrong: page-level scrolling is deliberate (TalemateApp.vue:483/632/635/1282 auto-scroll the input into view), and the unreachable toolbar was a Playwright artefact - the websocket was refused because another frontend held it, so no scene loaded and no auto-scroll fired. Independent story-pane scrolling remains a possible design improvement with no user-reported problem behind it. Detail preserved in the spec appendix."
+  }
+}

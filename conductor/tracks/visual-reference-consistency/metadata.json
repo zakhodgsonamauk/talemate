@@ -1,0 +1,43 @@
+{
+  "version": 3,
+  "track_id": "visual-reference-consistency",
+  "name": "Identity from reference images",
+  "type": "feature",
+  "created": "2026-07-30",
+  "status": "implemented, E2E verified",
+  "design_doc": "docs/fork/visual-reference-consistency-design.md",
+  "setup_doc": "docs/fork/comfyui-ipadapter-setup.md",
+  "follows": "visual-consistency",
+  "superpower_enhanced": true,
+  "retroactive": "Recorded after the fact. The work ran ahead of the track, so the design doc is the authority and this file exists to keep the registry honest.",
+  "loop_state": {
+    "current_step": "EVALUATE_EXECUTION",
+    "step_status": "NOT_STARTED",
+    "fix_cycle_count": 0,
+    "max_fix_cycles": 5,
+    "superpower_enhanced": true,
+    "checkpoints": {
+      "PLAN": { "status": "PASSED" },
+      "EXECUTION": { "status": "PENDING" }
+    }
+  },
+  "delivered": [
+    "ReferenceMixin (src/talemate/agents/visual/references.py): picks the subject, attaches their cover as reference_assets, which routes the request to the image-edit backend",
+    "Two ComfyUI workflows: sdxl-ipadapter-character.json (single pass) and sdxl-ipadapter-inpaint.json (two-pass, masked, composition preserved)",
+    "Dedicated ComfyUI install at C:\\ComfyUI-talemate with IP-Adapter PLUS SDXL and CLIP-Vision ViT-H, sharing the KoboldCpp checkpoints",
+    "start-fork.bat USE_COMFYUI=1 switch with --reserve-vram 5",
+    "19 tests in tests/test_visual_reference.py",
+    "Fixed a pre-existing break: strip_emphasis used in generation.py without being imported"
+  ],
+  "verified": [
+    "AC - identity transfers: control generation gave human skin and blue hair; with her cover as reference, violet skin, markings and hair all present",
+    "AC - stable across seeds: three seeds produced recognisably the same person",
+    "AC - end to end through the UI: Visualize -> Kaira -> Card attached her cover x3, ComfyUI ran the IPAdapter graph, asset saved as IMAGE_EDIT with 3 references, output recognisably Kaira"
+  ],
+  "known_gaps": [
+    "Illustration quality is limited by missing prompt guardrails and by Kaira's cover being a glamour portrait - both carried into scene-scroll-and-image-quality",
+    "Elmer can never be referenced: his visual rule hides his face, so his cover is a silhouette and the selector skips him by design",
+    "seed_mode does nothing on the ComfyUI backend - Workflow.set_seeds randomises every seed field on every run",
+    "Not committed at the time of writing"
+  ]
+}
