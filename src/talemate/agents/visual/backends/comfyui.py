@@ -88,6 +88,41 @@ def model_profile(model_name: str | None) -> dict | None:
     return None
 
 
+def resolve_checkpoint(
+    workflow: "Workflow", agent_model: str | None, override: str | None
+) -> tuple[str | None, dict | None]:
+    """
+    The checkpoint a generation should run with, and the sampler profile to apply.
+
+    Precedence: per-request override (Adjust & Visualize / regenerate) beats the
+    agent-configured model beats the workflow's own default.
+
+    A profile is returned only when the effective model differs from the one baked
+    into the workflow - a workflow running its shipped checkpoint keeps its own
+    hand-tuned settings, whatever the profile table thinks of them. A swap to an
+    unrecognised model keeps the workflow settings too, with a warning, because a
+    wrong guess is worse than a predictable mismatch.
+    """
+    baked = None
+    node = workflow.main_model_node
+    if node:
+        baked = node["inputs"].get("ckpt_name") or node["inputs"].get("unet_name")
+
+    model = override or agent_model or None
+    if not model or model == baked:
+        return model, None
+
+    profile = model_profile(model)
+    if not profile:
+        log.warning(
+            "comfyui.resolve_checkpoint.no_profile",
+            checkpoint=model,
+            workflow_default=baked,
+            note="workflow's own sampler settings kept - may not suit this model",
+        )
+    return model, profile
+
+
 class Model(pydantic.BaseModel):
     name: str
     label: str
@@ -605,25 +640,19 @@ class Backend(backends.Backend):
     async def generate(
         self, request: GenerationRequest, response: GenerationResponse
     ) -> bytes:
-        model: str = request.agent_config["model"]
         workflow: Workflow = request.agent_config["workflow"].copy
 
-        # A per-request checkpoint choice (Adjust & Visualize modal) outranks the
-        # agent-configured model. It carries its sampler profile with it: the
-        # workflow's baked-in steps/cfg are tuned for the workflow's own checkpoint,
-        # and e.g. a Lightning model at the Pony workflow's cfg produces garbage.
-        checkpoint_override = (request.extra_config or {}).get("checkpoint") or None
-        if checkpoint_override:
-            model = checkpoint_override
-            profile = model_profile(checkpoint_override)
-            if profile:
-                workflow.set_sampler(profile)
-            else:
-                log.warning(
-                    "comfyui.checkpoint_override.no_profile",
-                    checkpoint=checkpoint_override,
-                    note="workflow's own sampler settings kept - may not suit this model",
-                )
+        # The sampler profile travels with the checkpoint, whichever way it was
+        # chosen: the workflow's baked-in steps/cfg are tuned for the workflow's own
+        # checkpoint, and e.g. a Lightning model at the Pony workflow's cfg produces
+        # garbage. See resolve_checkpoint for the precedence.
+        model, profile = resolve_checkpoint(
+            workflow,
+            request.agent_config.get("model"),
+            (request.extra_config or {}).get("checkpoint") or None,
+        )
+        if profile:
+            workflow.set_sampler(profile)
 
         workflow.set_resolution(request.resolution)
         workflow.set_prompt(request.prompt, request.negative_prompt)

@@ -77,21 +77,24 @@
               :disabled="generating || promptLoading || characterItems.length === 0"
             />
 
-            <!-- Per-request checkpoint choice. Only offered when the image backend
-                 answered the checkpoints query with actual models (ComfyUI); the
-                 sampler settings travel with the choice on the backend, so a
-                 Lightning model is not run at a base model's cfg. -->
+            <!-- Checkpoint choice. Only offered when the image backend answered the
+                 checkpoints query with actual models (ComfyUI). Choosing one sets
+                 the agent's model for every generation path - both tabs here, the
+                 plain Visualize chip, character cards, automatic generations - and
+                 the sampler settings travel with it on the backend, so a Lightning
+                 model is not run at a base model's cfg. -->
             <v-select
               v-if="checkpointChoices.length > 1"
-              v-model="checkpoint"
+              :model-value="checkpoint"
               class="mt-2"
               :items="checkpointChoices"
               item-title="label"
               item-value="value"
               label="Image Model"
-              hint="Sampler settings adjust to the chosen model automatically."
+              hint="Applies to all image generation until changed. Sampler settings adjust automatically."
               persistent-hint
               :disabled="generating || promptLoading"
+              @update:model-value="onCheckpointChosen"
             />
 
             <v-alert
@@ -190,6 +193,20 @@
               :items="characterItems"
               label="Character"
               :disabled="generating || characterItems.length === 0"
+            />
+
+            <v-select
+              v-if="checkpointChoices.length > 1"
+              :model-value="checkpoint"
+              class="mt-2"
+              :items="checkpointChoices"
+              item-title="label"
+              item-value="value"
+              label="Image Model"
+              hint="Applies to all image generation until changed. Sampler settings adjust automatically."
+              persistent-hint
+              :disabled="generating"
+              @update:model-value="onCheckpointChosen"
             />
           </v-window-item>
         </v-window>
@@ -294,10 +311,15 @@ export default {
       format: FORMAT_TYPE.LANDSCAPE,
       characterName: '',
       referenceAssets: [],
-      // '' means the workflow's own default model; anything else is a
-      // per-request checkpoint override carried in extra_config.
+      // The agent's current model ('' = workflow default). Choosing one here
+      // sets it globally via set_checkpoint; it is also sent as a per-request
+      // extra_config override so the saved asset records what made it and a
+      // regenerate reproduces it even after the global choice moves on.
       checkpoint: '',
       checkpointChoices: [],
+      // True when a regenerate opened the dialog with its own recorded
+      // checkpoint - the agent's current model must not clobber it.
+      checkpointFromRequest: false,
     };
   },
   computed: {
@@ -411,6 +433,7 @@ export default {
       this.referenceAssets = (r.reference_assets && Array.isArray(r.reference_assets)) ? r.reference_assets.slice() : [];
       // Regenerate keeps the checkpoint the image was made with.
       this.checkpoint = (r.extra_config && r.extra_config.checkpoint) || '';
+      this.checkpointFromRequest = Boolean(this.checkpoint);
     },
     requestCheckpoints() {
       this.getWebsocket().send(JSON.stringify({ type: 'visual', action: 'checkpoints' }));
@@ -418,11 +441,26 @@ export default {
     handleMessage(message) {
       if (message.type !== 'visual' || message.action !== 'checkpoints') return;
       this.checkpointChoices = Array.isArray(message.data) ? message.data : [];
-      // A stale override pointing at a model that no longer exists must not be
+      if (!this.checkpointFromRequest) {
+        this.checkpoint = message.current || '';
+      }
+      // A stale choice pointing at a model that no longer exists must not be
       // silently sent; fall back to the workflow default.
       if (this.checkpoint && !this.checkpointChoices.some(c => c.value === this.checkpoint)) {
         this.checkpoint = '';
       }
+    },
+    onCheckpointChosen(value) {
+      this.checkpoint = value || '';
+      this.checkpointFromRequest = false;
+      // Global, like the art style chip: every generation path runs this model
+      // until it is changed again. The backend pairs it with the right sampler
+      // settings per generation.
+      this.getWebsocket().send(JSON.stringify({
+        type: 'visual',
+        action: 'set_checkpoint',
+        checkpoint: this.checkpoint,
+      }));
     },
     close() {
       this.internalModel = false;

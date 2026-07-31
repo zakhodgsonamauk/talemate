@@ -1,6 +1,7 @@
 import pydantic
 import structlog
 
+from talemate.config import commit_config
 from talemate.instance import get_agent
 from talemate.server.websocket_plugin import Plugin
 from talemate.scene_assets import AssetMeta
@@ -128,9 +129,23 @@ class VisualWebsocketHandler(Plugin):
 
         await visual.analyze(request)
 
+    # The comfyui actions whose model choice the checkpoint selector governs.
+    # Both, deliberately: a reference-conditioned scene illustration routes to the
+    # image-edit backend, so setting only the create action would silently skip
+    # most character shots.
+    CHECKPOINT_ACTIONS = ("comfyui_image_create", "comfyui_image_edit")
+
+    def _checkpoint_action(self, visual):
+        """The primary comfyui action carrying the model choice, or None."""
+        for action_key in self.CHECKPOINT_ACTIONS:
+            action = (visual.actions or {}).get(action_key)
+            if action and "model" in action.config:
+                return action
+        return None
+
     async def handle_checkpoints(self, data: dict):
         """
-        List the checkpoints available on the image backend.
+        List the checkpoints available on the image backend, plus the current one.
 
         Feeds the model dropdown in the Adjust & Visualize modal. Only backends
         that expose a model list (ComfyUI) answer with choices; anything else gets
@@ -152,13 +167,48 @@ class VisualWebsocketHandler(Plugin):
             except Exception as e:
                 log.warning("visual.checkpoints.unavailable", error=str(e))
 
+        action = self._checkpoint_action(visual)
+        current = action.config["model"].value if action else ""
+
         self.websocket_handler.queue_put(
             {
                 "type": "visual",
                 "action": "checkpoints",
                 "data": choices,
+                "current": current or "",
             }
         )
+
+    async def handle_set_checkpoint(self, data: dict):
+        """
+        Set the checkpoint the visual agent generates with, everywhere.
+
+        Writes the agent's configured model for both comfyui actions and persists
+        it, so every generation path - the modal's both tabs, the plain Visualize
+        chip, character cards, automatic generations - runs the chosen model. The
+        sampler profile is applied per generation by resolve_checkpoint, not here.
+        An empty value returns to the workflow default.
+        """
+        checkpoint = (data.get("checkpoint") or "").strip()
+        visual = get_agent("visual")
+
+        touched = False
+        for action_key in self.CHECKPOINT_ACTIONS:
+            action = (visual.actions or {}).get(action_key)
+            if action and "model" in action.config:
+                action.config["model"].value = checkpoint
+                touched = True
+
+        if not touched:
+            await self.signal_operation_failed(
+                "The image backend does not support model selection"
+            )
+            return
+
+        await visual.save_config()
+        await commit_config()
+        await visual.emit_status()
+        log.info("visual.set_checkpoint", checkpoint=checkpoint or "(workflow default)")
 
     async def handle_cancel_generation(self, data: dict):
         """

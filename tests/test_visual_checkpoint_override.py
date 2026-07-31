@@ -12,6 +12,7 @@ from talemate.agents.visual.backends.comfyui import (
     MODEL_PROFILES,
     Workflow,
     model_profile,
+    resolve_checkpoint,
 )
 
 
@@ -117,3 +118,56 @@ def test_set_sampler_does_not_touch_seeds():
     workflow.set_sampler(model_profile("Juggernaut-XI-byRunDiffusion.safetensors"))
 
     assert workflow.nodes["2"]["inputs"]["seed"] == 1
+
+
+# === resolve_checkpoint - the precedence every generation path runs through ===
+
+
+def test_request_override_beats_the_agent_model():
+    model, profile = resolve_checkpoint(
+        _workflow(),
+        agent_model="Juggernaut-XI-byRunDiffusion.safetensors",
+        override="Juggernaut-XI-byRunDiffusion-Lightning.safetensors",
+    )
+    assert model == "Juggernaut-XI-byRunDiffusion-Lightning.safetensors"
+    assert profile["steps"] == 6
+
+
+def test_agent_model_beats_the_workflow_default():
+    """The path the plain Visualize chip, character cards and automatic
+    generations take: no request override, only the agent's configured model."""
+    model, profile = resolve_checkpoint(
+        _workflow(),
+        agent_model="Juggernaut-XI-byRunDiffusion.safetensors",
+        override=None,
+    )
+    assert model == "Juggernaut-XI-byRunDiffusion.safetensors"
+    assert profile["steps"] == 35
+
+
+def test_workflow_default_keeps_its_own_hand_tuned_settings():
+    """No choice made anywhere: the workflow JSON is authoritative, even though
+    its checkpoint name would match a profile."""
+    model, profile = resolve_checkpoint(_workflow(), agent_model="", override=None)
+    assert model is None
+    assert profile is None
+
+
+def test_choosing_the_workflows_own_checkpoint_changes_nothing():
+    """Selecting the model the workflow already runs must not replace its baked
+    settings with the profile table's generic ones."""
+    model, profile = resolve_checkpoint(
+        _workflow(),
+        agent_model="CyberRealisticPony_V9.safetensors",
+        override=None,
+    )
+    assert model == "CyberRealisticPony_V9.safetensors"
+    assert profile is None
+
+
+def test_swapping_to_an_unrecognised_model_gets_no_profile():
+    model, profile = resolve_checkpoint(
+        _workflow(), agent_model="SomeBespokeModel_v3.safetensors", override=None
+    )
+    assert model == "SomeBespokeModel_v3.safetensors"
+    assert profile is None
