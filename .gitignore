@@ -38,7 +38,6 @@ scenes/
 tts_voice_samples/*.wav
 third-party-docs/
 legacy-state-reinforcements.yaml
-CLAUDE.md
 docs/update-progress
 talemate_frontend/eslint.config.cjs
 # Added by code-review-graph
