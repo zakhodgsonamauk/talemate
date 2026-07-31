@@ -15,7 +15,7 @@ Active and completed development tracks.
 | autonomous-story | Story unfolds automatically around the player | feature | planned | EVALUATE_PLAN | 2026-07-30 |
 | visual-subject-fidelity | The right person doing the right thing | feature | in progress, T1/T2 shipped | EXECUTE | 2026-07-31 |
 | director-trust-and-levers | Director trust and autonomy levers | feature | IN USER TESTING | EVALUATE_EXECUTION | 2026-07-31 |
-| agent-observability | Structured debug logging across agents | infrastructure | planned | EVALUATE_PLAN | 2026-07-31 |
+| agent-observability | Structured debug logging across agents | infrastructure | implemented, awaiting restart | EVALUATE_EXECUTION | 2026-07-31 |
 
 ## Completed Tracks
 
