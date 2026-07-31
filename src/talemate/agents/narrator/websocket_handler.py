@@ -69,8 +69,15 @@ class NarratorWebsocketHandler(Plugin):
         """
         Give a query or instruction to the narrator that results in a context investigation
         message.
+
+        Story-advancing queries are escalated to the director's scene direction
+        when query escalation is enabled on the narrator and scene direction is
+        active on the director.
         """
         payload = QueryPayload(**data)
+
+        if await self._escalate_query_to_director(payload.query):
+            return
 
         narration = await self.narrator.narrate_query(**payload.model_dump())
         message: ContextInvestigationMessage = ContextInvestigationMessage(
@@ -80,6 +87,41 @@ class NarratorWebsocketHandler(Plugin):
 
         await self.scene.push_history(message)
         emit("context_investigation", message=message)
+
+    async def _escalate_query_to_director(self, query: str) -> bool:
+        """
+        Route a story-advancing query to the director's scene direction.
+
+        Returns True when the query was escalated and handled by the director.
+        """
+        if not self.narrator.query_escalation_enabled:
+            return False
+
+        director = get_agent("director")
+        if (
+            not director
+            or not director.enabled
+            or not director.direction_enabled_with_override
+        ):
+            return False
+
+        intent = await self.narrator.classify_query_intent(query)
+        if intent != "advance":
+            return False
+
+        # deferred import to avoid a narrator <-> director import cycle
+        from talemate.agents.director.scene_direction.schema import (
+            UserInteractionMessage,
+        )
+
+        log.debug("narrator.query.escalated_to_director", query=query)
+        emit("status", message="Query escalated to the director", status="info")
+
+        await director.direction_append_message(
+            UserInteractionMessage(user_input=query, is_direction=True)
+        )
+        await director.direction_execute_turn()
+        return True
 
     @set_loading("Looking at the scene", cancellable=True, as_async=True)
     async def handle_look_at_scene(self, data: dict):

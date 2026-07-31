@@ -64,7 +64,7 @@
 
     <!-- request input for query action -->
     <RequestInput ref="actionQueryInput" title="Narrator Query"
-        :instructions="'Ask a question or give a task to the narrator.\n\nThis is not a permanent instruction.'"
+        :instructions="'Ask a question or give a task to the narrator.\n\nThis is not a permanent instruction.\n\nStory-advancing requests (plot decisions, moving the story forward) are escalated to the director when the director\'s Scene Direction is enabled.'"
         input-type="multiline" icon="mdi-crystal-ball" :size="750" @continue="actionQuery" />
 
     <!-- narrative direction input -->

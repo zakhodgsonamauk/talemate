@@ -270,6 +270,59 @@ class TestNarratorAgentMethods:
         assert "Characters" in prompt_text
 
     @pytest.mark.asyncio
+    async def test_classify_query_intent_advance(self, active_context):
+        """Test that a story-advancing classification is returned as 'advance'."""
+        narrator = active_context
+        query = "Have the villain arrive at the tavern now"
+
+        narrator.client.send_prompt.return_value = "ADVANCE"
+
+        intent = await narrator.classify_query_intent(query)
+
+        assert intent == "advance"
+        narrator.client.send_prompt.assert_called_once()
+
+        # Verify query appears in the prompt
+        call_args = narrator.client.send_prompt.call_args
+        prompt_text = str(call_args[0][0])
+        assert query in prompt_text
+
+    @pytest.mark.asyncio
+    async def test_classify_query_intent_answer(self, active_context):
+        """Test that an informational classification is returned as 'answer'."""
+        narrator = active_context
+
+        narrator.client.send_prompt.return_value = "ANSWER"
+
+        intent = await narrator.classify_query_intent("What time of day is it?")
+
+        assert intent == "answer"
+
+    @pytest.mark.asyncio
+    async def test_classify_query_intent_defaults_to_answer(self, active_context):
+        """Test that ambiguous or malformed responses default to 'answer'."""
+        narrator = active_context
+
+        for response in ["", "MAYBE", "I think the user wants a description."]:
+            narrator.client.send_prompt.reset_mock()
+            narrator.client.send_prompt.return_value = response
+
+            intent = await narrator.classify_query_intent("Do something")
+
+            assert intent == "answer"
+
+    @pytest.mark.asyncio
+    async def test_classify_query_intent_tolerates_punctuation(self, active_context):
+        """Test that 'ADVANCE.' style responses still classify as 'advance'."""
+        narrator = active_context
+
+        narrator.client.send_prompt.return_value = "advance."
+
+        intent = await narrator.classify_query_intent("Move the story forward")
+
+        assert intent == "advance"
+
+    @pytest.mark.asyncio
     async def test_narrate_character_calls_client(self, active_context, mock_scene):
         """Test that narrate_character calls the LLM client and extracts the response."""
         narrator = active_context
@@ -746,3 +799,92 @@ class TestNarratorWorldStateSnapshot:
 
         prompt_text = str(narrator.client.send_prompt.call_args[0][0])
         assert "scene notes" not in prompt_text.lower()
+
+
+class TestQueryEscalation:
+    """Tests for routing story-advancing narrator queries to the director."""
+
+    def _make_director(self, enabled=True, direction_enabled=True):
+        director = Mock()
+        director.enabled = enabled
+        director.direction_enabled_with_override = direction_enabled
+        director.direction_append_message = AsyncMock()
+        director.direction_execute_turn = AsyncMock(return_value=([], False))
+        return director
+
+    def _make_handler(self, monkeypatch, narrator, director):
+        import talemate.agents.narrator.websocket_handler as wsh
+
+        def fake_get_agent(agent_type):
+            return {"narrator": narrator, "director": director}.get(agent_type)
+
+        monkeypatch.setattr(wsh, "get_agent", fake_get_agent)
+        monkeypatch.setattr(wsh, "emit", Mock())
+        return wsh.NarratorWebsocketHandler(Mock())
+
+    @pytest.mark.asyncio
+    async def test_advance_query_escalates(self, active_context, monkeypatch):
+        """An ADVANCE classification hands the query to the director."""
+        narrator = active_context
+        narrator.client.send_prompt.return_value = "ADVANCE"
+
+        director = self._make_director()
+        handler = self._make_handler(monkeypatch, narrator, director)
+
+        query = "Have the villain arrive at the tavern now"
+        escalated = await handler._escalate_query_to_director(query)
+
+        assert escalated is True
+        director.direction_append_message.assert_awaited_once()
+        message = director.direction_append_message.await_args[0][0]
+        assert message.user_input == query
+        assert message.is_direction is True
+        director.direction_execute_turn.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_answer_query_not_escalated(self, active_context, monkeypatch):
+        """An ANSWER classification stays with the narrator."""
+        narrator = active_context
+        narrator.client.send_prompt.return_value = "ANSWER"
+
+        director = self._make_director()
+        handler = self._make_handler(monkeypatch, narrator, director)
+
+        escalated = await handler._escalate_query_to_director("What time is it?")
+
+        assert escalated is False
+        director.direction_append_message.assert_not_awaited()
+        director.direction_execute_turn.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_no_escalation_when_narrator_toggle_disabled(
+        self, active_context, monkeypatch
+    ):
+        """Disabling the narrator's query escalation action skips classification."""
+        narrator = active_context
+        narrator.actions["query_escalation"].enabled = False
+
+        director = self._make_director()
+        handler = self._make_handler(monkeypatch, narrator, director)
+
+        escalated = await handler._escalate_query_to_director("Move the story forward")
+
+        assert escalated is False
+        narrator.client.send_prompt.assert_not_called()
+        director.direction_execute_turn.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_no_escalation_when_scene_direction_disabled(
+        self, active_context, monkeypatch
+    ):
+        """No classification happens when the director's scene direction is off."""
+        narrator = active_context
+
+        director = self._make_director(direction_enabled=False)
+        handler = self._make_handler(monkeypatch, narrator, director)
+
+        escalated = await handler._escalate_query_to_director("Move the story forward")
+
+        assert escalated is False
+        narrator.client.send_prompt.assert_not_called()
+        director.direction_execute_turn.assert_not_awaited()

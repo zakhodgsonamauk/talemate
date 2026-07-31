@@ -256,6 +256,13 @@ class NarratorAgent(MemoryRAGMixin, AutoNarrationMixin, Agent):
                     )
                 },
             ),
+            "query_escalation": AgentAction(
+                enabled=True,
+                can_be_disabled=True,
+                label="Query Escalation",
+                icon="mdi-bullhorn",
+                description="Route story-advancing queries to the director. When a narrator query asks to move the story forward or make a plot decision, it is handed to the director's scene direction instead of being answered as a context investigation. Only applies while the director's Scene Direction is enabled.",
+            ),
         }
 
         MemoryRAGMixin.add_actions(actions)
@@ -300,6 +307,10 @@ class NarratorAgent(MemoryRAGMixin, AutoNarrationMixin, Agent):
     @property
     def narrate_time_passage_enabled(self) -> bool:
         return self.resolve_enabled("narrate_time_passage")
+
+    @property
+    def query_escalation_enabled(self) -> bool:
+        return self.resolve_enabled("query_escalation")
 
     @property
     def content_use_scene_intent(self) -> bool:
@@ -525,6 +536,33 @@ class NarratorAgent(MemoryRAGMixin, AutoNarrationMixin, Agent):
         )
 
         return response
+
+    @_set_processing
+    async def classify_query_intent(self, query: str) -> str:
+        """
+        Classify whether a narrator query asks for information ("answer")
+        or wants the story moved forward ("advance").
+
+        Defaults to "answer" when the classification is ambiguous.
+        """
+
+        _, extracted = await Prompt.request(
+            "narrator.classify-query-intent",
+            self.client,
+            "analyze_freeform_short",
+            vars={
+                "scene": self.scene,
+                "max_tokens": self.client.max_token_length,
+                "query": query,
+            },
+        )
+
+        response = (extracted["response"] or "").strip()
+        intent = response.split()[0].strip(".:").upper() if response else ""
+
+        log.debug("classify_query_intent", query=query, intent=intent)
+
+        return "advance" if intent == "ADVANCE" else "answer"
 
     @set_processing
     @store_context_state(

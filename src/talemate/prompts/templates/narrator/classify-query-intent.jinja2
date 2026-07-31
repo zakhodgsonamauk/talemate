@@ -1,0 +1,23 @@
+{#-
+Extractors:
+  - response: AsIsExtractor()
+-#}
+{% set last_message = scene.last_message_of_type(["character", "narrator"]) %}
+{% if last_message -%}
+``` the final line in the scene
+{{ last_message }}
+```
+{% endif -%}
+<|SECTION:TASK|>
+The user has sent the following input to the story's narrator:
+
+"{{ query }}"
+
+Classify the intent of this input as one of:
+
+ANSWER - the user wants information, a description, or an answer about the scene or story world. The story itself should not move forward.
+ADVANCE - the user wants the story to move forward, a plot decision to be made, or events to happen (for example: introducing a character, resolving a conflict, skipping ahead, deciding an outcome).
+
+Respond with exactly one word: ANSWER or ADVANCE.
+<|CLOSE_SECTION|>
+Classification:
