@@ -2419,3 +2419,36 @@ async def test_an_explicit_scene_keeps_its_score_tags(styling_agent):
         active_scene.reset(token)
 
     assert "score_9" in request.prompt
+
+
+async def test_finalize_works_when_the_agent_has_no_characters_shim(styling_agent):
+    """Exercises the branch the fixture normally hides.
+
+    `styling_agent` sets `agent.characters` so it needs no actors, which means
+    `getattr(self, "characters", None) or scene.characters` short-circuits and the
+    scene-backed half is never evaluated. A NameError on that half therefore passed
+    every test and failed immediately in the real app. This removes the shim so the
+    fallback is actually taken.
+    """
+    from talemate.context import active_scene
+
+    from unittest.mock import PropertyMock, patch
+
+    del styling_agent.characters
+
+    request = _request(", ".join([KAIRA_ANCHOR, "Kaira", "uniform", "console"]))
+
+    token = active_scene.set(styling_agent.scene)
+    try:
+        # `Scene.characters` is a read-only property over the scene's actors.
+        with patch.object(
+            type(styling_agent.scene),
+            "characters",
+            new_callable=PropertyMock,
+            return_value=[styling_agent.kaira, styling_agent.elmer],
+        ):
+            await styling_agent._finalize_prompt(request)
+    finally:
+        active_scene.reset(token)
+
+    assert request.prompt, "finalise produced nothing"

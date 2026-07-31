@@ -746,6 +746,10 @@ class GenerationMixin:
         trait belonging to Kaira - sitting in the same prompt. To a diffusion model that
         is not a second character, it is a contradictory adjective on the first.
         """
+        scene = active_scene.get()
+        if not scene:
+            return keywords
+
         primary, secondary = await self._primary_and_secondary(keywords, request)
         if not secondary:
             return keywords
