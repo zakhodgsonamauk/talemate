@@ -127,6 +127,19 @@ _UNDRESS_INTENT_WORDS = {
 RATING_SAFE_TAG = "rating_safe"
 RATING_NEGATIVES = ("rating_explicit", "rating_questionable")
 
+# EXPERIMENT, and the last text-side lever available.
+#
+# Every other one has been pulled and verified in the payload actually delivered to
+# ComfyUI - booru sex tags, the full anatomy negatives, the rating axis, cfg raised to 8 -
+# and the image came back explicit regardless. The score tags are what remains: they select
+# for highly-rated booru images, and that corpus skews explicit, so on a checkpoint tuned
+# around them they plausibly outrank `rating_safe`.
+#
+# The cost is real - these are what give a Pony checkpoint its polish - so they are dropped
+# only for a subject the prompt says is dressed. If this does not work, the conclusion is
+# that prompt-level control cannot reach this checkpoint and the model has to change (T14).
+SCORE_TAGS = ("score_9", "score_8_up", "score_7_up", "score_6_up", "score_5_up")
+
 _CLOTHING_WORDS = {
     "uniform",
     "shirt",
@@ -208,6 +221,64 @@ def dominant_sex(text: str | None) -> str | None:
 # lowercase; ones generated in play can arrive Title-Cased, hence the case-insensitive
 # lookup rather than a direct `get`.
 _GENDER_ATTRIBUTE_KEYS = ("gender", "sex")
+
+# Attributes that carry a character's visual identity beyond their derived anchor. The
+# anchor is a condensed appearance line and does not mention species or equipment, so
+# "Altrusian", "combat trousers", "pulse pistol" and "weapon harness" were unmatchable and
+# leaked onto a human subject's prompt.
+_IDENTITY_ATTRIBUTE_KEYS = (
+    "species",
+    "appearance",
+    "gear and tech",
+    "gear",
+    "equipment",
+    "clothing",
+)
+
+# Paraphrases the LLM reaches for in place of an anchor's own wording. Observed live:
+# "purple skin" against an anchor that says "deep violet skin", which word-level matching
+# could not connect. Kept deliberately narrow - a broad synonym table would start dropping
+# the subject's own traits.
+_WORD_SYNONYMS = {
+    "violet": {"purple"},
+    "purple": {"violet"},
+    "crimson": {"red"},
+    "red": {"crimson"},
+}
+
+
+def _expand_synonyms(words: set[str]) -> set[str]:
+    """Add known paraphrases so a reworded trait still matches its owner."""
+    expanded = set(words)
+    for word in words:
+        expanded |= _WORD_SYNONYMS.get(word, set())
+    return expanded
+
+
+def identity_words(character) -> set[str]:
+    """
+    Significant words describing what a character looks like and carries.
+
+    Drawn from the identity attributes as well as the anchor, because the anchor is a
+    condensed appearance line: it says nothing about species or equipment, which is how
+    another character's species and gear reached a human subject's prompt.
+    """
+    attributes = getattr(character, "base_attributes", None) or {}
+    lowered = {str(key).strip().lower(): value for key, value in attributes.items()}
+
+    text_parts: list[str] = []
+    for key in _IDENTITY_ATTRIBUTE_KEYS:
+        value = lowered.get(key)
+        if isinstance(value, str) and value.strip():
+            text_parts.append(value)
+
+    words = {
+        word
+        for part in text_parts
+        for word in re.findall(r"[\w'-]+", part.lower())
+        if len(word) > 3
+    }
+    return _expand_synonyms(words)
 
 # Fallback prose. A character generated during play may have no gender attribute at all -
 # observed with a character whose attributes were Age/Appearance/Background/Personality and
@@ -476,6 +547,7 @@ class GenerationMixin:
         # Before the budget trim so the tags are accounted for rather than pushed out.
         keywords = await self._add_sex_tags(keywords, request)
         keywords = await self._add_rating_tags(keywords, request)
+        keywords = await self._drop_score_tags_when_dressed(keywords, request)
         keywords = await self._trim_to_budget(keywords, request)
 
         keywords = list(dict.fromkeys(keywords))
@@ -689,8 +761,27 @@ class GenerationMixin:
         # Word-level, not exact-token. The LLM writes "violet skin" where the anchor says
         # "deep violet skin with geometric facial markings" - an exact match would have
         # let the live case straight through.
+        #
+        # Widened beyond the anchors with each character's identity attributes and known
+        # paraphrases. The anchor is a condensed appearance line: it names no species and no
+        # equipment, so "Altrusian", "combat trousers", "pulse pistol" and "weapon harness"
+        # were unmatchable, and "purple skin" could not be connected to an anchor saying
+        # "violet". All of those reached a lone human male's prompt in one generation.
+        scene_characters = list(getattr(self, "characters", None) or scene.characters)
+        subject = getattr(self, "_primary_character", None)
+
         secondary_words = words_of(secondary)
-        primary_words = words_of(primary)
+        primary_words = _expand_synonyms(words_of(primary))
+        for character in scene_characters:
+            if subject is not None and character is subject:
+                primary_words |= identity_words(character)
+            else:
+                secondary_words |= identity_words(character)
+
+        # `secondary_words` deliberately keeps words the subject shares - "skin" belongs to
+        # both - because the test below requires every word of a keyword to be attributable
+        # to the other character. Removing shared words would break "purple skin", where
+        # only "purple" is exclusively theirs. `exclusive` carries that distinction instead.
         exclusive = secondary_words - primary_words
         if not exclusive:
             return keywords
@@ -805,6 +896,32 @@ class GenerationMixin:
                 garments += 1
 
         return garments > undress
+
+    async def _drop_score_tags_when_dressed(
+        self, keywords: list[str], request: GenerationRequest
+    ) -> list[str]:
+        """
+        Remove the Pony score tags from a clothed subject's prompt.
+
+        See SCORE_TAGS: they bias toward explicit output on this checkpoint family, and by
+        this point they are the only text-side lever left untried. Scoped to dressed
+        subjects so an explicit scene keeps the quality tags it benefits from.
+        """
+        scene = active_scene.get()
+        if not scene or request.vis_type in VIS_TYPES_WITHOUT_CAST:
+            return keywords
+
+        if not self._subject_is_dressed(keywords):
+            return keywords
+
+        kept = [kw for kw in keywords if kw.strip().lower() not in SCORE_TAGS]
+        if len(kept) != len(keywords):
+            log.debug(
+                "drop_score_tags",
+                dropped=len(keywords) - len(kept),
+                reason="dressed subject on a checkpoint whose score tags skew explicit",
+            )
+        return kept
 
     async def _add_rating_tags(
         self, keywords: list[str], request: GenerationRequest

@@ -2308,3 +2308,114 @@ async def test_rating_tags_do_not_depend_on_resolving_sex(styling_agent):
 
     assert "1girl" not in request.prompt, "sex should be unresolved here"
     assert "rating_safe" in request.prompt, "rating must not be gated on sex"
+
+
+# ---------------------------------------------------------------------------
+# Trait leak, widened matching (T15)
+#
+# Observed live, in a prompt whose subject was a lone human male: "geometric patterns
+# on violet skin", "combat trousers", "weapon harness", "pulse pistol", "Altrusian".
+# The anchor is a condensed appearance line naming no species and no equipment, so none
+# of the gear or species terms were matchable, and "purple skin" could not be connected
+# to an anchor that says "violet".
+# ---------------------------------------------------------------------------
+
+
+def _cast_with_attributes(agent):
+    """Give the fixture's pair the attribute shapes the live scene has."""
+    agent.kaira.base_attributes.update(
+        {
+            "species": "Altrusian",
+            "appearance": "deep violet skin, geometric facial markings, indigo hair",
+            "gear and tech": "combat trousers, weapon harness, pulse pistol",
+        }
+    )
+    agent.elmer.base_attributes.update(
+        {
+            "species": "Human",
+            "appearance": "light tan skin, strong jawline, sun-bleached hair",
+            "gear and tech": "maintenance uniform, tool belt, diagnostic tools",
+        }
+    )
+
+
+@pytest.mark.parametrize(
+    "leaked",
+    [
+        "Altrusian",
+        "combat trousers",
+        "weapon harness",
+        "pulse pistol",
+        "violet skin",
+        "purple skin",  # paraphrase of the anchor's own wording
+    ],
+)
+async def test_another_characters_identity_is_dropped(styling_agent, leaked):
+    from talemate.context import active_scene
+
+    _cast_with_attributes(styling_agent)
+    request = _request(", ".join([ELMER_ANCHOR, "Elmer", "tool belt", leaked, "console"]))
+
+    token = active_scene.set(styling_agent.scene)
+    try:
+        await styling_agent._finalize_prompt(request)
+    finally:
+        active_scene.reset(token)
+
+    assert leaked.lower() not in request.prompt.lower(), (
+        f"{leaked!r} belongs to the other character and reached the subject's prompt"
+    )
+
+
+async def test_the_subjects_own_traits_survive_the_widened_matching(styling_agent):
+    """The risk of widening: dropping the subject's own vocabulary."""
+    from talemate.context import active_scene
+
+    _cast_with_attributes(styling_agent)
+    request = _request(
+        ", ".join([ELMER_ANCHOR, "Elmer", "maintenance uniform", "tool belt", "console"])
+    )
+
+    token = active_scene.set(styling_agent.scene)
+    try:
+        await styling_agent._finalize_prompt(request)
+    finally:
+        active_scene.reset(token)
+
+    assert "tool belt" in request.prompt.lower()
+    assert "maintenance uniform" in request.prompt.lower()
+
+
+# --- score tags: the last text-side lever ---
+
+
+async def test_score_tags_are_dropped_for_a_dressed_subject(styling_agent):
+    from talemate.context import active_scene
+
+    request = _request(
+        ", ".join(["score_9", "score_8_up", KAIRA_ANCHOR, "Kaira", "uniform", "boots"])
+    )
+
+    token = active_scene.set(styling_agent.scene)
+    try:
+        await styling_agent._finalize_prompt(request)
+    finally:
+        active_scene.reset(token)
+
+    assert "score_9" not in request.prompt
+    assert "score_8_up" not in request.prompt
+
+
+async def test_an_explicit_scene_keeps_its_score_tags(styling_agent):
+    """The quality tags are worth keeping where they do no harm."""
+    from talemate.context import active_scene
+
+    request = _request(", ".join(["score_9", KAIRA_ANCHOR, "Kaira", "bare torso"]))
+
+    token = active_scene.set(styling_agent.scene)
+    try:
+        await styling_agent._finalize_prompt(request)
+    finally:
+        active_scene.reset(token)
+
+    assert "score_9" in request.prompt

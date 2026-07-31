@@ -23,11 +23,13 @@
       "T2",
       "T12",
       "T13",
+      "T15",
       "T17",
-      "T18"
+      "T18",
+      "T19"
     ],
-    "next_task": "verify rating tags by generation; then T15",
-    "next_task_note": "T13 verified (spaceship, not garden). T18 shipped. If rating_safe does not hold, T14 (SFW checkpoint) is now properly justified - the pipeline has been proven correct by payload inspection, so the model is the remaining variable. T6/T7/T8 can be reassessed now that the reference no longer overrides the text."
+    "next_task": "verify T19 by generation; if still explicit, T14",
+    "next_task_note": "T15 and T19 shipped. T19 is the final text-side lever - if the image is still explicit with the score tags gone, every prompt-level control has been tried and verified in the delivered payload, and the checkpoint must change (T14). Remaining after that: T16 (subject-scoped dressed test), T4/T5 (camera-gaze tag), T6/T7/T8 (pose and budget, now unblocked), T11 docs."
   },
   "cannot_self_certify": {
     "reason": "diffusion output can only be judged by looking at it",
@@ -162,9 +164,9 @@
     {
       "id": "T15",
       "name": "Another character's traits leak into the subject's prompt - ROOT CAUSE",
-      "status": "pending",
+      "status": "completed",
       "deps": [],
-      "note": "Subject was a human male; his prompt carried purple skin, bare chest, Altrusian, geometric patterns on arms, combat trousers, pulse pistol - all another character's. Two consequences: contradictory adjectives on the subject, AND it disarmed a guardrail, because 'bare chest' is an undress phrase so the dressed test suppressed every nudity negative. _drop_secondary_traits matches from anchor tokens and the LLM paraphrases - it writes 'purple skin' where the anchor says 'deep violet skin', and nothing catches 'Altrusian' at all."
+      "note": "Subject was a human male; his prompt carried purple skin, bare chest, Altrusian, geometric patterns on arms, combat trousers, pulse pistol - all another character's. Two consequences: contradictory adjectives on the subject, AND it disarmed a guardrail, because 'bare chest' is an undress phrase so the dressed test suppressed every nudity negative. _drop_secondary_traits matches from anchor tokens and the LLM paraphrases - it writes 'purple skin' where the anchor says 'deep violet skin', and nothing catches 'Altrusian' at all. | FIXED 2026-07-31: the matcher only ever knew each character's derived anchor, which is a condensed appearance line naming no species and no equipment - so Altrusian, combat trousers, weapon harness and pulse pistol were unmatchable, and 'purple skin' could not be connected to an anchor saying 'violet'. Widened with _IDENTITY_ATTRIBUTE_KEYS (species, appearance, gear and tech, gear, equipment, clothing) plus a deliberately narrow synonym table for observed paraphrases. Shared words like 'skin' are kept in the secondary set on purpose: the test requires every word of a keyword to be attributable to the other character and at least one to be exclusively theirs, so removing shared words would have let 'purple skin' through."
     },
     {
       "id": "T16",
@@ -191,6 +193,16 @@
       ],
       "human_verified": true,
       "note": "Payload inspection proved the pipeline was correct and the model was overriding it: the full negative set (nude, naked, topless, bottomless, penis, exposed genitals, pubic hair, undressing, unzipped, open pants, uncensored, nsfw) plus clothing terms and 1boy/male focus were all delivered to ComfyUI, and the image was explicit anyway. The score tags are part of the cause: score_9/score_8_up select for highly-rated booru images and that corpus skews explicit, so the positive prompt carried a bias the anatomy negatives had to fight. Added rating_safe positive and rating_explicit/rating_questionable negative, gated on _subject_is_dressed so a deliberately explicit scene is untouched, and deliberately NOT gated on sex resolution since rating is independent of it and sex resolution has already proven fragile. cfg raised 7 -> 8 on the SDXL paths (character, multi, inpaint, default-sdxl) so negatives bind harder; the qwen/turbo workflows keep cfg 1, which their distilled models require. Also extracted _subject_is_dressed into one helper - it is the seam T16 replaces."
+    },
+    {
+      "id": "T19",
+      "name": "EXPERIMENT: drop Pony score tags for a dressed subject",
+      "status": "completed",
+      "deps": [
+        "T18"
+      ],
+      "human_verified": true,
+      "note": "The last text-side lever. Payload inspection had already proved booru sex tags, the full anatomy negatives, the rating axis and cfg 8 were all delivered and ignored. score_9/score_8_up select for highly-rated booru images and that corpus skews explicit, so on a checkpoint tuned around them they plausibly outrank rating_safe. Dropped only for a dressed subject, since the tags are what give the checkpoint its polish. If this fails, prompt-level control cannot reach this checkpoint and T14 (change the model) is the answer - which would then be evidence-based rather than a guess."
     }
   ],
   "problems": {
@@ -205,7 +217,8 @@
     "P9": "Sex conditioning silently did nothing whenever the LLM paraphrased the anchor, because it read _primary_character, which _primary_and_secondary only sets after confirming the anchor's own wording appears in the prompt",
     "P10": "IPAdapter was overriding the text conditioning: ip-adapter-plus at weight 0.8, ease out, end_at 0.8, K+V transfers composition and background as well as identity, so an outdoor reference photo put a reactor-room scene in a garden and suppressed prompt detail",
     "P11": "A malformed LLM response aborted the whole visualize action, because retries covered only empty responses - not responses missing a required section",
-    "P12": "The Pony score tags bias toward explicit output: score_9/score_8_up select for highly-rated booru images, a corpus that skews explicit, so the positive prompt fought its own negatives"
+    "P12": "The Pony score tags bias toward explicit output: score_9/score_8_up select for highly-rated booru images, a corpus that skews explicit, so the positive prompt fought its own negatives",
+    "P13": "_drop_secondary_traits only knew each character's derived anchor - a condensed appearance line with no species and no equipment - so another character's species, gear and paraphrased colours leaked onto the subject unmatched"
   },
   "decisions": [
     "Sex is expressed as booru tags (1boy / male focus / 1girl), not natural language. The checkpoint family is tag-trained; 'human male' carries little signal. This is the same principle visual-reference-closure recorded for negatives, applied to the positive, which nobody had done.",
@@ -222,6 +235,7 @@
     "IPAdapter fix starts with the model, not the weights: ip-adapter-plus-face was already installed and is the variant intended for identity-without-composition. Weights stay at 0.8/ease out/0.8 for now so the swap can be attributed on its own.",
     "Extraction failure gets its own retry allowance rather than raising the shared `attempts` default, because generate-visual-asset.json pins attempts: 1 and changing the default would alter every other graph.",
     "Rating tags are gated on the dressed determination but NOT on sex resolution. Rating is independent of sex, and sex resolution has failed twice already - coupling them would risk losing the rating control too.",
-    "cfg raised to 8 only on the SDXL/Pony workflows. qwen_image, qwen_image_edit and z_image_turbo keep cfg 1 because their distilled models require it; raising it there would wreck them."
+    "cfg raised to 8 only on the SDXL/Pony workflows. qwen_image, qwen_image_edit and z_image_turbo keep cfg 1 because their distilled models require it; raising it there would wreck them.",
+    "Secondary vocabulary is widened from base_attributes (species, appearance, gear) rather than by loosening the match test, because loosening it would start dropping the subject's own traits. Shared words stay in the secondary set so the all-words-attributable test still catches 'purple skin', where only 'purple' is exclusively the other character's."
   ]
 }
