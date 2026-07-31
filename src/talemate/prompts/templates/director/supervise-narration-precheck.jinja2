@@ -1,0 +1,32 @@
+{#-
+Extractors:
+  - response: AsIsExtractor()
+-#}
+{# SCENE HISTORY - lean triage prompt: history + draft only, no static/world context #}
+{% set budget = max_tokens - 800 - count_tokens(draft) - count_tokens(guidance) %}
+<|SECTION:SCENE|>
+{% for scene_line in scene.context_history(budget=budget, min_dialogue=20, sections=False) -%}
+{{ scene_line }}
+{% endfor %}
+<|CLOSE_SECTION|>
+<|SECTION:DRAFT NARRATION|>
+A smaller writing model has produced the following draft narration, intended to be appended to the current moment of the scene:
+
+```draft
+{{ draft }}
+```
+<|CLOSE_SECTION|>
+<|SECTION:TASK|>
+You are triaging the draft before a possible full editorial review. Check it against the scene history:
+- Repetition: does it repeat story beats, imagery, distinctive phrases or information that were already established?
+- Stalling: does it fail to move the scene forward, merely re-describing the current state?
+- Contradiction: does it conflict with established facts, characters, tone or the writing style?
+{% if guidance %}
+Additional review criteria:
+{{ guidance }}
+{% endif %}
+
+This is a mechanical triage of fictional story text - judge only whether the draft needs editorial correction.
+
+Respond with exactly one word: PASS if the draft is acceptable as-is, or ISSUES if it needs the full review.
+<|CLOSE_SECTION|>

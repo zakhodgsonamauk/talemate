@@ -63,6 +63,33 @@ class NarrationSupervisionMixin:
                         {"label": "Author (always rewrite)", "value": "author"},
                     ],
                 ),
+                "frequency": AgentActionConfig(
+                    type="number",
+                    label="Frequency",
+                    description=(
+                        "Supervise every Nth narration. The review always sees the "
+                        "full scene history, so the narrations skipped in between are "
+                        "still covered by the next review - but only the latest draft "
+                        "can be corrected before it reaches the scene."
+                    ),
+                    value=1,
+                    min=1,
+                    max=10,
+                    step=1,
+                ),
+                "precheck_client": AgentActionConfig(
+                    type="text",
+                    label="Pre-check client",
+                    description=(
+                        "Client (by name) for a cheap PASS/ISSUES triage before the "
+                        "full supervision generation. The expensive full review on the "
+                        "director's client only runs when triage flags issues. Leave "
+                        "empty to always run the full review. Ignored in Author mode. "
+                        "Pick a fast model that will not refuse your content - a "
+                        "refusal is treated as ISSUES and escalates to the full review."
+                    ),
+                    value="",
+                ),
                 "guidance": AgentActionConfig(
                     type="blob",
                     label="Extra guidance",
@@ -85,6 +112,16 @@ class NarrationSupervisionMixin:
     @property
     def narration_supervision_guidance(self) -> str:
         return self.resolve_config("supervise_narration", "guidance")
+
+    @property
+    def narration_supervision_frequency(self) -> int:
+        return int(self.resolve_config("supervise_narration", "frequency"))
+
+    @property
+    def narration_supervision_precheck_client(self) -> str:
+        return (
+            self.resolve_config("supervise_narration", "precheck_client") or ""
+        ).strip()
 
     # signal connect
 
@@ -118,6 +155,21 @@ class NarrationSupervisionMixin:
         except AttributeError:
             pass
 
+        if not self._narration_supervision_frequency_gate():
+            return
+
+        # cheap triage on a separate fast client - only escalate to the
+        # expensive full review when it flags issues. Author mode always
+        # rewrites, so a pass/fail verdict is meaningless there.
+        if self.narration_supervision_mode != "author":
+            try:
+                needs_full = await self.narration_supervision_precheck(draft)
+            except Exception as e:
+                log.error("narration_supervision.precheck_error", error=e)
+                needs_full = True
+            if not needs_full:
+                return
+
         try:
             revised = await self.narration_supervision_process(draft)
         except Exception as e:
@@ -137,7 +189,71 @@ class NarrationSupervisionMixin:
             )
             emission.response = revised.strip()
 
+    def _narration_supervision_frequency_gate(self) -> bool:
+        """Frequency lever: pass every Nth narration.
+
+        Counts skipped narrations in agent scene state; when the counter
+        reaches N-1 skips, the next narration passes and the counter resets.
+        Mirrors the scene-direction frequency gate.
+        """
+        frequency = self.narration_supervision_frequency
+        if frequency <= 1:
+            return True
+        count = (
+            self.get_scene_state("narration_supervision_counter", default=0) or 0
+        ) + 1
+        if count >= frequency:
+            self.set_scene_states(narration_supervision_counter=0)
+            return True
+        self.set_scene_states(narration_supervision_counter=count)
+        return False
+
     # actions
+
+    @set_processing
+    async def narration_supervision_precheck(self, draft: str) -> bool:
+        """Cheap PASS/ISSUES triage on the configured pre-check client.
+
+        Returns True when the full supervision generation should run.
+        Fails open: no client configured, an unknown client name, or an
+        ambiguous verdict (including a refusal) all escalate to the full
+        review rather than silently skipping it.
+        """
+        client_name = self.narration_supervision_precheck_client
+        if not client_name:
+            return True
+
+        from talemate.instance import get_client
+
+        try:
+            client = get_client(client_name)
+        except KeyError:
+            log.warning(
+                "narration_supervision.precheck_client_not_found",
+                configured=client_name,
+            )
+            return True
+
+        response, _ = await Prompt.request(
+            "director.supervise-narration-precheck",
+            client,
+            "investigate_16",
+            vars={
+                "scene": self.scene,
+                "max_tokens": client.max_token_length,
+                "draft": draft,
+                "guidance": self.narration_supervision_guidance,
+            },
+        )
+
+        verdict = (response or "").strip()[:40].upper()
+        # check ISSUES first - if both words somehow appear, prefer the
+        # full review
+        if "ISSUES" in verdict:
+            return True
+        if "PASS" in verdict:
+            return False
+        return True
 
     @set_processing
     async def narration_supervision_process(self, draft: str) -> str | None:
