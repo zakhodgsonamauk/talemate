@@ -1602,8 +1602,11 @@ class ClientBase:
             prompt_param = self.generate_prompt_parameters(kind)
 
             if response_length_mod:
-                prompt_param["max_tokens"] = (
-                    prompt_param.get("max_tokens", 150) + response_length_mod
+                # Floor, not trust: a template shrinking a response it considers
+                # disposable must not be able to push the budget to zero or below,
+                # which the backend would reject and fail the whole generation.
+                prompt_param["max_tokens"] = max(
+                    32, prompt_param.get("max_tokens", 150) + response_length_mod
                 )
                 log.debug(
                     "Template modified response length",

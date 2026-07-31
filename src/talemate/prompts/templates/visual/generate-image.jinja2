@@ -6,7 +6,15 @@
 {#- The graph supplies `character` (an object), never `character_name` - passing
     the wrong one made the pending-task key mismatch the request downstream, which
     cancelled the parallel call and quietly fell back to sequential. -#}
-{% if agent_config("visual._distillation.enabled") %}{% set _ = agent_action("visual", "begin_prompt_distillation", vis_type=vis_type|default(''), instructions=(instructions|default('') or (visual_prompt.instructions if visual_prompt is defined and visual_prompt.instructions else '')), character_name=(character.name if character is defined and character else '')) %}{% endif %}
+{% if agent_config("visual._distillation.enabled") %}
+{% set _ = agent_action("visual", "begin_prompt_distillation", vis_type=vis_type|default(''), instructions=(instructions|default('') or (visual_prompt.instructions if visual_prompt is defined and visual_prompt.instructions else '')), character_name=(character.name if character is defined and character else '')) %}
+{#- With distillation running in parallel, this local response is only subject
+    evidence and crash padding - the distiller's output replaces it. Shrink it so
+    the local write always finishes inside the cloud call's shadow; observed live
+    at full budget it was the LONGER of the two, making the discarded call the
+    critical path. Distillation off keeps the full configured budget. -#}
+{{ mod_response_length(-420) }}
+{% endif %}
 {% set general_context %}
 <|SECTION:GENERAL CONTEXT|>
 {% include "extra-context.jinja2" %}
