@@ -74,6 +74,41 @@ def normalize_keyword(keyword: str) -> str:
     return stripped.replace("_", " ")
 
 
+_ESCAPED_OPEN = "\x00ESCOPEN\x00"
+_ESCAPED_CLOSE = "\x00ESCCLOSE\x00"
+_EMPHASIS_WEIGHT = re.compile(r":\s*\d+(?:\.\d+)?\s*(?=\)|,|$)")
+
+
+def strip_emphasis(prompt: str) -> str:
+    """
+    Remove A1111 emphasis syntax, leaving the keywords behind.
+
+    Regenerate hands a previous request back to generation, so the prompt reaching
+    _finalize_prompt may already be weighted. Without stripping first, emphasis is
+    applied on top of emphasis and compounds every time - observed reaching three
+    nested levels and an unbalanced bracket, which parses as something quite unlike
+    what it looks like.
+
+    Escaped brackets are literal content - a scar "\\(old\\)" - and are preserved.
+    """
+    if not prompt or ("(" not in prompt and ":" not in prompt):
+        return prompt
+
+    text = prompt.replace(r"\(", _ESCAPED_OPEN).replace(r"\)", _ESCAPED_CLOSE)
+    text = _EMPHASIS_WEIGHT.sub("", text)
+    text = text.replace("(", "").replace(")", "")
+    text = text.replace(_ESCAPED_OPEN, r"\(").replace(_ESCAPED_CLOSE, r"\)")
+
+    # Unwrapping can leave doubled separators behind.
+    parts = [part.strip() for part in text.split(",")]
+    return ", ".join(part for part in parts if part)
+
+
+# A bracket that is not already backslash-escaped. Keeps weight_group idempotent;
+# see its docstring for what compounding escapes did.
+_UNESCAPED_BRACKET = re.compile(r"(?<!\\)[()]")
+
+
 def weight_group(keywords: list[str], weight: float) -> str:
     """
     Render keywords as an A1111 emphasis group: `(a, b, c:1.3)`.
@@ -84,12 +119,19 @@ def weight_group(keywords: list[str], weight: float) -> str:
 
     Existing brackets are escaped; an unescaped one would change how the rest of the
     prompt parses.
+
+    Only brackets that are not already escaped. strip_emphasis leaves `\\(` intact
+    because it is literal content, so escaping unconditionally compounded the
+    backslashes on every finalise pass - `\\(old\\)` becoming `\\\\(old\\\\)`, which is
+    a literal backslash followed by an unescaped bracket, i.e. the very thing this
+    escaping exists to prevent. Reachable from regenerate and from prompt
+    adjustment, both of which finalise a prompt that was already finalised once.
     """
     text = ", ".join(keywords)
     if not text:
         return text
 
-    text = text.replace("(", r"\(").replace(")", r"\)")
+    text = _UNESCAPED_BRACKET.sub(r"\\\g<0>", text)
 
     if abs(weight - 1.0) < 0.01:
         return ", ".join(keywords)

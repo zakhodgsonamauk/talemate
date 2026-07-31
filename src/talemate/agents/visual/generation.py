@@ -31,6 +31,7 @@ from .style import (
     estimate_prompt_tokens,
     normalize_keyword,
     sanitise_keywords,
+    strip_emphasis,
     weight_group,
 )
 from .exceptions import ImageEditNotAvailableError, TextToImageNotAvailableError
@@ -255,8 +256,12 @@ class GenerationMixin:
             return
 
         original = request.prompt
+        # Regenerate re-submits a previous request, so the prompt may already be
+        # weighted. Strip first or emphasis compounds on every pass.
         keywords = [
-            normalize_keyword(kw) for kw in original.split(",") if kw.strip()
+            normalize_keyword(kw)
+            for kw in strip_emphasis(original).split(",")
+            if kw.strip()
         ]
 
         keywords = sanitise_keywords(keywords)

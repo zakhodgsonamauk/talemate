@@ -1904,3 +1904,77 @@ def test_sanitise_drops_orientation_and_subject_count_phrasings():
 
     # "solo" is the style template's own tag and must survive.
     assert kept == ["solo", "harsh overhead lighting", "violet skin"]
+
+
+# ---------------------------------------------------------------------------
+# Re-entry
+#
+# Regenerate feeds a previous request back through generation, so the prompt arriving
+# at _finalize_prompt may already carry emphasis. Observed live:
+#   naked:1.3, (violet skin, (geometric facial markings, ...:1.3), four-fingered
+#   hands:1.3)
+# Nested groups and a bare weight - malformed, and it compounds on every regenerate.
+# ---------------------------------------------------------------------------
+
+
+OBSERVED_NESTED = (
+    "score_9, solo, naked:1.3, control room, "
+    "(violet skin, (geometric facial markings, indigo hair, large black eyes, "
+    "tall stature:1.3), four-fingered hands:1.3), portrait orientation"
+)
+
+
+def test_strip_emphasis_unwraps_a_group():
+    from talemate.agents.visual.style import strip_emphasis
+
+    assert strip_emphasis("(alien woman, violet skin:1.3)") == (
+        "alien woman, violet skin"
+    )
+
+
+def test_strip_emphasis_unwraps_nested_groups_and_bare_weights():
+    from talemate.agents.visual.style import strip_emphasis
+
+    result = strip_emphasis(OBSERVED_NESTED)
+
+    assert "(" not in result.replace(r"\(", "")
+    assert ":1.3" not in result
+    assert "violet skin" in result
+    assert "geometric facial markings" in result
+    assert "naked" in result
+
+
+def test_strip_emphasis_leaves_escaped_parentheses_alone():
+    """An escaped bracket is literal content - a scar "(old)" - not emphasis syntax."""
+    from talemate.agents.visual.style import strip_emphasis
+
+    assert strip_emphasis(r"scar \(old\), violet skin") == r"scar \(old\), violet skin"
+
+
+def test_strip_emphasis_is_a_no_op_on_a_plain_prompt():
+    from talemate.agents.visual.style import strip_emphasis
+
+    plain = "score_9, alien woman, violet skin, control room"
+    assert strip_emphasis(plain) == plain
+
+
+async def test_finalize_does_not_compound_emphasis_on_regenerate(styling_agent):
+    """The real requirement: finalising twice must give the same prompt, not a more
+    emphatic one."""
+    from talemate.context import active_scene
+
+    styling_agent.actions["prompt_generation"].config["identity_weight"].value = 1.3
+    first = _request(", ".join([SCENE_ANCHOR, KAIRA_ANCHOR, "Kaira", "leaning over"]))
+    first.instructions = OBSERVING_KAIRA
+
+    token = active_scene.set(styling_agent.scene)
+    try:
+        await styling_agent._finalize_prompt(first)
+        second = _request(first.prompt)
+        second.instructions = OBSERVING_KAIRA
+        await styling_agent._finalize_prompt(second)
+    finally:
+        active_scene.reset(token)
+
+    assert second.prompt == first.prompt
+    assert second.prompt.count(":1.3)") == 1
