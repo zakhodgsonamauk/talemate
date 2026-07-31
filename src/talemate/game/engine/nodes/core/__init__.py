@@ -807,6 +807,25 @@ class NodeBase(pydantic.BaseModel):
                             source_node=getattr(socket.source, "node", None)
                             and socket.source.node.title,
                         )
+                    elif (
+                        socket.source is not None
+                        and socket.source.deactivated
+                        and self.registry
+                        and not self.registry.startswith(
+                            ("core/", "data/", "state/", "util/")
+                        )
+                    ):
+                        # Deactivation cascades are usually intentional
+                        # branching, but when they reach a load-bearing agent
+                        # node the whole feature dies silently - log those.
+                        log.debug(
+                            "node.skipped.deactivated_source",
+                            node=self.title,
+                            registry=self.registry,
+                            input=socket.name,
+                            source_node=getattr(socket.source, "node", None)
+                            and socket.source.node.title,
+                        )
                     elif state.verbosity >= NodeVerbosity.VERBOSE:
                         log.warning(
                             f"Node {self.title} input {socket.name} is not available, missing socket {socket.name}"

@@ -737,6 +737,11 @@ class FinalizePrompt(AgentNode):
     async def run(self, state: GraphState):
         generation_request: GenerationRequest = self.require_input("generation_request")
 
+        # Validate/attach identity references here too - the preview path never
+        # reaches visual.generate, so without this the graph's LLM-selected
+        # references go to the user unvalidated (observed live: the wrong
+        # character's card previewed for a Kaira shot).
+        await self.agent.attach_character_references(generation_request)
         await self.agent._finalize_prompt(generation_request)
 
         self.set_output_values(

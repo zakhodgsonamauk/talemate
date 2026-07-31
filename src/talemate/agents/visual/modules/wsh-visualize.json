@@ -907,6 +907,21 @@
       "inherited": false,
       "registry": "agents/visual/FinalizePrompt",
       "base_type": "core/Node"
+    },
+    "8032a9f2-467a-4992-a0ee-6db9ec096526": {
+      "title": "GET obj.callback",
+      "id": "8032a9f2-467a-4992-a0ee-6db9ec096526",
+      "properties": {
+        "attribute": "callback"
+      },
+      "x": 397,
+      "y": 540,
+      "width": 210,
+      "height": 98,
+      "collapsed": false,
+      "inherited": false,
+      "registry": "data/Get",
+      "base_type": "core/Node"
     }
   },
   "edges": {
@@ -1037,7 +1052,8 @@
       "d9cc2c5b-51e2-4296-83b6-b8c0027a1b5a.object",
       "7dd0877a-67ca-4989-bab0-88b17764979d.object",
       "b7e1a3c2-1f44-4d90-9a2e-7c6d5e0f1234.object",
-      "b7d1ef00-0000-4000-8000-000000000001.object"
+      "b7d1ef00-0000-4000-8000-000000000001.object",
+      "8032a9f2-467a-4992-a0ee-6db9ec096526.object"
     ],
     "5527d9cb-6ffd-461e-bb08-0f915e06da18.context": [
       "d2bde569-e394-46b3-9d44-78791d423ce2.asset_ctx"
@@ -1113,6 +1129,9 @@
     ],
     "b7d1ef00-0000-4000-8000-00000000000f.state": [
       "b7d1ef00-0000-4000-8000-00000000000c.state"
+    ],
+    "8032a9f2-467a-4992-a0ee-6db9ec096526.value": [
+      "d2bde569-e394-46b3-9d44-78791d423ce2.callback"
     ]
   },
   "groups": [
