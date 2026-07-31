@@ -337,7 +337,17 @@ class DirectorChatActionConfirm(Node):
 
         try:
             context = director_chat_context.get()
-            if context and context.confirm_write_actions:
+            confirm_required = False
+            if context:
+                # confirm_write_actions can be toggled from the UI mid-run;
+                # prefer the live chat value over the task-creation snapshot
+                chat = director.chat_get(context.chat_id)
+                confirm_required = (
+                    chat.confirm_write_actions
+                    if chat is not None
+                    else context.confirm_write_actions
+                )
+            if context and confirm_required:
                 state.shared[key] = "waiting"
                 start_time = time.time()
                 emit(

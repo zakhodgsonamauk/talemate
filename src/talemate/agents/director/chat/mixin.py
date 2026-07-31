@@ -546,9 +546,13 @@ class DirectorChatMixin:
 
         def _sync_plan_to_context():
             """Inject active plan into extra_vars for the prompt template."""
-            nonlocal chat
+            nonlocal chat, mode
             # Re-fetch chat to avoid overwriting messages appended by other methods
             chat = self.chat_get(chat_id) or chat
+            # mode can be toggled from the UI mid-run; re-read so the next
+            # iteration picks it up
+            mode = chat.mode if chat else "normal"
+            extra_vars["mode"] = mode
             chat_ctx = director_chat_context.get()
             plan_id = (chat_ctx.plan_id if chat_ctx else None) or (
                 chat.plan_id if chat else None
