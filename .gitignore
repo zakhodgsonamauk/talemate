@@ -42,3 +42,4 @@ docs/update-progress
 talemate_frontend/eslint.config.cjs
 # Added by code-review-graph
 .code-review-graph/
+scripts/bakeoff_results/
