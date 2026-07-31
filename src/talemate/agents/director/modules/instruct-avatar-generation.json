@@ -338,7 +338,7 @@
       "properties": {
         "template": null,
         "max_calls": 1,
-        "retries": 0,
+        "retries": 1,
         "response_length": 1024
       },
       "x": 1937,

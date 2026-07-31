@@ -823,7 +823,7 @@
       "properties": {
         "template": null,
         "max_calls": 5,
-        "retries": 0,
+        "retries": 1,
         "response_length": 2048
       },
       "x": 1469,

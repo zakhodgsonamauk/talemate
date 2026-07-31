@@ -371,7 +371,7 @@
       "properties": {
         "template": null,
         "max_calls": 999,
-        "retries": 0,
+        "retries": 1,
         "response_length": 1024,
         "max_concurrent": 3
       },

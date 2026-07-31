@@ -1239,7 +1239,7 @@
       "properties": {
         "template": null,
         "max_calls": 5,
-        "retries": 0,
+        "retries": 1,
         "response_length": 1024
       },
       "x": 5057,

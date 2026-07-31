@@ -660,7 +660,7 @@
       "title": "Advanced Format",
       "id": "a6cccbd7-3b62-4327-836b-2c72a0786c3f",
       "properties": {
-        "template": "Update world entry **{context_name}**:\n\n``` diff\n{diff_plain}\n```"
+        "template": "Update world entry **{name}**:\n\n``` diff\n{diff_plain}\n```"
       },
       "x": 1650,
       "y": 1513,
@@ -1133,11 +1133,16 @@
       "title": "AI Function Callback Metadata",
       "id": "54e86ad0-38d2-4f22-95db-c927dd9557b3",
       "properties": {
-        "instructions": "Use this to create a new world entry with a unqiue title.\n\nGive instructions to the writer on what to create.",
+        "instructions": "Use this to create a new world entry with a unqiue title.\n\nGive instructions to the writer on what to create.\n\nIf the user asks to store exact content word-for-word, pass that content in `verbatim_content` - it is saved as-is, with no creative rewriting. Still provide the title and brief instructions.",
         "examples": [
           {
             "instructions": "Create a description of a small family-owned bakery that's been in the neighborhood for three generations. Include details about the types of pastries they specialize in, the warm atmosphere, and how it serves as a community gathering place where locals catch up on gossip.",
             "title": "Rosetti Family Bakery"
+          },
+          {
+            "title": "Story Arc: The Heist",
+            "instructions": "Store the user's story-arc outline exactly as provided.",
+            "verbatim_content": "## Act 1\n- The crew cases the vault\n\n## Act 2\n- The double-cross\n\n## Act 3\n- The escape"
           }
         ]
       },
@@ -1154,7 +1159,7 @@
       "title": "AI Function Callback Metadata",
       "id": "89d44840-9309-4136-8592-7a43115660ca",
       "properties": {
-        "instructions": "Use this to make changes to a specific world entry. The world entry MUST be identified by its full Context ID. If you do not know the Context ID do not use this function and instead report back that you don't know.",
+        "instructions": "Use this to make changes to a specific world entry. The world entry MUST be identified by its full Context ID. If you do not know the Context ID do not use this function and instead report back that you don't know.\n\nIf the user asks to store exact content word-for-word, pass it in `verbatim_content` - the entry's content is replaced with that text as-is, with no creative rewriting.",
         "examples": [
           {
             "context_id": "world_entry.manual:662b3b63ec0d",
@@ -1165,6 +1170,12 @@
             "context_id": "world_entry.manual:109e72fc8104",
             "instructions": "Add information to the existing entry about the dragons' behavior. Include that locals are reporting the dragons seem agitated and restless.",
             "replace": false
+          },
+          {
+            "context_id": "world_entry.manual:662b3b63ec0d",
+            "instructions": "Replace the entry with the exact table the user provided.",
+            "verbatim_content": "| Beat | Status |\n| --- | --- |\n| Opening | done |\n| Confrontation | pending |",
+            "replace": true
           }
         ]
       },
@@ -1222,11 +1233,144 @@
       "inherited": false,
       "registry": "core/Output",
       "base_type": "core/Node"
+    },
+    "3d7126c9-fda4-4688-9c37-034f19b5abca": {
+      "title": "verbatim_content",
+      "id": "3d7126c9-fda4-4688-9c37-034f19b5abca",
+      "properties": {
+        "name": "verbatim_content",
+        "typ": "str",
+        "instructions": "Optional. Exact text to store as the entry's content, word-for-word. Use when the user asks to save specific content verbatim (tables, lists, structured notes, exact wording). When set, this text is saved as-is - no creative rewriting. Still provide `title` and brief `instructions` (shown in the confirmation summary)."
+      },
+      "x": 1639,
+      "y": 1816,
+      "width": 282,
+      "height": 106,
+      "collapsed": false,
+      "inherited": false,
+      "registry": "focal/Argument",
+      "base_type": "core/Node"
+    },
+    "60c55779-e0de-458f-b1e3-fbb543affe32": {
+      "title": "verbatim set?",
+      "id": "60c55779-e0de-458f-b1e3-fbb543affe32",
+      "properties": {
+        "mode": "contains",
+        "case_sensitive": true,
+        "substring": ""
+      },
+      "x": 1639,
+      "y": 1946,
+      "width": 200,
+      "height": 90,
+      "collapsed": false,
+      "inherited": false,
+      "registry": "data/string/StringCheck",
+      "base_type": "core/Node"
+    },
+    "f1a3cf49-6c7b-468d-838e-01d1bea0d30a": {
+      "title": "verbatim? skip generate",
+      "id": "f1a3cf49-6c7b-468d-838e-01d1bea0d30a",
+      "properties": {},
+      "x": 1879,
+      "y": 1946,
+      "width": 180,
+      "height": 90,
+      "collapsed": false,
+      "inherited": false,
+      "registry": "core/RSwitchAdvanced",
+      "base_type": "core/Node"
+    },
+    "8caf87a1-9d23-4a4f-8113-14c1ed0541b0": {
+      "title": "text: verbatim or generated",
+      "id": "8caf87a1-9d23-4a4f-8113-14c1ed0541b0",
+      "properties": {},
+      "x": 2299,
+      "y": 1946,
+      "width": 180,
+      "height": 90,
+      "collapsed": false,
+      "inherited": false,
+      "registry": "core/RSwitch",
+      "base_type": "core/Node"
+    },
+    "d308382a-9265-4676-ba7d-dd6f86c8c1f3": {
+      "title": "verbatim_content",
+      "id": "d308382a-9265-4676-ba7d-dd6f86c8c1f3",
+      "properties": {
+        "name": "verbatim_content",
+        "typ": "str",
+        "instructions": "Optional. Exact replacement text for this entry, word-for-word. Use when the user asks to store specific content verbatim. When set, this text becomes the entry's new content as-is - no creative rewriting; `instructions` and `replace` do not alter it."
+      },
+      "x": 740,
+      "y": 1133,
+      "width": 282,
+      "height": 106,
+      "collapsed": false,
+      "inherited": false,
+      "registry": "focal/Argument",
+      "base_type": "core/Node"
+    },
+    "c699c470-db17-4abc-8dd0-9e651b00970e": {
+      "title": "verbatim set?",
+      "id": "c699c470-db17-4abc-8dd0-9e651b00970e",
+      "properties": {
+        "mode": "contains",
+        "case_sensitive": true,
+        "substring": ""
+      },
+      "x": 740,
+      "y": 1263,
+      "width": 200,
+      "height": 90,
+      "collapsed": false,
+      "inherited": false,
+      "registry": "data/string/StringCheck",
+      "base_type": "core/Node"
+    },
+    "1f34a452-5007-4e97-b746-5452637bb211": {
+      "title": "verbatim? skip generate",
+      "id": "1f34a452-5007-4e97-b746-5452637bb211",
+      "properties": {},
+      "x": 980,
+      "y": 1263,
+      "width": 180,
+      "height": 90,
+      "collapsed": false,
+      "inherited": false,
+      "registry": "core/RSwitchAdvanced",
+      "base_type": "core/Node"
+    },
+    "918c1be3-8b5d-451b-b747-fd3bd4275617": {
+      "title": "text: verbatim or generated",
+      "id": "918c1be3-8b5d-451b-b747-fd3bd4275617",
+      "properties": {},
+      "x": 1400,
+      "y": 1263,
+      "width": 180,
+      "height": 90,
+      "collapsed": false,
+      "inherited": false,
+      "registry": "core/RSwitch",
+      "base_type": "core/Node"
+    },
+    "9f640676-4925-4660-a238-3f4cec1fd6cf": {
+      "title": "diff base: current or passthrough",
+      "id": "9f640676-4925-4660-a238-3f4cec1fd6cf",
+      "properties": {},
+      "x": 1400,
+      "y": 1473,
+      "width": 180,
+      "height": 90,
+      "collapsed": false,
+      "inherited": false,
+      "registry": "core/RSwitch",
+      "base_type": "core/Node"
     }
   },
   "edges": {
     "f97ddf29-8a86-4cfe-925d-07bfac8d2988.text": [
-      "187c9c4f-e74b-4a6a-824a-fa2a12e6f950.text"
+      "8caf87a1-9d23-4a4f-8113-14c1ed0541b0.no"
     ],
     "80c6f2a9-c710-403b-8720-2ab4bfec8d38.result": [
       "dd53581b-e872-477e-a21b-a4731e2bb0d0.value"
@@ -1315,7 +1459,7 @@
       "18badecb-e756-4daa-8d7b-674c3301f9bb.check"
     ],
     "8ddb4264-a466-421a-9a2f-70d873882ab7.value": [
-      "e94cfd6a-acc6-479e-9d4f-2f5446bef062.state"
+      "1f34a452-5007-4e97-b746-5452637bb211.no"
     ],
     "8839d93d-f2c8-44a1-9a2f-ed1f9fd156a3.value": [
       "e94cfd6a-acc6-479e-9d4f-2f5446bef062.instructions"
@@ -1324,23 +1468,21 @@
       "e94cfd6a-acc6-479e-9d4f-2f5446bef062.original"
     ],
     "e94cfd6a-acc6-479e-9d4f-2f5446bef062.text": [
-      "a9686166-832b-4014-aebf-e4232eb04006.b",
-      "fe24fcdb-ead4-43a6-abae-d15b652ee4c4.state"
-    ],
-    "e94cfd6a-acc6-479e-9d4f-2f5446bef062.context_name": [
-      "a6cccbd7-3b62-4327-836b-2c72a0786c3f.item1"
+      "918c1be3-8b5d-451b-b747-fd3bd4275617.no"
     ],
     "e94cfd6a-acc6-479e-9d4f-2f5446bef062.original": [
-      "a9686166-832b-4014-aebf-e4232eb04006.a"
+      "9f640676-4925-4660-a238-3f4cec1fd6cf.no"
     ],
     "f56ac59e-bb75-420c-97d0-689ad77979ee.context_id_item": [
       "f6fa5702-7bc2-49f8-8468-d5723f95953f.context_id_item"
     ],
     "f56ac59e-bb75-420c-97d0-689ad77979ee.name": [
-      "e94cfd6a-acc6-479e-9d4f-2f5446bef062.context_name"
+      "e94cfd6a-acc6-479e-9d4f-2f5446bef062.context_name",
+      "a6cccbd7-3b62-4327-836b-2c72a0786c3f.item1"
     ],
     "f56ac59e-bb75-420c-97d0-689ad77979ee.value": [
-      "18badecb-e756-4daa-8d7b-674c3301f9bb.no"
+      "18badecb-e756-4daa-8d7b-674c3301f9bb.no",
+      "9f640676-4925-4660-a238-3f4cec1fd6cf.yes"
     ],
     "f6fa5702-7bc2-49f8-8468-d5723f95953f.context_id_item": [
       "925da249-c167-44e5-81ea-9b86534a8af8.item0"
@@ -1397,7 +1539,7 @@
       "7ae107d9-116e-4807-b690-b1c7e2d7782a.description"
     ],
     "7ae107d9-116e-4807-b690-b1c7e2d7782a.accepted": [
-      "f97ddf29-8a86-4cfe-925d-07bfac8d2988.state",
+      "f1a3cf49-6c7b-468d-838e-01d1bea0d30a.no",
       "f97ddf29-8a86-4cfe-925d-07bfac8d2988.context_name",
       "ad722790-c95e-408f-8c4f-9edc819c667c.value"
     ],
@@ -1444,6 +1586,45 @@
     ],
     "4a34add9-e9c9-4c52-b253-77e3e4c05316.summary": [
       "32163c9e-3b5c-4f32-962e-e9fb593a3ed6.value"
+    ],
+    "3d7126c9-fda4-4688-9c37-034f19b5abca.value": [
+      "60c55779-e0de-458f-b1e3-fbb543affe32.string",
+      "f1a3cf49-6c7b-468d-838e-01d1bea0d30a.yes"
+    ],
+    "60c55779-e0de-458f-b1e3-fbb543affe32.result": [
+      "f1a3cf49-6c7b-468d-838e-01d1bea0d30a.check",
+      "8caf87a1-9d23-4a4f-8113-14c1ed0541b0.check"
+    ],
+    "f1a3cf49-6c7b-468d-838e-01d1bea0d30a.yes": [
+      "8caf87a1-9d23-4a4f-8113-14c1ed0541b0.yes"
+    ],
+    "f1a3cf49-6c7b-468d-838e-01d1bea0d30a.no": [
+      "f97ddf29-8a86-4cfe-925d-07bfac8d2988.state"
+    ],
+    "8caf87a1-9d23-4a4f-8113-14c1ed0541b0.value": [
+      "187c9c4f-e74b-4a6a-824a-fa2a12e6f950.text"
+    ],
+    "d308382a-9265-4676-ba7d-dd6f86c8c1f3.value": [
+      "c699c470-db17-4abc-8dd0-9e651b00970e.string",
+      "1f34a452-5007-4e97-b746-5452637bb211.yes"
+    ],
+    "c699c470-db17-4abc-8dd0-9e651b00970e.result": [
+      "1f34a452-5007-4e97-b746-5452637bb211.check",
+      "918c1be3-8b5d-451b-b747-fd3bd4275617.check",
+      "9f640676-4925-4660-a238-3f4cec1fd6cf.check"
+    ],
+    "1f34a452-5007-4e97-b746-5452637bb211.yes": [
+      "918c1be3-8b5d-451b-b747-fd3bd4275617.yes"
+    ],
+    "1f34a452-5007-4e97-b746-5452637bb211.no": [
+      "e94cfd6a-acc6-479e-9d4f-2f5446bef062.state"
+    ],
+    "918c1be3-8b5d-451b-b747-fd3bd4275617.value": [
+      "a9686166-832b-4014-aebf-e4232eb04006.b",
+      "fe24fcdb-ead4-43a6-abae-d15b652ee4c4.state"
+    ],
+    "9f640676-4925-4660-a238-3f4cec1fd6cf.value": [
+      "a9686166-832b-4014-aebf-e4232eb04006.a"
     ]
   },
   "groups": [
