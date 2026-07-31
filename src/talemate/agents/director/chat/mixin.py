@@ -35,6 +35,12 @@ if TYPE_CHECKING:
 
 log = structlog.get_logger("talemate.agent.director.chat")
 
+# The redact-spoilers template prefills "<REDACTED>" (set_prepared_response),
+# so the model completes inside the tag and Prompt.request prepends the tag
+# when the model does not repeat it. The `$` fallback is deliberate: a model
+# that omits the closing tag still produced a redaction-prompt-conditioned
+# rewrite, and treating that as the reply is safer for a spoiler gate than
+# falling back to the original (which would leak).
 REDACTED_PATTERN = re.compile(r"<REDACTED>(.*?)(?:</REDACTED>|$)", re.S)
 
 

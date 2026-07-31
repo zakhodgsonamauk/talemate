@@ -131,6 +131,28 @@ class TestChatRedactMessage:
         assert stub.calls[0]["vars"]["draft"] == ORIGINAL
 
     @pytest.mark.asyncio
+    async def test_prefill_coerced_response_without_tags(
+        self, director, nospoilers_chat, monkeypatch
+    ):
+        """The template prefills "<REDACTED>", so Prompt.request prepends the
+        opening tag when the model does not repeat it. A completion without
+        any tags is still the prompt-conditioned rewrite and must be used as
+        the redacted text (never fall back to the unredacted original)."""
+        install = patch_prompt_request_in(monkeypatch)
+        install(
+            {
+                # what Prompt.request returns after prepending the prefill
+                "director.redact-spoilers": [
+                    (f"<REDACTED>{REDACTED}", {}),
+                ]
+            }
+        )
+
+        result = await director.chat_redact_message(nospoilers_chat, ORIGINAL)
+
+        assert result == REDACTED
+
+    @pytest.mark.asyncio
     async def test_empty_response_returns_original(
         self, director, nospoilers_chat, monkeypatch
     ):
