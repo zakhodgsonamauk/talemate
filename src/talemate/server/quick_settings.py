@@ -41,6 +41,9 @@ class QuickSettingsPlugin:
             config.game.general.auto_save = payload.value
         elif payload.setting == "auto_progress":
             config.game.general.auto_progress = payload.value
+        elif payload.setting == "max_ai_turns":
+            # value arrives as Any off the websocket; the schema floor is 1
+            config.game.general.max_ai_turns = max(1, int(payload.value))
         elif payload.setting == "auto_attach_assets":
             config.appearance.scene.auto_attach_assets = payload.value
         else:

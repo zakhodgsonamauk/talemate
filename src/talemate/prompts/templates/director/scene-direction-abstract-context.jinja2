@@ -1,0 +1,99 @@
+{#-
+Abstracted scene context for autonomous scene direction.
+
+Replaces verbatim scene dialogue with summaries, world state and character
+notes. Used when `director.scene_direction.abstract_context` is on, so the
+director can run on a censored or remote model without the scene's prose being
+sent to it.
+
+Deliberately does not reach for the scene's message history at all — the normal
+context helper mixes summaries with verbatim dialogue by design. Everything here
+is drawn from already-summarised material, so no dialogue can leak through this
+path. A test enforces that this file never references that helper.
+
+Expects: `budget` (tokens available for this section).
+-#}
+{% set summary_entries = [] %}
+{#- Most abstract first: the highest layer is the broadest arc summary. -#}
+{% for layer in scene.layered_history|reverse %}
+{% for entry in layer %}
+{% if entry.get("text") %}{% set _ = summary_entries.append(entry["text"]) %}{% endif %}
+{% endfor %}
+{% endfor %}
+{#- Then the per-chunk archive summaries, oldest to newest. -#}
+{% for entry in scene.archived_history %}
+{% if entry.get("text") %}{% set _ = summary_entries.append(entry["text"]) %}{% endif %}
+{% endfor %}
+
+{#- Trim from the front so the most recent summaries survive the budget. -#}
+{% set kept = [] %}
+{% set used = [0] %}
+{% for text in summary_entries|reverse %}
+{% set cost = count_tokens(text) %}
+{% if used[0] + cost <= budget %}
+{% set _ = kept.append(text) %}
+{% set _ = used.__setitem__(0, used[0] + cost) %}
+{% endif %}
+{% endfor %}
+
+<|SECTION:STORY SO FAR|>
+{% if kept %}
+Summarised account of what has happened, oldest first. The exact wording of recent dialogue is deliberately withheld — direct from these summaries and the current state below.
+
+{% for text in kept|reverse %}
+- {{ text|condensed }}
+{% endfor %}
+{% else %}
+Nothing has been summarised yet. The scene is either new or too short to have produced summaries, so judge from the current state below and the scene intent.
+{% endif %}
+<|CLOSE_SECTION|>
+
+{% set ws = scene.world_state %}
+{% set state_body %}
+{%- if ws.location %}Location: {{ ws.location|condensed }}
+{% endif -%}
+{%- if ws.characters.values()|selectattr("snapshot")|list %}
+### Characters
+{% for name, char in ws.characters.items() if char.snapshot %}- {{ name }}{% if char.emotion %} ({{ char.emotion }}){% endif %} — {{ char.snapshot|condensed }}
+{% endfor -%}
+{% endif -%}
+{%- if ws.items.values()|selectattr("snapshot")|list %}
+### Items
+{% for name, item in ws.items.items() if item.snapshot %}- {{ name }} — {{ item.snapshot|condensed }}
+{% endfor -%}
+{% endif -%}
+{%- if ws.places.values()|selectattr("snapshot")|list %}
+### Places
+{% for name, place in ws.places.items() if place.snapshot %}- {{ name }} — {{ place.snapshot|condensed }}
+{% endfor -%}
+{% endif -%}
+{% endset %}
+{% if state_body|trim %}
+<|SECTION:CURRENT STATE|>
+What is true right now.
+
+{{ state_body|trim }}
+<|CLOSE_SECTION|>
+{% endif %}
+
+{% set active_body %}
+{%- for character in scene.characters %}
+- {{ character.name }}{% if character.is_player %} (the user's character){% endif %}{% if character.description %} — {{ character.description|condensed }}{% endif %}
+{% endfor -%}
+{% endset %}
+{% if active_body|trim %}
+<|SECTION:CHARACTERS IN THE SCENE|>
+{{ active_body|trim }}
+<|CLOSE_SECTION|>
+{% endif %}
+
+<|SECTION:IMPORTANT NOTES|>
+STORY TITLE: {{ scene.title or scene.name or "<None>" }}
+ABSTRACTED CONTEXT: You are directing from summaries, not from the scene text. Do not attempt to quote or continue exact wording; give instructions describing what should happen, and let the actors and narrator write it.
+{% if not scene.num_history_entries %}
+UNPLAYED: There has been no progress in the interactive story yet.
+{% endif %}
+{% if not scene.context %}
+CONTENT CLASSIFICATION MISSING: The content classification is missing.
+{% endif %}
+<|CLOSE_SECTION|>

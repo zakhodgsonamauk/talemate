@@ -49,8 +49,15 @@ These context IDs are currently pinned to all context.
 {% set _ = budgets.set_reserved(reserved_tokens) %}
 
 {# SCENE CONTEXT #}
+{# When abstracted context is on the director gets summaries and world state    #}
+{# instead of verbatim dialogue, so it can run on a censored or remote model     #}
+{# without the scene's prose being sent to it.                                   #}
 {% set scene_context_text %}
+{% if agent_config("director.scene_direction.abstract_context") %}
+{% with budget=budgets.scene_context %}{% include "scene-direction-abstract-context.jinja2" %}{% endwith %}
+{% else %}
 {% with budget=budgets.scene_context %}{% include "scene-context-chat.jinja2" %}{% endwith %}
+{% endif %}
 {% endset %}
 
 {# DIRECTION HISTORY (bounded by budgets.direction_history via callable) #}

@@ -80,22 +80,6 @@
       "registry": "data/number/Make",
       "base_type": "core/Node"
     },
-    "d5a5c1d5-5cc2-44ef-becc-2c3fb737d732": {
-      "title": "MAX AI TURNS - 3",
-      "id": "d5a5c1d5-5cc2-44ef-becc-2c3fb737d732",
-      "properties": {
-        "value": "3",
-        "number_type": "int"
-      },
-      "x": 162,
-      "y": 344,
-      "width": 210,
-      "height": 82,
-      "collapsed": true,
-      "inherited": false,
-      "registry": "data/number/Make",
-      "base_type": "core/Node"
-    },
     "6514eef7-ee1d-4ae9-a33a-318564ce7fe5": {
       "title": "Stage 0",
       "id": "6514eef7-ee1d-4ae9-a33a-318564ce7fe5",
@@ -266,7 +250,7 @@
       "base_type": "core/Node"
     },
     "e126618f-84db-4361-991c-661d1fbe50a6": {
-      "title": "EMERGENCY BREAK",
+      "title": "EMERGENCY BREAK (backstop - max_ai_turns)",
       "id": "e126618f-84db-4361-991c-661d1fbe50a6",
       "properties": {},
       "x": 930,
@@ -1161,6 +1145,60 @@
       "inherited": false,
       "registry": "scene/event/trigger/GameLoopActorIter",
       "base_type": "core/EventTrigger"
+    },
+    "4c17a3e2-9f6b-4d51-b7a0-1e5c8d2f6a94": {
+      "title": "Get Scene State (AI turn cap)",
+      "id": "4c17a3e2-9f6b-4d51-b7a0-1e5c8d2f6a94",
+      "properties": {},
+      "x": 162,
+      "y": 344,
+      "width": 210,
+      "height": 106,
+      "collapsed": false,
+      "inherited": false,
+      "registry": "scene/GetSceneState",
+      "base_type": "core/Node"
+    },
+    "b81f4a06-3d27-4e88-9a51-7c0e6d4b21f3": {
+      "title": "Player Was Addressed",
+      "id": "b81f4a06-3d27-4e88-9a51-7c0e6d4b21f3",
+      "properties": {},
+      "x": 420,
+      "y": 1390,
+      "width": 220,
+      "height": 126,
+      "collapsed": false,
+      "inherited": false,
+      "registry": "scene/PlayerWasAddressed",
+      "base_type": "core/Node"
+    },
+    "c92e5b17-4e38-4f99-8b62-8d1f7e5c32a4": {
+      "title": "Hand back? (yield OR addressed)",
+      "id": "c92e5b17-4e38-4f99-8b62-8d1f7e5c32a4",
+      "properties": {},
+      "x": 680,
+      "y": 1330,
+      "width": 250,
+      "height": 106,
+      "collapsed": false,
+      "inherited": false,
+      "registry": "core/ORRouter",
+      "base_type": "core/Node"
+    },
+    "d03f6c28-5f49-4a11-9c73-9e2f8f6d43b5": {
+      "title": "As Bool",
+      "id": "d03f6c28-5f49-4a11-9c73-9e2f8f6d43b5",
+      "properties": {
+        "default": false
+      },
+      "x": 960,
+      "y": 1330,
+      "width": 180,
+      "height": 82,
+      "collapsed": false,
+      "inherited": false,
+      "registry": "core/AsBool",
+      "base_type": "core/Node"
     }
   },
   "edges": {
@@ -1176,9 +1214,6 @@
     ],
     "ddeee74b-80c1-4e96-90c8-aa39662390b4.value": [
       "03905d37-9e09-436e-86c5-d5f92939be10.default"
-    ],
-    "d5a5c1d5-5cc2-44ef-becc-2c3fb737d732.value": [
-      "7b31eda5-084d-42bf-9e72-5920019340e8.b"
     ],
     "7c7a6436-38f1-4bf3-9382-d480d64c14ea.character": [
       "bc3f6839-08fb-45ed-906f-3cd85e2692f4.value"
@@ -1365,9 +1400,6 @@
       "33533e99-7333-4d71-93ed-b4c2735e5302.state",
       "33533e99-7333-4d71-93ed-b4c2735e5302.value"
     ],
-    "bad4de23-1028-4be6-b6ab-d85d177060ff.yield_to_user": [
-      "070dcc40-1aa7-4e45-bfa2-1a5fb0b2804e.value"
-    ],
     "911c7a59-03be-4be5-b50a-51ef55b6bd4d.auto_progress": [
       "c432f53d-eec5-47a2-8e67-146a1d66df2b.a"
     ],
@@ -1391,6 +1423,21 @@
     ],
     "42951d3e-6c6a-4b3c-91ce-59c0a97f706b.event": [
       "c044e62a-a1c5-4dd5-a20f-6bc22f13df64.state"
+    ],
+    "4c17a3e2-9f6b-4d51-b7a0-1e5c8d2f6a94.max_ai_turns": [
+      "7b31eda5-084d-42bf-9e72-5920019340e8.b"
+    ],
+    "bad4de23-1028-4be6-b6ab-d85d177060ff.yield_to_user": [
+      "c92e5b17-4e38-4f99-8b62-8d1f7e5c32a4.a"
+    ],
+    "b81f4a06-3d27-4e88-9a51-7c0e6d4b21f3.addressed": [
+      "c92e5b17-4e38-4f99-8b62-8d1f7e5c32a4.b"
+    ],
+    "c92e5b17-4e38-4f99-8b62-8d1f7e5c32a4.yes": [
+      "d03f6c28-5f49-4a11-9c73-9e2f8f6d43b5.value"
+    ],
+    "d03f6c28-5f49-4a11-9c73-9e2f8f6d43b5.value": [
+      "070dcc40-1aa7-4e45-bfa2-1a5fb0b2804e.value"
     ]
   },
   "groups": [

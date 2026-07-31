@@ -134,6 +134,12 @@ class SceneDirectionMixin:
                     description="Track and report participation balance between narrator and active characters to encourage variety in scene direction.",
                     value=True,
                 ),
+                "abstract_context": AgentActionConfig(
+                    type="bool",
+                    label="Abstracted context",
+                    description="Give the director summaries, world state and character notes instead of verbatim scene dialogue. Lets you route the director to a censored or remote model without sending it the prose, at the cost of the director losing the exact wording of recent beats.",
+                    value=False,
+                ),
             },
         )
 
@@ -170,6 +176,15 @@ class SceneDirectionMixin:
     @property
     def direction_maintain_turn_balance(self) -> bool:
         return self.resolve_config("scene_direction", "maintain_turn_balance")
+
+    @property
+    def direction_abstract_context(self) -> bool:
+        """Whether the director sees summaries instead of verbatim dialogue.
+
+        Off by default so existing behaviour is unchanged. Turning it on is what
+        makes it safe to point the director at a censored or remote model.
+        """
+        return self.resolve_config("scene_direction", "abstract_context")
 
     @property
     def direction_enabled(self) -> bool:

@@ -675,6 +675,75 @@ class TestSceneDirectionMethods:
                     assert "<DECISION>" not in last_msg.message
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("abstract", [False, True])
+    async def test_abstract_context_withholds_verbatim_dialogue(
+        self, active_context, abstract
+    ):
+        """AC8 — with abstracted context on, no scene dialogue reaches the prompt.
+
+        This is what makes it safe to route the director to a censored or remote
+        model: it plans from summaries, while the local model writes the prose.
+        Parameterised so the negative case proves the assertion can fail.
+        """
+        from talemate.scene_message import CharacterMessage
+
+        director = active_context
+        director.actions["scene_direction"].enabled = True
+        director.actions["scene_direction"].config[
+            "abstract_context"
+        ].value = abstract
+
+        director.scene.history.append(
+            CharacterMessage(
+                message='Elena: "the bulkhead groaned like a dying animal"',
+                source="ai",
+            )
+        )
+
+        captured = []
+
+        async def capture(prompt, *args, **kwargs):
+            captured.append(prompt)
+            return "<ANALYSIS>ok</ANALYSIS><DECISION>Let the narrator continue.</DECISION>"
+
+        director.client.send_prompt = AsyncMock(side_effect=capture)
+
+        with patch(
+            "talemate.agents.director.action_core.utils.get_available_actions"
+        ) as mock_actions:
+            mock_actions.return_value = []
+            with patch(
+                "talemate.agents.director.action_core.utils.get_meta_groups"
+            ) as mock_meta:
+                mock_meta.return_value = []
+                await director.direction_execute_turn(always_on=True)
+
+        assert captured, "the director never called the client"
+        joined = "\n".join(str(prompt) for prompt in captured)
+
+        # CHAT_START_MARKER is emitted unconditionally by scene-context-chat.jinja2,
+        # the template that carries verbatim dialogue. Its presence or absence is
+        # therefore a reliable signal for which context path rendered — unlike the
+        # dialogue itself, which the mocked summarizer suppresses in this harness.
+        if abstract:
+            assert "CHAT_START_MARKER" not in joined, (
+                "the verbatim-dialogue context template still rendered despite "
+                "abstract_context being enabled"
+            )
+            assert "ABSTRACTED CONTEXT" in joined, (
+                "the abstracted-context notice is missing, so the director was not "
+                "told it is working from summaries"
+            )
+            # <|SECTION:...|> renders as sentence-case markdown, so compare loosely
+            assert "story so far" in joined.lower(), "the summary section is missing"
+        else:
+            assert "CHAT_START_MARKER" in joined, (
+                "the verbatim-dialogue path did not render — the abstract path is "
+                "being used unconditionally"
+            )
+            assert "ABSTRACTED CONTEXT" not in joined
+
+    @pytest.mark.asyncio
     async def test_direction_execute_turn_skipped_when_disabled(self, active_context):
         """Test that direction_execute_turn is skipped when disabled."""
         director = active_context

@@ -67,6 +67,8 @@ class GetSceneState(Node):
     - auto_save: Whether auto save is enabled
     - auto_backup: Whether auto backup is enabled
     - auto_progress: Whether auto progress is enabled
+    - max_ai_turns: Consecutive AI turns allowed before the turn is forced back
+      to the player
     - scene: The scene instance
     """
 
@@ -81,6 +83,7 @@ class GetSceneState(Node):
         self.add_output("active", socket_type="bool")
         self.add_output("auto_save", socket_type="bool")
         self.add_output("auto_progress", socket_type="bool")
+        self.add_output("max_ai_turns", socket_type="number")
         self.add_output("scene", socket_type="scene")
 
     async def run(self, state: GraphState):
@@ -91,6 +94,7 @@ class GetSceneState(Node):
                 "active": scene.active,
                 "auto_save": scene.auto_save,
                 "auto_progress": scene.auto_progress,
+                "max_ai_turns": scene.max_ai_turns,
                 "scene": scene,
             }
         )
@@ -382,6 +386,133 @@ class IsPlayerCharacter(Node):
                 "yes": True if character.is_player else UNRESOLVED,
                 "no": True if not character.is_player else UNRESOLVED,
                 "character": character,
+            }
+        )
+
+
+@register("scene/IsPlayerCharacterName")
+class IsPlayerCharacterName(Node):
+    """
+    Whether a character name refers to the player's character.
+
+    Exists so graphs can branch on "is this the player's action?" without a
+    string-compare chain: `core/Case` matches against a static property, so it
+    cannot compare against a name resolved at runtime.
+
+    A blank or unknown name is not the player — callers that leave the name
+    empty get the non-player branch, which keeps existing behaviour unchanged.
+
+    Inputs:
+
+    - name: The character name to test
+
+    Outputs:
+
+    - state: The input state passed through
+    - is_player: Whether the name refers to the player character
+    - yes: True when it is the player, otherwise UNRESOLVED
+    - no: True when it is not the player, otherwise UNRESOLVED
+    """
+
+    def __init__(self, title="Is Player Character Name", **kwargs):
+        super().__init__(title=title, **kwargs)
+
+    def setup(self):
+        self.add_input("state", optional=True)
+        self.add_input("name", socket_type="str", optional=True)
+
+        self.add_output("state")
+        self.add_output("is_player", socket_type="bool")
+        self.add_output("yes", socket_type="bool")
+        self.add_output("no", socket_type="bool")
+
+    async def run(self, state: GraphState):
+        scene: "Scene" = active_scene.get()
+        name = self.normalized_input_value("name")
+
+        is_player = False
+        if isinstance(name, str) and name.strip():
+            player = scene.get_player_character()
+            if player and player.name:
+                is_player = name.strip().lower() == player.name.strip().lower()
+
+        self.set_output_values(
+            {
+                "state": self.get_input_value("state"),
+                "is_player": is_player,
+                "yes": True if is_player else UNRESOLVED,
+                "no": True if not is_player else UNRESOLVED,
+            }
+        )
+
+
+@register("scene/PlayerWasAddressed")
+class PlayerWasAddressed(Node):
+    """
+    Whether the most recent character message addressed or acted upon the player.
+
+    A cheap local check with no LLM call, used by the scene loop to hand control
+    back when it is actually the player's line. Biased toward saying no: a miss
+    is caught by the max_ai_turns backstop, whereas a false positive interrupts
+    the player constantly.
+
+    Inputs:
+
+    - state: Optional state to trigger execution
+
+    Outputs:
+
+    - state: The input state passed through
+    - addressed: Whether the player was addressed
+    - yes: True when addressed, otherwise UNRESOLVED
+    - no: True when not addressed, otherwise UNRESOLVED
+    """
+
+    def __init__(self, title="Player Was Addressed", **kwargs):
+        super().__init__(title=title, **kwargs)
+
+    def setup(self):
+        self.add_input("state", optional=True)
+
+        self.add_output("state")
+        self.add_output("addressed", socket_type="bool")
+        self.add_output("yes", socket_type="bool")
+        self.add_output("no", socket_type="bool")
+
+    async def run(self, state: GraphState):
+        from talemate.scene.address import addresses_player
+        from talemate.scene_message import CharacterMessage
+
+        scene: "Scene" = active_scene.get()
+        addressed = False
+
+        player = scene.get_player_character()
+        if player:
+            last = next(
+                (
+                    message
+                    for message in reversed(scene.history)
+                    if isinstance(message, CharacterMessage)
+                ),
+                None,
+            )
+            if last:
+                addressed = addresses_player(
+                    last,
+                    player_name=player.name,
+                    other_names=[
+                        character.name
+                        for character in scene.characters
+                        if character.name != player.name
+                    ],
+                )
+
+        self.set_output_values(
+            {
+                "state": self.get_input_value("state"),
+                "addressed": addressed,
+                "yes": True if addressed else UNRESOLVED,
+                "no": True if not addressed else UNRESOLVED,
             }
         )
 

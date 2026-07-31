@@ -416,21 +416,6 @@
       "registry": "focal/Argument",
       "base_type": "core/Node"
     },
-    "6aca0c36-b086-4f1d-8f4f-1c3ef95b6475": {
-      "title": "As Bool",
-      "id": "6aca0c36-b086-4f1d-8f4f-1c3ef95b6475",
-      "properties": {
-        "default": false
-      },
-      "x": 352,
-      "y": 1736,
-      "width": 210,
-      "height": 58,
-      "collapsed": false,
-      "inherited": false,
-      "registry": "core/AsBool",
-      "base_type": "core/Node"
-    },
     "dacaddcd-0089-40bd-9469-4597e1779be4": {
       "title": "true (state)",
       "id": "dacaddcd-0089-40bd-9469-4597e1779be4",
@@ -606,6 +591,148 @@
       "inherited": false,
       "registry": "agents/director/gameplay/rollDice",
       "base_type": "core/Graph"
+    },
+    "e5a1c740-1b62-4f83-a0d5-3c7e91b4d206": {
+      "title": "character",
+      "id": "e5a1c740-1b62-4f83-a0d5-3c7e91b4d206",
+      "properties": {
+        "name": "character",
+        "typ": "str",
+        "instructions": "The name of the character whose action this roll resolves, exactly as it appears in the scene. Leave blank when the roll is not tied to one character (weather, an ambush, a coin flip). When the roll resolves the player's own character's action, the player is asked to confirm before it is rolled."
+      },
+      "x": -470,
+      "y": 1916,
+      "width": 260,
+      "height": 131,
+      "collapsed": false,
+      "inherited": false,
+      "registry": "focal/Argument",
+      "base_type": "core/Node"
+    },
+    "f6b2d851-2c73-4094-b1e6-4d8fa2c5e317": {
+      "title": "Is Player Character Name",
+      "id": "f6b2d851-2c73-4094-b1e6-4d8fa2c5e317",
+      "properties": {},
+      "x": -170,
+      "y": 1916,
+      "width": 240,
+      "height": 126,
+      "collapsed": false,
+      "inherited": false,
+      "registry": "scene/IsPlayerCharacterName",
+      "base_type": "core/Node"
+    },
+    "a7c3e962-3d84-41a5-82f7-5e9fb3d6f428": {
+      "title": "Roll / Skip",
+      "id": "a7c3e962-3d84-41a5-82f7-5e9fb3d6f428",
+      "properties": {
+        "item_type": "str",
+        "items": [
+          "Roll",
+          "Skip"
+        ]
+      },
+      "x": -170,
+      "y": 2106,
+      "width": 200,
+      "height": 106,
+      "collapsed": false,
+      "inherited": false,
+      "registry": "data/MakeList",
+      "base_type": "core/Node"
+    },
+    "b8d4fa73-4e95-42b6-93a8-6f0ac4e7a539": {
+      "title": "Confirm Roll",
+      "id": "b8d4fa73-4e95-42b6-93a8-6f0ac4e7a539",
+      "properties": {
+        "closable": true,
+        "timeout_seconds": 0,
+        "element_title": "Your roll",
+        "element_body": "",
+        "multi_select": false,
+        "default": null
+      },
+      "x": 110,
+      "y": 1976,
+      "width": 260,
+      "height": 200,
+      "collapsed": false,
+      "inherited": false,
+      "registry": "ux/BuildChoiceElement",
+      "base_type": "core/Node"
+    },
+    "c9e50b84-5fa6-43c7-a4b9-7a1bd5f8b64a": {
+      "title": "Await Confirmation",
+      "id": "c9e50b84-5fa6-43c7-a4b9-7a1bd5f8b64a",
+      "properties": {},
+      "x": 410,
+      "y": 1976,
+      "width": 240,
+      "height": 180,
+      "collapsed": false,
+      "inherited": false,
+      "registry": "ux/EmitElement",
+      "base_type": "core/Node"
+    },
+    "d0f61c95-60b7-44d8-b5ca-8b2ce609c75b": {
+      "title": "Rolled?",
+      "id": "d0f61c95-60b7-44d8-b5ca-8b2ce609c75b",
+      "properties": {
+        "attribute_name": "",
+        "case_a": "Roll",
+        "case_b": "Skip",
+        "case_c": "",
+        "case_d": ""
+      },
+      "x": 690,
+      "y": 1976,
+      "width": 200,
+      "height": 151,
+      "collapsed": false,
+      "inherited": false,
+      "registry": "core/Case",
+      "base_type": "core/Node"
+    },
+    "e1072da6-71c8-45e9-c6db-9c3df71ad86c": {
+      "title": "Proceed with roll?",
+      "id": "e1072da6-71c8-45e9-c6db-9c3df71ad86c",
+      "properties": {},
+      "x": 950,
+      "y": 1916,
+      "width": 220,
+      "height": 151,
+      "collapsed": false,
+      "inherited": false,
+      "registry": "core/Coallesce",
+      "base_type": "core/Node"
+    },
+    "f2183eb7-82d9-46fa-d7ec-ad4e082be97d": {
+      "title": "Show to user? (asked OR requested)",
+      "id": "f2183eb7-82d9-46fa-d7ec-ad4e082be97d",
+      "properties": {},
+      "x": 110,
+      "y": 2236,
+      "width": 270,
+      "height": 106,
+      "collapsed": false,
+      "inherited": false,
+      "registry": "core/ORRouter",
+      "base_type": "core/Node"
+    },
+    "03294fc8-93ea-47ab-e8fd-be5f193cfa8e": {
+      "title": "As Bool",
+      "id": "03294fc8-93ea-47ab-e8fd-be5f193cfa8e",
+      "properties": {
+        "default": false
+      },
+      "x": 410,
+      "y": 2236,
+      "width": 180,
+      "height": 82,
+      "collapsed": false,
+      "inherited": false,
+      "registry": "core/AsBool",
+      "base_type": "core/Node"
     }
   },
   "edges": {
@@ -678,20 +805,15 @@
     "ecd89db9-74f5-4d9c-ab8b-6ff4a1f113d9.value": [
       "065d8cc1-c78d-44cb-89ae-a73270b4ea9a.value"
     ],
-    "6aca0c36-b086-4f1d-8f4f-1c3ef95b6475.value": [
-      "872134b7-be67-4acb-b713-873190fe2b70.emit_system_message"
-    ],
-    "dacaddcd-0089-40bd-9469-4597e1779be4.value": [
-      "872134b7-be67-4acb-b713-873190fe2b70.state"
-    ],
     "065d8cc1-c78d-44cb-89ae-a73270b4ea9a.value": [
       "872134b7-be67-4acb-b713-873190fe2b70.max"
     ],
     "f427f4b7-96d9-4587-86f2-4fe73943ab73.value": [
-      "872134b7-be67-4acb-b713-873190fe2b70.reason"
+      "872134b7-be67-4acb-b713-873190fe2b70.reason",
+      "b8d4fa73-4e95-42b6-93a8-6f0ac4e7a539.body"
     ],
     "460615fb-c111-4fbc-9e0a-c4a12cbdb11d.value": [
-      "6aca0c36-b086-4f1d-8f4f-1c3ef95b6475.value"
+      "f2183eb7-82d9-46fa-d7ec-ad4e082be97d.a"
     ],
     "665c926f-b9e2-4d9a-897f-06293e7bb692.value": [
       "16ccbc30-b374-4b38-b878-6f7303460b53.value"
@@ -707,6 +829,42 @@
     ],
     "872134b7-be67-4acb-b713-873190fe2b70.formatted_result": [
       "816e5d36-a31c-4908-9104-1509189a78f2.value"
+    ],
+    "e5a1c740-1b62-4f83-a0d5-3c7e91b4d206.value": [
+      "f6b2d851-2c73-4094-b1e6-4d8fa2c5e317.name"
+    ],
+    "f6b2d851-2c73-4094-b1e6-4d8fa2c5e317.yes": [
+      "b8d4fa73-4e95-42b6-93a8-6f0ac4e7a539.state"
+    ],
+    "a7c3e962-3d84-41a5-82f7-5e9fb3d6f428.list": [
+      "b8d4fa73-4e95-42b6-93a8-6f0ac4e7a539.choices"
+    ],
+    "b8d4fa73-4e95-42b6-93a8-6f0ac4e7a539.ux_element": [
+      "c9e50b84-5fa6-43c7-a4b9-7a1bd5f8b64a.ux_element"
+    ],
+    "b8d4fa73-4e95-42b6-93a8-6f0ac4e7a539.state": [
+      "c9e50b84-5fa6-43c7-a4b9-7a1bd5f8b64a.state"
+    ],
+    "c9e50b84-5fa6-43c7-a4b9-7a1bd5f8b64a.value": [
+      "d0f61c95-60b7-44d8-b5ca-8b2ce609c75b.value"
+    ],
+    "d0f61c95-60b7-44d8-b5ca-8b2ce609c75b.a": [
+      "e1072da6-71c8-45e9-c6db-9c3df71ad86c.a"
+    ],
+    "f6b2d851-2c73-4094-b1e6-4d8fa2c5e317.no": [
+      "e1072da6-71c8-45e9-c6db-9c3df71ad86c.b"
+    ],
+    "e1072da6-71c8-45e9-c6db-9c3df71ad86c.value": [
+      "872134b7-be67-4acb-b713-873190fe2b70.state"
+    ],
+    "f6b2d851-2c73-4094-b1e6-4d8fa2c5e317.is_player": [
+      "f2183eb7-82d9-46fa-d7ec-ad4e082be97d.b"
+    ],
+    "f2183eb7-82d9-46fa-d7ec-ad4e082be97d.yes": [
+      "03294fc8-93ea-47ab-e8fd-be5f193cfa8e.value"
+    ],
+    "03294fc8-93ea-47ab-e8fd-be5f193cfa8e.value": [
+      "872134b7-be67-4acb-b713-873190fe2b70.emit_system_message"
     ]
   },
   "groups": [

@@ -200,6 +200,10 @@ class GamePlayerCharacter(pydantic.BaseModel):
 class General(pydantic.BaseModel):
     auto_save: bool = True
     auto_progress: bool = True
+    # Consecutive AI turns allowed before the loop forces the turn back to the
+    # player. A backstop, not the primary pacing mechanism — the director hands
+    # back on its own via direct_scene.yield_to_user.
+    max_ai_turns: int = pydantic.Field(default=12, ge=1)
     max_backscroll: int = 100
     add_default_character: bool = True
     show_agent_activity_bar: bool = True

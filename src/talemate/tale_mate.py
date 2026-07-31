@@ -456,6 +456,10 @@ class Scene(Emitter):
         return self.config.game.general.auto_progress
 
     @property
+    def max_ai_turns(self) -> int:
+        return self.config.game.general.max_ai_turns
+
+    @property
     def world_state_manager(self) -> WorldStateManager:
         return WorldStateManager(self)
 
@@ -1417,6 +1421,7 @@ class Scene(Emitter):
                 "saved": self.saved,
                 "auto_save": self.auto_save,
                 "auto_progress": self.auto_progress,
+                "max_ai_turns": self.max_ai_turns,
                 "can_auto_save": self.can_auto_save(),
                 "can_regenerate": can_regenerate,
                 "can_regenerate_reason": can_regenerate_reason,
