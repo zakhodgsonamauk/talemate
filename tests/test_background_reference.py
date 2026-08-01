@@ -54,3 +54,63 @@ class TestSetBackgroundReference:
         before = json.dumps(workflow.nodes, sort_keys=True)
         workflow.set_background_reference("talemate/bg_test.png")
         assert json.dumps(workflow.nodes, sort_keys=True) == before
+
+
+class TestSetReferenceWeights:
+    def test_targets_nodes_by_title(self):
+        workflow = load_workflow()
+        workflow.set_reference_weights(character=0.3, background=0.9)
+        assert workflow.nodes["23"]["inputs"]["weight"] == 0.3
+        assert workflow.nodes["93"]["inputs"]["weight"] == 0.9
+
+    def test_none_keeps_baked_values(self):
+        workflow = load_workflow()
+        workflow.set_reference_weights(character=None, background=0.6)
+        assert workflow.nodes["23"]["inputs"]["weight"] == 0.8
+        assert workflow.nodes["93"]["inputs"]["weight"] == 0.6
+
+    def test_workflow_without_chain_is_a_silent_skip(self):
+        workflow = load_workflow("default-sdxl.json")
+        before = json.dumps(workflow.nodes, sort_keys=True)
+        workflow.set_reference_weights(character=0.5, background=0.5)
+        assert json.dumps(workflow.nodes, sort_keys=True) == before
+
+    def test_weight_type_is_never_touched(self):
+        workflow = load_workflow()
+        workflow.set_reference_weights(character=0.5, background=0.5)
+        assert workflow.nodes["23"]["inputs"]["weight_type"] == "ease out"
+        assert workflow.nodes["93"]["inputs"]["weight_type"] == "style transfer"
+
+
+class TestResolveReferenceWeights:
+    def _request(self, **kwargs):
+        from talemate.agents.visual.schema import GenerationRequest
+
+        return GenerationRequest(prompt="test", **kwargs)
+
+    def test_no_config_no_shot_keeps_baked(self):
+        from talemate.agents.visual.backends.comfyui import resolve_reference_weights
+
+        assert resolve_reference_weights(self._request()) == (None, None)
+
+    def test_wide_shot_lowers_character_default(self):
+        from talemate.agents.visual.backends.comfyui import (
+            WIDE_SHOT_CHARACTER_WEIGHT,
+            resolve_reference_weights,
+        )
+
+        char, bg = resolve_reference_weights(self._request(shot_type="wide"))
+        assert char == WIDE_SHOT_CHARACTER_WEIGHT
+        assert bg is None
+
+    def test_explicit_slider_beats_shot_default(self):
+        from talemate.agents.visual.backends.comfyui import resolve_reference_weights
+
+        char, bg = resolve_reference_weights(
+            self._request(
+                shot_type="wide",
+                extra_config={"character_ref_weight": 0.7, "bg_ref_weight": 0.2},
+            )
+        )
+        assert char == 0.7
+        assert bg == 0.2

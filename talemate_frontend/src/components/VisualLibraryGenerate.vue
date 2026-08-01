@@ -141,6 +141,26 @@
               :available-assets-map="availableAssetsMap"
               @update:reference-assets="(v) => referenceAssets = v"
             />
+            <v-slider
+              v-if="referenceAssets.length || inlineReference"
+              v-model="characterRefWeight"
+              class="mt-1 px-2"
+              density="compact"
+              :min="0.1"
+              :max="1.0"
+              :step="0.05"
+              thumb-label
+              hide-details
+              :disabled="generating || promptLoading"
+              @update:model-value="characterRefWeightTouched = true"
+            >
+              <template #prepend>
+                <span class="text-caption text-medium-emphasis">Strength {{ characterRefWeight.toFixed(2) }}</span>
+              </template>
+            </v-slider>
+            <div v-if="(referenceAssets.length || inlineReference) && shotType === 'wide' && !characterRefWeightTouched" class="text-caption text-medium-emphasis px-2">
+              Lowered for the wide shot — a portrait reference at full strength fights wide composition.
+            </div>
             <VisualReferenceImages
               class="mt-2"
               title="Background Reference"
@@ -151,6 +171,23 @@
               :available-assets-map="availableAssetsMap"
               @update:reference-assets="(v) => backgroundReferenceAssets = v"
             />
+            <v-slider
+              v-if="backgroundReferenceAssets.length"
+              v-model="bgRefWeight"
+              class="mt-1 px-2"
+              density="compact"
+              :min="0.1"
+              :max="1.0"
+              :step="0.05"
+              thumb-label
+              hide-details
+              :disabled="generating || promptLoading"
+              @update:model-value="bgRefWeightTouched = true"
+            >
+              <template #prepend>
+                <span class="text-caption text-medium-emphasis">Strength {{ bgRefWeight.toFixed(2) }}</span>
+              </template>
+            </v-slider>
             <div class="text-medium-emphasis text-caption mb-2">
               Style transfer only — carries mood, palette and setting from the
               image, never a person's identity.
@@ -369,6 +406,13 @@ export default {
       // the prompt just like a cross-dialect model switch does - the shot type
       // shapes the whole prompt, not a suffix.
       shotType: 'auto',
+      // IPAdapter strengths. The slider shows exactly what generates (the
+      // wide-shot default lowers the character strength until the user moves
+      // the slider themselves - the touched flags track that).
+      characterRefWeight: 0.8,
+      characterRefWeightTouched: false,
+      bgRefWeight: 0.45,
+      bgRefWeightTouched: false,
     };
   },
   computed: {
@@ -502,6 +546,19 @@ export default {
       this.backgroundReferenceAssets = (r.background_reference_assets && Array.isArray(r.background_reference_assets)) ? r.background_reference_assets.slice() : [];
       if (r.prompt_profile) this.previewProfile = r.prompt_profile;
       this.shotType = r.shot_type || 'auto';
+      // Regenerate reproduces recorded weights; otherwise the shot type sets
+      // the starting point the backend would use anyway.
+      const ec = r.extra_config || {};
+      if (typeof ec.character_ref_weight === 'number') {
+        this.characterRefWeight = ec.character_ref_weight;
+        this.characterRefWeightTouched = true;
+      } else if (!this.characterRefWeightTouched) {
+        this.characterRefWeight = this.shotType === 'wide' ? 0.45 : 0.8;
+      }
+      if (typeof ec.bg_ref_weight === 'number') {
+        this.bgRefWeight = ec.bg_ref_weight;
+        this.bgRefWeightTouched = true;
+      }
       this.recomposing = false;
       // Regenerate keeps the checkpoint the image was made with.
       this.checkpoint = (r.extra_config && r.extra_config.checkpoint) || '';
@@ -555,6 +612,11 @@ export default {
     onShotTypeChosen(value) {
       const previous = this.shotType;
       this.shotType = value || 'auto';
+      // An untouched slider follows the shot's default so it always shows
+      // what will generate; a hand-set value is the user's and stays.
+      if (!this.characterRefWeightTouched) {
+        this.characterRefWeight = this.shotType === 'wide' ? 0.45 : 0.8;
+      }
       // Same contract as a cross-dialect model switch: the framing shapes the
       // whole prompt, so a change recomposes it when there is a source message
       // to compose from. Without one the choice still rides the request.
@@ -656,8 +718,20 @@ export default {
         if (this.attachmentContext) {
           payload.generation_request.asset_attachment_context = this.attachmentContext;
         }
+        // extra_config rides the saved asset's meta, so a regenerate
+        // reproduces the model and the reference strengths for free.
+        const extraConfig = {};
         if (this.checkpoint) {
-          payload.generation_request.extra_config = { checkpoint: this.checkpoint };
+          extraConfig.checkpoint = this.checkpoint;
+        }
+        if (this.referenceAssets.length || this.inlineReference) {
+          extraConfig.character_ref_weight = this.characterRefWeight;
+        }
+        if (this.backgroundReferenceAssets.length) {
+          extraConfig.bg_ref_weight = this.bgRefWeight;
+        }
+        if (Object.keys(extraConfig).length) {
+          payload.generation_request.extra_config = extraConfig;
         }
         this.getWebsocket().send(JSON.stringify(payload));
       }

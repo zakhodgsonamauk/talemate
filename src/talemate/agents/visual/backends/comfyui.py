@@ -124,6 +124,29 @@ def resolve_checkpoint(
     return model, profile
 
 
+# A wide shot lowers the character reference by default - the portrait-shaped
+# reference at 0.8 drags the composition back to a centered hero pose.
+WIDE_SHOT_CHARACTER_WEIGHT = 0.45
+
+
+def resolve_reference_weights(
+    request: "GenerationRequest",
+) -> tuple[float | None, float | None]:
+    """
+    The (character, background) IPAdapter weights for a generation.
+
+    Precedence per slot: explicit slider value (extra_config) beats the
+    wide-shot default beats the workflow's baked value (returned as None -
+    set_reference_weights skips None).
+    """
+    extra = request.extra_config or {}
+    char_weight = extra.get("character_ref_weight")
+    bg_weight = extra.get("bg_ref_weight")
+    if char_weight is None and request.shot_type == "wide":
+        char_weight = WIDE_SHOT_CHARACTER_WEIGHT
+    return char_weight, bg_weight
+
+
 class Model(pydantic.BaseModel):
     name: str
     label: str
@@ -332,6 +355,29 @@ class Workflow(pydantic.BaseModel):
             stop_at_clip_layer=stop_at_clip_layer,
             nodes_touched=touched,
         )
+
+    def set_reference_weights(
+        self, character: float | None = None, background: float | None = None
+    ):
+        """
+        Override the IPAdapter reference strengths, found by node title the
+        same way set_background_reference finds its chain. None keeps the
+        workflow's baked value; a missing node is a silent skip (workflows
+        without the chain, or without the background chain, are unaffected).
+        """
+        targets = {
+            "Apply Character Reference": character,
+            "Apply Background Reference": background,
+        }
+        touched = {}
+        for node in self.nodes.values():
+            title = node.get("_meta", {}).get("title", "")
+            weight = targets.get(title)
+            if weight is None:
+                continue
+            node["inputs"]["weight"] = weight
+            touched[title] = weight
+        log.debug("workflow.set_reference_weights", touched=touched)
 
     def set_background_reference(self, image_path: str | None):
         """
@@ -734,6 +780,12 @@ class Backend(backends.Backend):
         workflow.set_prompt(request.prompt, request.negative_prompt)
         workflow.set_main_model(model)
         workflow.set_seeds()
+
+        char_weight, bg_weight = resolve_reference_weights(request)
+        if char_weight is not None or bg_weight is not None:
+            workflow.set_reference_weights(
+                character=char_weight, background=bg_weight
+            )
 
         # Inject reference images for image edit workflows
         reference_bytes = request.reference_bytes

@@ -384,3 +384,20 @@ async def test_the_template_renders_with_real_scene_objects(agent):
     assert KAIRA_ANCHOR in rendered
     assert "PROMPT:" in rendered
     assert "rating_questionable or rating_explicit" in rendered
+
+async def test_non_auto_shot_mismatches_the_auto_prestart(agent):
+    """The prestart cannot see the shot choice and always distills auto; a
+    wide-shot finalize must discard it and distill fresh with the shot block."""
+    with _stub_llm(DISTILLED) as stub:
+        await _begin(
+            agent, vis_type=VIS_TYPE.SCENE_ILLUSTRATION, instructions=INSTRUCTIONS
+        )
+        request = _request(instructions=INSTRUCTIONS)
+        request.shot_type = "wide"
+        await _finalize(agent, request)
+
+    # The cancelled auto task may or may not have reached the stub before the
+    # mismatch; what is pinned is that finalize distilled fresh for the wide ask.
+    assert request.distilled is True
+    assert agent._pending_distillation is None
+    assert stub.call_count >= 1
