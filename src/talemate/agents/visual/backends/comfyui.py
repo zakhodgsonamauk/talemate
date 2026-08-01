@@ -364,6 +364,10 @@ class Workflow(pydantic.BaseModel):
         same way set_background_reference finds its chain. None keeps the
         workflow's baked value; a missing node is a silent skip (workflows
         without the chain, or without the background chain, are unaffected).
+
+        The titles are part of the workflow contract: renaming "Apply
+        Character Reference" / "Apply Background Reference" in a workflow
+        JSON silently disables weight injection for it.
         """
         targets = {
             "Apply Character Reference": character,

@@ -24,3 +24,18 @@ Dispositions:
   test_non_auto_shot_mismatches_the_auto_prestart added (Phase 3 commit).
 - "document prestart tradeoff in code" — already present at the key
   construction comment.
+
+## Phase 3 — reference weight sliders (7b05cab)
+
+Featherweight review 20260801-090719-c5dc (qwen3.5:cloud): contract holds.
+Verified: set_reference_weights (weight field) is orthogonal to
+set_background_reference's model-input rewire - ordering safe; the
+checkpoint reader's isinstance(str) guard is unaffected by numeric weight
+keys; Vuetify sliders emit numbers end to end; instruct mode sending no
+weights degrades to the backend defaults by design.
+Dispositions:
+- min-clamp on restoring weights from stale asset meta — ACCEPTED
+  (Math.min/max clamp in applyInitialRequest, close-out commit).
+- title-coupling doc note — ACCEPTED (docstring note, close-out commit).
+- defensive float() coercion at generate() — DECLINED: pydantic validates
+  extra_config values and JSON numbers arrive as float already.

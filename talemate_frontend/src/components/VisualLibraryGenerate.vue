@@ -549,14 +549,16 @@ export default {
       // Regenerate reproduces recorded weights; otherwise the shot type sets
       // the starting point the backend would use anyway.
       const ec = r.extra_config || {};
+      // Clamped to the slider's range - stale asset meta must not restore a
+      // value the slider cannot represent.
       if (typeof ec.character_ref_weight === 'number') {
-        this.characterRefWeight = ec.character_ref_weight;
+        this.characterRefWeight = Math.min(1.0, Math.max(0.1, ec.character_ref_weight));
         this.characterRefWeightTouched = true;
       } else if (!this.characterRefWeightTouched) {
         this.characterRefWeight = this.shotType === 'wide' ? 0.45 : 0.8;
       }
       if (typeof ec.bg_ref_weight === 'number') {
-        this.bgRefWeight = ec.bg_ref_weight;
+        this.bgRefWeight = Math.min(1.0, Math.max(0.1, ec.bg_ref_weight));
         this.bgRefWeightTouched = true;
       }
       this.recomposing = false;

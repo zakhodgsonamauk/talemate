@@ -18,7 +18,7 @@ Active and completed development tracks.
 | agent-observability | Structured debug logging across agents | infrastructure | implemented, awaiting restart | EVALUATE_EXECUTION | 2026-07-31 |
 | model-aware-prompting | Prompt profiles per checkpoint dialect | feature | implemented, live-tested | EVALUATE_EXECUTION | 2026-08-01 |
 | comfyui-workflow-quality | Clip skip, sampler rebake, background reference | feature | implemented, user-accepted | EVALUATE_EXECUTION | 2026-08-01 |
-| shot-control | Shot-type selector, reference weight sliders, WYSIWYG refs | feature | planned | EVALUATE_PLAN | 2026-08-01 |
+| shot-control | Shot-type selector, reference weight sliders, WYSIWYG refs | feature | in user testing | COMPLETE | 2026-08-01 |
 
 ## Completed Tracks
 

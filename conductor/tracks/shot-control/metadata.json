@@ -3,16 +3,23 @@
   "track_id": "shot-control",
   "name": "Shot control - shot-type selector, reference weight sliders, WYSIWYG references",
   "type": "feature",
-  "status": "planned",
+  "status": "in_user_testing",
   "superpower_enhanced": true,
   "created_at": "2026-08-01",
   "loop_state": {
-    "current_step": "EVALUATE_PLAN",
-    "step_status": "NOT_STARTED",
+    "current_step": "COMPLETE",
+    "step_status": "PASSED",
     "fix_cycle_count": 0,
     "checkpoints": {
       "PLAN": {
         "status": "PASSED"
+      },
+      "EXECUTE": {
+        "status": "PASSED"
+      },
+      "EVALUATE_EXECUTION": {
+        "status": "PASSED",
+        "note": "3 featherweight reviews + suites green; live ACs pending user's next generations after a coordinated backend restart"
       }
     }
   },
