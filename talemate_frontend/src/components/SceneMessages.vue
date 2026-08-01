@@ -690,7 +690,7 @@ export default {
             const hints = {
                 auto: 'Let the prompt decide the framing.',
                 closeup: 'Face and expression fill the frame.',
-                medium: 'Waist up.',
+                medium: 'Full body, subject prominent.',
                 wide: 'Environment first — the subject is a small figure in the scene.',
             };
             return hints[this.visTypeDialog.shotType] || '';

@@ -217,7 +217,7 @@ class TestDistillTemplate:
     def test_medium_shot_block_renders(self):
         text = self._render("pony", shot_type="medium")
         assert "MEDIUM SHOT" in text
-        assert "waist up" in text
+        assert "full body" in text
 
 
 class TestClipSkip:

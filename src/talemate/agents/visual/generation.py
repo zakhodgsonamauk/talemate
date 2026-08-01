@@ -182,7 +182,7 @@ SHOT_BLOCKS: dict[str, str] = {
     "medium": (
         "REQUESTED FRAMING - MEDIUM SHOT (this is the one exception to the\n"
         "no-framing-language rule; include this framing vocabulary):\n"
-        "Frame the subject waist up. Include: medium shot, waist up."
+        "Frame the subject full body. Include: medium shot, full body."
     ),
 }
 
