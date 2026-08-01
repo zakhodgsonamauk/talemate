@@ -182,12 +182,12 @@ export default {
       return (this.asset_id && this.asset_type) ? this.asset_id : null;
     },
     // Visualizable context investigations can generate an image into the
-    // message. `query` is excluded (no fitting visual subject); the button
-    // hides once an asset is already attached (regeneration is then handled
-    // by the asset image itself).
+    // Every investigation result is visualizable - including `query`, whose
+    // answers are often rich visual descriptions (the request builder falls
+    // back to a scene illustration of the text). Kept visible even with an
+    // asset attached, matching narrator/character messages.
     showVisualize() {
-      const visualizable = ['examine', 'visual-scene', 'visual-character'];
-      return visualizable.includes(this.message.sub_type) && !this.messageAsset;
+      return true;
     },
     visualizeBusy() {
       return this.isMessageVisualizing ? this.isMessageVisualizing(this.message.id) : false;
