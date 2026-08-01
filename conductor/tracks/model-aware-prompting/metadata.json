@@ -3,12 +3,12 @@
   "track_id": "model-aware-prompting",
   "name": "Model-aware prompt generation (prompt profiles)",
   "type": "feature",
-  "status": "planned",
+  "status": "implemented, live-tested overnight, awaiting user click-through",
   "superpower_enhanced": true,
   "created_at": "2026-08-01",
   "loop_state": {
-    "current_step": "EVALUATE_PLAN",
-    "step_status": "NOT_STARTED",
+    "current_step": "EVALUATE_EXECUTION",
+    "step_status": "COMPLETED",
     "fix_cycle_count": 0,
     "checkpoints": {
       "PLAN": {
