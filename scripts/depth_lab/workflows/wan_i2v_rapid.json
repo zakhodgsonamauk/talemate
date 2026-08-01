@@ -1,11 +1,11 @@
 {
   "1": {
     "inputs": {
-      "unet_name": "Unknown\\no tags\\wan2.2-rapid-mega-aio-nsfw-v12.1-Q2_K.gguf"
+      "unet_name": "Wan2.2-I2V-A14B-HighNoise-Q3_K_M.gguf"
     },
     "class_type": "UnetLoaderGGUF",
     "_meta": {
-      "title": "Lab WAN Model"
+      "title": "Lab WAN High Model"
     }
   },
   "2": {
@@ -14,14 +14,64 @@
         "1",
         0
       ],
+      "lora_name": "wan2.2_i2v_lightx2v_4steps_lora_v1_high_noise.safetensors",
+      "strength_model": 1.0
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "Lab WAN High Lightning"
+    }
+  },
+  "3": {
+    "inputs": {
+      "model": [
+        "2",
+        0
+      ],
       "shift": 8.0
     },
     "class_type": "ModelSamplingSD3",
     "_meta": {
-      "title": "Lab WAN Shift"
+      "title": "Lab WAN High Shift"
     }
   },
-  "3": {
+  "4": {
+    "inputs": {
+      "unet_name": "Wan2.2-I2V-A14B-LowNoise-Q3_K_M.gguf"
+    },
+    "class_type": "UnetLoaderGGUF",
+    "_meta": {
+      "title": "Lab WAN Low Model"
+    }
+  },
+  "5": {
+    "inputs": {
+      "model": [
+        "4",
+        0
+      ],
+      "lora_name": "wan2.2_i2v_lightx2v_4steps_lora_v1_low_noise.safetensors",
+      "strength_model": 1.0
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "Lab WAN Low Lightning"
+    }
+  },
+  "6": {
+    "inputs": {
+      "model": [
+        "5",
+        0
+      ],
+      "shift": 8.0
+    },
+    "class_type": "ModelSamplingSD3",
+    "_meta": {
+      "title": "Lab WAN Low Shift"
+    }
+  },
+  "7": {
     "inputs": {
       "clip_name": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
       "type": "wan"
@@ -31,7 +81,7 @@
       "title": "Lab WAN Text Encoder"
     }
   },
-  "4": {
+  "8": {
     "inputs": {
       "vae_name": "wan_2.1_vae.safetensors"
     },
@@ -40,7 +90,7 @@
       "title": "Lab WAN VAE"
     }
   },
-  "5": {
+  "9": {
     "inputs": {
       "image": "talemate/source.png"
     },
@@ -49,11 +99,11 @@
       "title": "Lab Source Image"
     }
   },
-  "6": {
+  "10": {
     "inputs": {
       "text": "slow cinematic camera push in, subtle ambient motion, stable composition",
       "clip": [
-        "3",
+        "7",
         0
       ]
     },
@@ -62,11 +112,11 @@
       "title": "Lab WAN Positive"
     }
   },
-  "7": {
+  "11": {
     "inputs": {
-      "text": "static, still, jitter, warping, morphing, distorted face, extra limbs, text, watermark",
+      "text": "static, jitter, warping, morphing, distorted face, extra limbs, text, watermark",
       "clip": [
-        "3",
+        "7",
         0
       ]
     },
@@ -75,25 +125,25 @@
       "title": "Lab WAN Negative"
     }
   },
-  "8": {
+  "12": {
     "inputs": {
       "positive": [
-        "6",
+        "10",
         0
       ],
       "negative": [
-        "7",
+        "11",
         0
       ],
       "vae": [
-        "4",
+        "8",
         0
       ],
       "start_image": [
-        "5",
+        "9",
         0
       ],
-      "width": 832,
+      "width": 704,
       "height": 480,
       "length": 49,
       "batch_size": 1
@@ -103,44 +153,80 @@
       "title": "Lab WAN I2V"
     }
   },
-  "9": {
+  "13": {
     "inputs": {
       "model": [
-        "2",
+        "3",
         0
       ],
-      "positive": [
-        "8",
-        0
-      ],
-      "negative": [
-        "8",
-        1
-      ],
-      "latent_image": [
-        "8",
-        2
-      ],
-      "seed": 12345,
+      "add_noise": "enable",
+      "noise_seed": 12345,
       "steps": 4,
       "cfg": 1.0,
       "sampler_name": "euler",
       "scheduler": "simple",
-      "denoise": 1.0
+      "positive": [
+        "12",
+        0
+      ],
+      "negative": [
+        "12",
+        1
+      ],
+      "latent_image": [
+        "12",
+        2
+      ],
+      "start_at_step": 0,
+      "end_at_step": 2,
+      "return_with_leftover_noise": "enable"
     },
-    "class_type": "KSampler",
+    "class_type": "KSamplerAdvanced",
     "_meta": {
       "title": "Lab WAN Sampler"
     }
   },
-  "10": {
+  "14": {
+    "inputs": {
+      "model": [
+        "6",
+        0
+      ],
+      "add_noise": "disable",
+      "noise_seed": 12345,
+      "steps": 4,
+      "cfg": 1.0,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "positive": [
+        "12",
+        0
+      ],
+      "negative": [
+        "12",
+        1
+      ],
+      "latent_image": [
+        "13",
+        0
+      ],
+      "start_at_step": 2,
+      "end_at_step": 10000,
+      "return_with_leftover_noise": "disable"
+    },
+    "class_type": "KSamplerAdvanced",
+    "_meta": {
+      "title": "Lab WAN Sampler Low"
+    }
+  },
+  "15": {
     "inputs": {
       "samples": [
-        "9",
+        "14",
         0
       ],
       "vae": [
-        "4",
+        "8",
         0
       ]
     },
@@ -149,10 +235,10 @@
       "title": "Lab WAN Decode"
     }
   },
-  "11": {
+  "16": {
     "inputs": {
       "images": [
-        "10",
+        "15",
         0
       ],
       "frame_rate": 16.0,

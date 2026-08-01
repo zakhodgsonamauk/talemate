@@ -49,3 +49,13 @@ scripts/bakeoff_results/
 
 # depth parallax lab output (generated image/depth pairs)
 depth_lab_out/
+
+# backend run logs (PYTHONUNBUFFERED redirect targets)
+backend.log
+backend.err.log
+
+# scratch output from the depth lab bake-offs and e2e harnesses
+/rung*.png
+/bench_long.json
+scripts/e2e_result.txt
+scripts/e2e_wf_result.txt
