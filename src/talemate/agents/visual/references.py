@@ -372,9 +372,21 @@ class ReferenceMixin:
                 request.reference_assets = kept
                 return
 
-            # every supplied reference belonged to someone else - fall
-            # through and attach the subject's own cards instead
+            # every supplied reference belonged to someone else
             request.reference_assets = []
+            if not request.auto_references:
+                # the caller's list was authoritative and nothing valid
+                # survived - do NOT resurrect the subject's cover
+                log.debug("attach_character_references.explicit_refs_all_dropped")
+                return
+            # fall through and attach the subject's own cards instead
+
+        if not request.auto_references:
+            # An explicitly empty list means the user removed the character
+            # reference on purpose (observed live: the modal's removal was
+            # silently overridden by this auto-attach) - honor it.
+            log.debug("attach_character_references.explicit_no_refs")
+            return
 
         if not subject:
             log.debug("attach_character_references.no_subject")

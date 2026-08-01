@@ -583,6 +583,10 @@ export default {
             character_name: this.isCharacterVisType ? (this.characterName || null) : null,
             reference_assets: this.referenceAssets || [],
             background_reference_assets: this.backgroundReferenceAssets || [],
+            // The picker above IS the reference list. Without this flag the
+            // backend auto-attach refills an emptied list with the subject's
+            // cover, silently overriding the user's removal.
+            auto_references: false,
             inline_reference: this.inlineReference || null,
             // The prompt in the box is what the user saw and approved - possibly
             // hand-edited. Without this the backend's distillation pass recomposes

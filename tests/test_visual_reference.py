@@ -589,3 +589,61 @@ async def test_explicit_character_name_still_wins_over_the_face_rule(scene_ctx):
     await agent.attach_character_references(request)
 
     assert request.reference_assets == [ELMER_COVER]
+
+
+@pytest.mark.asyncio
+async def test_explicit_empty_refs_are_honored(kaira, illustration_request, scene_ctx):
+    """The confirmed live bug: removing the character reference in the modal
+    was overridden by auto-attach. auto_references=False makes the caller's
+    (empty) list authoritative."""
+    scene_ctx(make_scene([kaira], covers={"Kaira": KAIRA_COVER}))
+    illustration_request.auto_references = False
+    agent = FakeAgent()
+
+    await agent.attach_character_references(illustration_request)
+
+    assert illustration_request.reference_assets == []
+    assert illustration_request.gen_type == GEN_TYPE.TEXT_TO_IMAGE
+
+
+@pytest.mark.asyncio
+async def test_explicit_refs_still_validated(kaira, illustration_request, scene_ctx):
+    """auto_references=False still validates a supplied list against the subject."""
+    hannah_card = "9" * 64
+    scene_ctx(
+        make_scene(
+            [kaira, character("Hannah")],
+            covers={"Kaira": KAIRA_COVER},
+            owners={hannah_card: "Hannah", KAIRA_CARD: "Kaira"},
+        )
+    )
+    illustration_request.auto_references = False
+    illustration_request.reference_assets = [hannah_card, KAIRA_CARD]
+    agent = FakeAgent()
+
+    await agent.attach_character_references(illustration_request)
+
+    assert illustration_request.reference_assets == [KAIRA_CARD]
+
+
+@pytest.mark.asyncio
+async def test_explicit_all_wrong_refs_do_not_resurrect_cover(
+    kaira, illustration_request, scene_ctx
+):
+    """With auto_references=False, dropping every supplied (wrong-subject)
+    reference must not fall back to the subject's cover."""
+    hannah_card = "9" * 64
+    scene_ctx(
+        make_scene(
+            [kaira, character("Hannah")],
+            covers={"Kaira": KAIRA_COVER},
+            owners={hannah_card: "Hannah"},
+        )
+    )
+    illustration_request.auto_references = False
+    illustration_request.reference_assets = [hannah_card]
+    agent = FakeAgent()
+
+    await agent.attach_character_references(illustration_request)
+
+    assert illustration_request.reference_assets == []

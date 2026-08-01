@@ -451,6 +451,18 @@ class GenerationRequest(pydantic.BaseModel):
     # (see PromptProfile). "" = resolve lazily / historical pony behavior.
     prompt_profile: str = ""
 
+    # When False the caller's reference_assets are authoritative - an empty
+    # list means NO character reference, and auto-attach must not refill it.
+    # The Adjust modal sends False (its picker shows exactly what generates);
+    # every automatic path keeps the default.
+    auto_references: bool = True
+
+    # Requested framing: "auto" | "closeup" | "medium" | "wide". Injected as
+    # a shot block into the distillation contract; wide also lowers the
+    # default character reference weight (a portrait reference at full
+    # strength fights wide composition).
+    shot_type: str = "auto"
+
     agent_config: dict[str, Any] = pydantic.Field(default={})
 
     extra_config: dict[str, int | float | str | bool] = pydantic.Field(
