@@ -1474,11 +1474,15 @@ export default {
                 VIS_TYPE.SCENE_ILLUSTRATION,
             ].includes(vis_type);
 
+            // Captured before closeVisTypeDialog wipes the dialog state.
+            const checkpoint = this.visTypeDialog.checkpoint || '';
+
             this.closeVisTypeDialog();
             this.sendVisualizeWithPrompt(message_id, {
                 ...request,
                 vis_type,
                 character_name: keepsCharacter ? request.character_name : '',
+                checkpoint,
             });
         },
 
@@ -1495,6 +1499,12 @@ export default {
                     character_name: request.character_name || '',
                     instructions: request.instructions || '',
                     prefer_prompt_mode: true,
+                    // The chooser's model choice rides the request so the
+                    // modal's dropdown shows it immediately - no dependence on
+                    // the set_checkpoint/checkpoints round-trip ordering.
+                    extra_config: request.checkpoint
+                        ? { checkpoint: request.checkpoint }
+                        : {},
                 },
                 {
                     message_ids: [message_id],
