@@ -54,11 +54,13 @@ Rules:
    NEGATIVE: <comma-delimited keyword list>
 {% if profile_id == "sdxl_natural" %}
 2. The PROMPT line is fluent natural-language description, HARD CAP
-   {{ max_prompt_tokens }} tokens - the model stops reading past it. The FIRST
-   sentence must name the subject and their action; then setting, clothing state,
-   lighting, mood. When something must go, drop inventory and atmosphere before
-   pose. Weave the IDENTITY keywords in verbatim (they may stay comma-phrased
-   inside the sentence). Use only the 2-3 strongest SETTING keywords.
+   {{ max_prompt_tokens }} tokens - that is AT MOST 3 short sentences, roughly
+   50 words total; the model stops reading past it, so brevity IS quality. The
+   FIRST sentence must name the subject and their action; then setting,
+   clothing state, lighting. When something must go, drop inventory and
+   atmosphere before pose. Weave the IDENTITY keywords in verbatim (they may
+   stay comma-phrased inside the sentence). Use only the 2-3 strongest SETTING
+   keywords.
 3. At most ONE weighted phrase, `(like this:1.3)`, never above 1.4, no commas
    inside the parentheses. Use it on the pose/action if at all.
 4. Do NOT use score_9/score tags, rating_ tags, or booru tag lists - this model
@@ -94,8 +96,10 @@ Rules:
 7. Only physically visible things - no emotions as bare nouns, no plot words, no camera
    or framing language, no proper names. Show a feeling through posture, hands, face.
 8. Do not add art style, medium, or quality tags. Those are appended separately.
-9. NEGATIVE gets what must not appear: the wrong sex tag, a contradictory clothing
-   state, and anything a HARD RULE forbids. At most 10 keywords.
+9. NEGATIVE gets what must not appear IN THE IMAGE: the wrong sex tag, a
+   contradictory clothing state, and anything a HARD RULE forbids. At most 10
+   keywords. Only visual concepts - never meta terms like "booru tags" or
+   score/rating tags.
 10. No commentary, no markdown, nothing but the two lines.
 <|CLOSE_SECTION|>
 {% if llm_can_be_coerced() %}{{ set_prepared_response("PROMPT:") }}{% endif %}

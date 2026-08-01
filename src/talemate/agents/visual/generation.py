@@ -982,14 +982,48 @@ class GenerationMixin:
                 return [
                     kw
                     for kw in keywords
-                    if not re.match(r"\s*(score_|rating_|source_)", kw, re.IGNORECASE)
+                    if not re.match(
+                        r"\s*(score_|rating_|source_|booru)", kw, re.IGNORECASE
+                    )
                 ]
 
             style_phrase = ", ".join(
                 dict.fromkeys(_tagless([*quality_keywords, *style_positive]))
             )
             body = positive.strip().rstrip(",")
-            request.prompt = f"{body}. {style_phrase}" if style_phrase else body
+
+            # Deterministic safety net: the LLM overruns the token cap even
+            # when told twice (observed live: ~120 CLIP tokens against a 75
+            # cap). Sentences are ordered most-important-first by contract,
+            # so trim whole sentences from the tail until the budget holds.
+            budget = profile.max_prompt_tokens - estimate_prompt_tokens(style_phrase)
+            if estimate_prompt_tokens(body) > budget:
+                sentences = re.split(r"(?<=[.!?])\s+", body)
+                kept: list[str] = []
+                for sentence in sentences:
+                    candidate = " ".join([*kept, sentence])
+                    # the first sentence is kept even when it alone exceeds
+                    # the budget - a slightly over-budget prompt that depicts
+                    # the subject beats an empty one
+                    if kept and estimate_prompt_tokens(candidate) > budget:
+                        break
+                    kept.append(sentence)
+                trimmed = " ".join(kept)
+                log.debug(
+                    "distill_prompt.sentence_trim",
+                    before=estimate_prompt_tokens(body),
+                    after=estimate_prompt_tokens(trimmed),
+                    budget=budget,
+                    dropped_sentences=len(sentences) - len(kept),
+                )
+                body = trimmed
+
+            if style_phrase:
+                if body and body[-1] not in ".!?":
+                    body += "."
+                request.prompt = f"{body} {style_phrase}"
+            else:
+                request.prompt = body
             negative_keywords = _tagless(
                 [
                     kw.strip()
