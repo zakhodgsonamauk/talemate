@@ -74,6 +74,7 @@
         :tts-busy="ttsBusy"
         :rev="rev"
         :scene-rev="sceneRev"
+        :show-visualize="true"
       >
         <template #extra-actions>
           <v-chip size="x-small" class="ml-2" label color="primary" v-if="!continuing && isLastMessage" variant="tonal" @click="continueConversation" :disabled="uxLocked || appBusy">

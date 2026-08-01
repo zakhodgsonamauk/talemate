@@ -1377,8 +1377,22 @@ export default {
                     return { vis_type: VIS_TYPE.SCENE_ILLUSTRATION, character_name: args.character, instructions };
                 case 'visual-scene':
                     return { vis_type: VIS_TYPE.SCENE_ILLUSTRATION, instructions };
-                default:
-                    return null;
+                default: {
+                    // Any ordinary story paragraph (narrator prose, character
+                    // dialogue) visualizes as a scene illustration of that
+                    // moment. A character message anchors subject selection
+                    // and reference conditioning to its speaker.
+                    if (!instructions.trim()) return null;
+                    const speaker = message.character || '';
+                    if (speaker && isKnownSceneCharacter(this.scene?.data, speaker)) {
+                        return {
+                            vis_type: VIS_TYPE.SCENE_ILLUSTRATION,
+                            character_name: speaker,
+                            instructions,
+                        };
+                    }
+                    return { vis_type: VIS_TYPE.SCENE_ILLUSTRATION, instructions };
+                }
             }
         },
 
