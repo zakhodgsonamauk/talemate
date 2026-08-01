@@ -19,6 +19,7 @@ Active and completed development tracks.
 | model-aware-prompting | Prompt profiles per checkpoint dialect | feature | implemented, live-tested | EVALUATE_EXECUTION | 2026-08-01 |
 | comfyui-workflow-quality | Clip skip, sampler rebake, background reference | feature | implemented, user-accepted | EVALUATE_EXECUTION | 2026-08-01 |
 | shot-control | Shot-type selector, reference weight sliders, WYSIWYG refs | feature | in user testing | COMPLETE | 2026-08-01 |
+| depth-parallax | 2.5D camera motion on illustrations and cards | feature | planned, phase 0 gated | EVALUATE_PLAN | 2026-08-01 |
 
 ## Completed Tracks
 

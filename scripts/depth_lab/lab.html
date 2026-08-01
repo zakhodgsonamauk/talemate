@@ -1,0 +1,533 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Depth parallax lab — phase 0</title>
+<style>
+  :root { color-scheme: dark; }
+  body {
+    margin: 0; padding: 16px 20px 60px;
+    background: #14161a; color: #dfe3ea;
+    font: 13px/1.5 ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+  }
+  h1 { font-size: 15px; font-weight: 600; margin: 0 0 4px; letter-spacing: .02em; }
+  .sub { color: #8b93a1; margin-bottom: 16px; }
+  .panel {
+    background: #1b1e24; border: 1px solid #2a2f38; border-radius: 6px;
+    padding: 12px 14px; margin-bottom: 16px;
+  }
+  .row { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; }
+  label.ctl { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: #8b93a1; }
+  label.ctl b { color: #dfe3ea; font-weight: 500; font-variant-numeric: tabular-nums; }
+  input[type=range] { width: 150px; }
+  select, button {
+    background: #23272f; color: #dfe3ea; border: 1px solid #343a45;
+    border-radius: 4px; padding: 5px 9px; font: inherit;
+  }
+  button:hover { background: #2b303a; cursor: pointer; }
+  .panes { display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start; }
+  .pane { }
+  .pane h2 {
+    font-size: 12px; font-weight: 600; margin: 0 0 6px;
+    display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+  }
+  .pane h2 .fps { color: #6fbf73; font-variant-numeric: tabular-nums; font-weight: 400; }
+  .pane .note { color: #8b93a1; font-size: 11px; margin-top: 5px; max-width: 40ch; }
+  canvas { display: block; background: #0d0f12; border: 1px solid #2a2f38; }
+  #stressOut { white-space: pre-wrap; font-family: ui-monospace, Consolas, monospace; color: #c8cfda; }
+  #stressGrid { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 10px; }
+  #stressGrid canvas { width: 90px; height: 60px; }
+  .warn { color: #d99a4e; }
+  .err { color: #d9634e; }
+</style>
+</head>
+<body>
+
+<h1>Depth parallax lab — phase 0</h1>
+<div class="sub">
+  Same asset, same depth map, two shaders. Left is naive single-sample UV
+  displacement. Right is ray-marched heightfield (the DepthFlow approach).
+  Push amplitude until each one breaks.
+</div>
+
+<div class="panel">
+  <div class="row">
+    <label class="ctl">asset
+      <select id="asset"></select>
+    </label>
+    <label class="ctl">framing
+      <select id="crop">
+        <option value="native">native (illustration)</option>
+        <option value="card">3:4 card crop, top-anchored</option>
+        <option value="cardbig">3:4 card crop @250px</option>
+      </select>
+    </label>
+    <label class="ctl">amplitude <b id="ampV">3.0%</b>
+      <input type="range" id="amp" min="0" max="12" step="0.1" value="3">
+    </label>
+    <label class="ctl">focus plane <b id="focusV">0.50</b>
+      <input type="range" id="focus" min="0" max="1" step="0.01" value="0.5">
+    </label>
+    <label class="ctl">march steps <b id="stepsV">64</b>
+      <input type="range" id="steps" min="8" max="256" step="8" value="64">
+    </label>
+    <label class="ctl">drift speed <b id="speedV">1.00x</b>
+      <input type="range" id="speed" min="0" max="3" step="0.05" value="1">
+    </label>
+    <label class="ctl">overscan <b id="overV">4%</b>
+      <input type="range" id="over" min="0" max="15" step="1" value="4">
+    </label>
+    <label class="ctl">depth blur <b id="dblurV">0px</b>
+      <input type="range" id="dblur" min="0" max="12" step="1" value="0">
+    </label>
+    <label class="ctl">edge soften <b id="softV">0.00</b>
+      <input type="range" id="soft" min="0" max="1" step="0.05" value="0">
+    </label>
+    <label class="ctl">&nbsp;
+      <button id="pause">pause</button>
+    </label>
+    <label class="ctl">&nbsp;
+      <button id="showDepth">show depth</button>
+    </label>
+  </div>
+</div>
+
+<div class="panes">
+  <div class="pane">
+    <h2><span>A — naive UV displacement</span><span class="fps" id="fpsA">–</span></h2>
+    <canvas id="cvA"></canvas>
+    <div class="note">
+      One sample. <code>uv += cam * (depth - focus)</code>. Cheap. Smears at
+      occlusion boundaries as amplitude rises.
+    </div>
+  </div>
+  <div class="pane">
+    <h2><span>B — ray-marched heightfield</span><span class="fps" id="fpsB">–</span></h2>
+    <canvas id="cvB"></canvas>
+    <div class="note">
+      Marches the ray until it meets the depth surface, then a secant refine.
+      Occlusion resolves instead of stretching. Costs <i>steps</i> texture
+      fetches per pixel.
+    </div>
+  </div>
+</div>
+
+<div class="panel" style="margin-top:20px">
+  <div class="row">
+    <b>WebGL2 context ceiling</b>
+    <label class="ctl">canvases
+      <input type="range" id="stressN" min="2" max="40" step="1" value="20">
+    </label>
+    <b id="stressNV">20</b>
+    <button id="stressRun">mount</button>
+    <button id="stressClear">clear</button>
+  </div>
+  <div id="stressOut" style="margin-top:10px">not run</div>
+  <div id="stressGrid"></div>
+</div>
+
+<script>
+// ---------------------------------------------------------------------------
+// Shaders
+//
+// The ray-marching fragment shader is a port of the approach used by DepthFlow
+//   https://github.com/BrokenSource/DepthFlow  (AGPL-3.0, (c) Tremeschin)
+//   depthflow/resources/depthflow.glsl
+// Talemate is AGPL-3.0, so this is licence-compatible. Attribution is required
+// and must travel with this file and any descendant of it.
+// ---------------------------------------------------------------------------
+
+const VERT = `#version 300 es
+in vec2 aPos;
+out vec2 vUv;
+void main() {
+  vUv = aPos * 0.5 + 0.5;
+  vUv.y = 1.0 - vUv.y;
+  gl_Position = vec4(aPos, 0.0, 1.0);
+}`;
+
+const COMMON = `#version 300 es
+precision highp float;
+in vec2 vUv;
+out vec4 fragColor;
+uniform sampler2D uImage;
+uniform sampler2D uDepth;
+uniform vec2  uCam;        // camera offset in uv units
+uniform float uFocus;      // depth value that stays still
+uniform vec2  uUvScale;    // crop
+uniform vec2  uUvOffset;
+uniform float uOverscan;
+uniform int   uSteps;
+uniform bool  uShowDepth;
+uniform float uSoften;     // 0 = raw silhouette streaks, 1 = full soft fill
+
+// crop + overscan: box uv -> image uv
+vec2 baseUv(vec2 uv) {
+  vec2 c = uv - 0.5;
+  c *= (1.0 - uOverscan);
+  return uUvOffset + (c + 0.5) * uUvScale;
+}
+float depthAt(vec2 uv) {
+  return texture(uDepth, clamp(uv, 0.0, 1.0)).r;  // near = white
+}`;
+
+// A — naive
+const FRAG_NAIVE = COMMON + `
+void main() {
+  vec2 uv = baseUv(vUv);
+  float d = depthAt(uv);
+  vec2 p = uv + uCam * (d - uFocus);
+  p = clamp(p, 0.0, 1.0);
+  fragColor = uShowDepth ? vec4(vec3(depthAt(p)), 1.0) : texture(uImage, p);
+}`;
+
+// B — ray-marched heightfield.
+// Depth is an elevation toward the viewer (near = 1). A ray enters at z = 1 and
+// descends to z = 0 while sliding across the surface by uCam. The first z that
+// falls at or below the local elevation is the hit. A secant step between the
+// last miss and the hit removes the stair-stepping that a fixed step size
+// leaves on shallow slopes.
+const FRAG_MARCH = COMMON + `
+void main() {
+  vec2 uv = baseUv(vUv);
+  int steps = uSteps;
+  float dz = 1.0 / float(steps);
+
+  float zPrev = 1.0;
+  vec2  pPrev = uv + uCam * (0.0 - uFocus);
+  float hPrev = depthAt(pPrev);
+
+  vec2 hit = pPrev;
+  bool found = false;
+  float cliff = 0.0;
+
+  for (int i = 1; i <= 256; i++) {
+    if (i > steps) break;
+    float s = float(i) * dz;      // 0 -> 1 as z goes 1 -> 0
+    float z = 1.0 - s;
+    vec2  p = uv + uCam * (s - uFocus);
+    float h = depthAt(p);
+
+    if (z <= h) {
+      // secant between the last miss and this hit on f(x) = h(x) - z(x)
+      float fPrev = hPrev - zPrev;
+      float fCur  = h - z;
+      float t = clamp(fPrev / max(fPrev - fCur, 1e-5), 0.0, 1.0);
+      hit = mix(pPrev, p, t);
+      found = true;
+      // How violently did the surface change over this one step? A smooth
+      // slope moves by about dz per step; a silhouette jumps far more. That
+      // excess is exactly where the ray had no data to land on, which is what
+      // the trailing streaks are made of.
+      cliff = clamp((abs(h - hPrev) / dz - 1.0) * 0.5, 0.0, 1.0);
+      break;
+    }
+    zPrev = z; pPrev = p; hPrev = h;
+  }
+  if (!found) hit = pPrev;
+
+  vec2 p = clamp(hit, 0.0, 1.0);
+  if (uShowDepth) { fragColor = vec4(vec3(depthAt(p)), 1.0); return; }
+
+  // Where the hit is unreliable, fetch from a coarser mip. The streak becomes a
+  // soft smudge that reads as depth-of-field rather than as a broken pixel run.
+  float lod = cliff * uSoften * 5.0;
+  fragColor = textureLod(uImage, p, lod);
+}`;
+
+// ---------------------------------------------------------------------------
+// Renderer
+// ---------------------------------------------------------------------------
+
+function compile(gl, type, src) {
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src);
+  gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+    throw new Error(gl.getShaderInfoLog(s) + "\n" + src);
+  }
+  return s;
+}
+
+class Pane {
+  constructor(canvas, fragSrc, fpsEl) {
+    this.canvas = canvas;
+    this.fpsEl = fpsEl;
+    this.gl = canvas.getContext("webgl2", { antialias: false, alpha: false });
+    if (!this.gl) throw new Error("no webgl2");
+    const gl = this.gl;
+
+    const prog = gl.createProgram();
+    gl.attachShader(prog, compile(gl, gl.VERTEX_SHADER, VERT));
+    gl.attachShader(prog, compile(gl, gl.FRAGMENT_SHADER, fragSrc));
+    gl.bindAttribLocation(prog, 0, "aPos");
+    gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+      throw new Error(gl.getProgramInfoLog(prog));
+    }
+    gl.useProgram(prog);
+    this.prog = prog;
+
+    const buf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.bufferData(gl.ARRAY_BUFFER,
+      new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(0);
+    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+
+    this.u = {};
+    for (const n of ["uImage","uDepth","uCam","uFocus","uUvScale","uUvOffset",
+                     "uOverscan","uSteps","uShowDepth","uSoften"]) {
+      this.u[n] = gl.getUniformLocation(prog, n);
+    }
+    gl.uniform1i(this.u.uImage, 0);
+    gl.uniform1i(this.u.uDepth, 1);
+
+    this.texImage = this.makeTex(gl, 0);
+    this.texDepth = this.makeTex(gl, 1);
+
+    this.frames = 0; this.lastFps = performance.now();
+  }
+
+  makeTex(gl, unit) {
+    const t = gl.createTexture();
+    gl.activeTexture(gl.TEXTURE0 + unit);
+    gl.bindTexture(gl.TEXTURE_2D, t);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    return t;
+  }
+
+  upload(image, depth) {
+    const gl = this.gl;
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this.texImage);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+    // mip chain feeds the edge-soften fallback
+    gl.generateMipmap(gl.TEXTURE_2D);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+    this.uploadDepth(depth);
+  }
+
+  uploadDepth(depth) {
+    const gl = this.gl;
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, this.texDepth);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, depth);
+  }
+
+  resize(w, h) {
+    const dpr = 1;  // deliberately 1 - matches the shipping plan's cost control
+    this.canvas.width = Math.round(w * dpr);
+    this.canvas.height = Math.round(h * dpr);
+    this.canvas.style.width = w + "px";
+    this.canvas.style.height = h + "px";
+    this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
+  }
+
+  draw(state) {
+    const gl = this.gl;
+    gl.useProgram(this.prog);
+    gl.uniform2f(this.u.uCam, state.cam[0], state.cam[1]);
+    gl.uniform1f(this.u.uFocus, state.focus);
+    gl.uniform2f(this.u.uUvScale, state.uvScale[0], state.uvScale[1]);
+    gl.uniform2f(this.u.uUvOffset, state.uvOffset[0], state.uvOffset[1]);
+    gl.uniform1f(this.u.uOverscan, state.overscan);
+    gl.uniform1i(this.u.uSteps, state.steps);
+    gl.uniform1i(this.u.uShowDepth, state.showDepth ? 1 : 0);
+    gl.uniform1f(this.u.uSoften, state.soften);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, this.texImage);
+    gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, this.texDepth);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+    this.frames++;
+    const now = performance.now();
+    if (now - this.lastFps > 500) {
+      const fps = this.frames * 1000 / (now - this.lastFps);
+      this.fpsEl.textContent = fps.toFixed(0) + " fps";
+      this.frames = 0; this.lastFps = now;
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Page
+// ---------------------------------------------------------------------------
+
+const $ = (id) => document.getElementById(id);
+const state = {
+  cam: [0, 0], focus: 0.5, uvScale: [1, 1], uvOffset: [0, 0],
+  overscan: 0.04, steps: 64, showDepth: false, soften: 0,
+};
+let paused = false, manifest = [], current = null, paneA, paneB, t0 = performance.now();
+let rawImage = null, rawDepth = null;
+
+// Softening the depth map's discontinuities turns a hard silhouette streak
+// into a gentle stretch. Done here on a canvas to test it interactively; in
+// production this belongs in the sidecar writer, so it costs nothing at
+// runtime and every client benefits.
+function blurredDepth(px) {
+  if (!rawDepth) return null;
+  if (!px) return rawDepth;
+  const c = document.createElement("canvas");
+  c.width = rawDepth.naturalWidth; c.height = rawDepth.naturalHeight;
+  const ctx = c.getContext("2d");
+  ctx.filter = `blur(${px}px)`;
+  ctx.drawImage(rawDepth, 0, 0);
+  return c;
+}
+
+function reuploadDepth() {
+  const d = blurredDepth(state.depthBlur | 0);
+  if (!d) return;
+  paneA.uploadDepth(d); paneB.uploadDepth(d);
+}
+
+function bindRange(id, valId, fmt, apply) {
+  const el = $(id);
+  const upd = () => { $(valId).textContent = fmt(parseFloat(el.value)); apply(parseFloat(el.value)); };
+  el.addEventListener("input", upd); upd();
+}
+
+bindRange("amp", "ampV", v => v.toFixed(1) + "%", v => state.amp = v / 100);
+bindRange("focus", "focusV", v => v.toFixed(2), v => state.focus = v);
+bindRange("steps", "stepsV", v => String(v | 0), v => state.steps = v | 0);
+bindRange("speed", "speedV", v => v.toFixed(2) + "x", v => state.speed = v);
+bindRange("over", "overV", v => (v | 0) + "%", v => state.overscan = v / 100);
+bindRange("dblur", "dblurV", v => (v | 0) + "px", v => { state.depthBlur = v | 0; reuploadDepth(); });
+bindRange("soft", "softV", v => v.toFixed(2), v => state.soften = v);
+
+$("pause").addEventListener("click", () => {
+  paused = !paused;
+  $("pause").textContent = paused ? "play" : "pause";
+});
+$("showDepth").addEventListener("click", () => {
+  state.showDepth = !state.showDepth;
+  $("showDepth").textContent = state.showDepth ? "show image" : "show depth";
+});
+$("crop").addEventListener("change", layout);
+$("asset").addEventListener("change", () => loadAsset($("asset").value));
+
+// crop maths mirroring CSS `object-fit: cover` + `object-position: top`,
+// which is what MessageAssetImage.vue applies to character cards.
+function coverCrop(iw, ih, bw, bh, anchorTop) {
+  const ia = iw / ih, ba = bw / bh;
+  if (ia > ba) {
+    const sx = ba / ia;
+    return { scale: [sx, 1], offset: [(1 - sx) / 2, 0] };
+  }
+  const sy = ia / ba;
+  return { scale: [1, sy], offset: [0, anchorTop ? 0 : (1 - sy) / 2] };
+}
+
+function layout() {
+  if (!current) return;
+  const mode = $("crop").value;
+  let bw, bh, anchorTop = false;
+  if (mode === "native") {
+    bw = 560; bh = Math.round(560 * current.height / current.width);
+  } else {
+    bw = mode === "cardbig" ? 250 : 200;
+    bh = Math.round(bw * 4 / 3);
+    anchorTop = true;
+  }
+  const c = coverCrop(current.width, current.height, bw, bh, anchorTop);
+  state.uvScale = c.scale; state.uvOffset = c.offset;
+  paneA.resize(bw, bh); paneB.resize(bw, bh);
+}
+
+function loadImg(src) {
+  return new Promise((res, rej) => {
+    const i = new Image();
+    i.onload = () => res(i);
+    i.onerror = () => rej(new Error("failed to load " + src));
+    i.src = src;
+  });
+}
+
+async function loadAsset(id) {
+  const entry = manifest.find(m => m.id === id);
+  if (!entry) return;
+  const [img, dep] = await Promise.all([loadImg(entry.image), loadImg(entry.depth)]);
+  current = entry;
+  rawImage = img; rawDepth = dep;
+  paneA.upload(img, dep); paneB.upload(img, dep);
+  reuploadDepth();
+  // a card asset defaults to the card framing, an illustration to native
+  $("crop").value = entry.vis_type === "CHARACTER_CARD" ? "card" : "native";
+  layout();
+}
+
+function frame() {
+  if (!paused) {
+    const t = (performance.now() - t0) / 1000 * (state.speed ?? 1);
+    // Lissajous drift: incommensurate frequencies, so no visible loop point
+    state.cam = [state.amp * Math.sin(0.31 * t), state.amp * Math.sin(0.23 * t)];
+  }
+  if (current) { paneA.draw(state); paneB.draw(state); }
+  requestAnimationFrame(frame);
+}
+
+// --- context ceiling probe -------------------------------------------------
+
+const stress = [];
+$("stressN").addEventListener("input", () => $("stressNV").textContent = $("stressN").value);
+$("stressClear").addEventListener("click", () => {
+  for (const c of stress) c.remove();
+  stress.length = 0;
+  $("stressOut").textContent = "cleared";
+});
+$("stressRun").addEventListener("click", () => {
+  const n = parseInt($("stressN").value, 10);
+  const grid = $("stressGrid");
+  let ok = 0, failed = 0, lost = 0;
+  for (let i = 0; i < n; i++) {
+    const c = document.createElement("canvas");
+    c.width = 180; c.height = 120;
+    c.addEventListener("webglcontextlost", (e) => { e.preventDefault(); lost++; report(); });
+    grid.appendChild(c); stress.push(c);
+    const gl = c.getContext("webgl2", { antialias: false });
+    if (!gl) { failed++; continue; }
+    gl.clearColor(0.1 + 0.8 * (i / n), 0.3, 0.5, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    ok++;
+  }
+  function report() {
+    const ua = navigator.userAgent.includes("Firefox") ? "Firefox" : "Chromium-family";
+    $("stressOut").innerHTML =
+      `${ua}\nrequested ${n} contexts (plus the 2 lab panes)\n` +
+      `acquired: ${ok}\n` +
+      (failed ? `<span class="err">refused: ${failed}</span>\n` : "refused: 0\n") +
+      (lost ? `<span class="warn">contextlost events so far: ${lost}</span>` : "contextlost events so far: 0");
+  }
+  report();
+  setTimeout(report, 400);
+});
+
+// --- boot ------------------------------------------------------------------
+
+(async function boot() {
+  try {
+    paneA = new Pane($("cvA"), FRAG_NAIVE, $("fpsA"));
+    paneB = new Pane($("cvB"), FRAG_MARCH, $("fpsB"));
+  } catch (e) {
+    document.body.innerHTML =
+      `<h1 class="err">WebGL2 unavailable</h1><pre>${e.message}</pre>`;
+    return;
+  }
+  manifest = await (await fetch("manifest.json")).json();
+  const sel = $("asset");
+  for (const m of manifest) {
+    const o = document.createElement("option");
+    o.value = m.id;
+    o.textContent = `${m.vis_type} ${m.width}x${m.height} — ${m.id.slice(0, 8)}`;
+    sel.appendChild(o);
+  }
+  await loadAsset(manifest[0].id);
+  frame();
+})();
+</script>
+</body>
+</html>

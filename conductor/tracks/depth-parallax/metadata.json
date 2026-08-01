@@ -1,0 +1,20 @@
+{
+  "version": 3,
+  "track_id": "depth-parallax",
+  "name": "Depth parallax - 2.5D camera motion on illustrations and cards",
+  "type": "feature",
+  "status": "planned",
+  "superpower_enhanced": true,
+  "created_at": "2026-08-01",
+  "loop_state": {
+    "current_step": "EVALUATE_PLAN",
+    "step_status": "NOT_STARTED",
+    "fix_cycle_count": 0,
+    "checkpoints": {
+      "PLAN": {
+        "status": "PASSED"
+      }
+    }
+  },
+  "notes": "From the 2026-08-01 movement investigation. Live probe of ComfyUI at localhost:8188 confirmed DepthAnythingV2Preprocessor already installed, and the full WAN 2.2 I2V + Lightning stack too - real video was costed at 2-3 min GPU per clip on the 4080 (--reserve-vram 5) and rejected for the default experience; it stays available as a future track. Approach validated by web research: port the ray-marched shader from BrokenSource/DepthFlow (AGPL-3.0, same licence as Talemate, v1.0.0 2026-06-15) rather than naive UV displacement - ray marching is what removes the occlusion smear that caps naive displacement at ~6% amplitude. Attribution header on the ported shader is a licence obligation, not a courtesy. No npm drop-in exists; frontend has no three.js/pixi. WebGL context limits verified: Chrome 16 desktop / 8 Android, Firefox 8 per principal / 2 mobile - context pooling is mandatory. Phase 0 is a standalone lab (scripts/depth_lab/) that renders real project assets through both shaders side by side and ends in an explicit user GO/NO-GO; a NO-GO closes the track at phase 0 and is a legitimate outcome."
+}

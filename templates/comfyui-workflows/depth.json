@@ -1,0 +1,54 @@
+{
+  "1": {
+    "inputs": {
+      "image": "talemate/placeholder.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Talemate Reference 1"
+    }
+  },
+  "2": {
+    "inputs": {
+      "image": [
+        "1",
+        0
+      ],
+      "ckpt_name": "depth_anything_v2_vitl.pth",
+      "resolution": 1024
+    },
+    "class_type": "DepthAnythingV2Preprocessor",
+    "_meta": {
+      "title": "Talemate Depth Estimate"
+    }
+  },
+  "3": {
+    "inputs": {
+      "image": [
+        "2",
+        0
+      ],
+      "upscale_method": "bilinear",
+      "width": 1216,
+      "height": 832,
+      "crop": "disabled"
+    },
+    "class_type": "ImageScale",
+    "_meta": {
+      "title": "Talemate Resolution"
+    }
+  },
+  "4": {
+    "inputs": {
+      "images": [
+        "3",
+        0
+      ],
+      "filename_prefix": "talemate_depth"
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Talemate Save Depth"
+    }
+  }
+}

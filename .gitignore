@@ -43,3 +43,9 @@ talemate_frontend/eslint.config.cjs
 # Added by code-review-graph
 .code-review-graph/
 scripts/bakeoff_results/
+
+# playwright-mcp scratch output (screenshots, snapshots, console logs)
+.playwright-mcp/
+
+# depth parallax lab output (generated image/depth pairs)
+depth_lab_out/
