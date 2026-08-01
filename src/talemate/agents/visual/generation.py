@@ -1806,6 +1806,15 @@ class GenerationMixin:
         # backend the request is bound for - and attaching a reference is what moves a
         # request onto the edit backend.
         await self.attach_character_references(request)
+
+        # A background reference alone also needs the reference-conditioned
+        # workflow; attach_character_references only reroutes for subject refs.
+        if (
+            request.background_reference_assets
+            and request.gen_type == GEN_TYPE.TEXT_TO_IMAGE
+            and self.can_edit_images
+        ):
+            request.gen_type = GEN_TYPE.IMAGE_EDIT
         self._apply_seed(request)
         await self._finalize_prompt(request)
 

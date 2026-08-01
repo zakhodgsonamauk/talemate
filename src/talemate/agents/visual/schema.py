@@ -459,6 +459,11 @@ class GenerationRequest(pydantic.BaseModel):
 
     reference_assets: list[str] = pydantic.Field(default_factory=list)
 
+    # Environment/mood reference (style-transfer IPAdapter) - typed separately
+    # from subject references because it routes to a different workflow slot
+    # and must never condition identity.
+    background_reference_assets: list[str] = pydantic.Field(default_factory=list)
+
     inline_reference: str | None = pydantic.Field(default=None, exclude=False)
 
     callback: Callable | None = pydantic.Field(default=None, exclude=True)
@@ -480,6 +485,13 @@ class GenerationRequest(pydantic.BaseModel):
                 0, scene.assets.bytes_from_image_data(self.inline_reference)
             )
         return asset_bytes
+
+    @property
+    def background_reference_bytes(self) -> list[bytes]:
+        scene: "Scene" = active_scene.get()
+        if not scene or not self.background_reference_assets:
+            return []
+        return scene.assets.get_asset_bytes_many(self.background_reference_assets)
 
     @pydantic.model_validator(mode="after")
     def extract_tags_from_prompt(self) -> "GenerationRequest":

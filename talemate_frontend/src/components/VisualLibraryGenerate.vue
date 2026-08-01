@@ -128,6 +128,16 @@
               :available-assets-map="availableAssetsMap"
               @update:reference-assets="(v) => referenceAssets = v"
             />
+            <VisualReferenceImages
+              class="mt-2"
+              title="Background Reference (style transfer - mood/setting only, no identity)"
+              :reference-assets="backgroundReferenceAssets"
+              :editable="editAvailable && !promptLoading"
+              :max-references="1"
+              :available-asset-ids="availableAssetIds"
+              :available-assets-map="availableAssetsMap"
+              @update:reference-assets="(v) => backgroundReferenceAssets = v"
+            />
             <v-alert v-if="!editAvailable" type="warning" density="compact" variant="text" class="mt-1 text-caption">
               <div class="text-muted">
                 Image references are unavailable. Configure the image edit backend in the visual agent or check its connection.
@@ -321,6 +331,8 @@ export default {
       format: FORMAT_TYPE.LANDSCAPE,
       characterName: '',
       referenceAssets: [],
+      // Environment/mood reference (style transfer) - never identity.
+      backgroundReferenceAssets: [],
       // The agent's current model ('' = workflow default). Choosing one here
       // sets it globally via set_checkpoint; it is also sent as a per-request
       // extra_config override so the saved asset records what made it and a
@@ -425,6 +437,7 @@ export default {
         this.format = FORMAT_TYPE.LANDSCAPE;
         this.characterName = '';
         this.referenceAssets = [];
+        this.backgroundReferenceAssets = [];
         return;
       }
       // Instructions present and not iterating: the caller wants the agent to
@@ -447,6 +460,7 @@ export default {
       this.format = r.format || FORMAT_TYPE.LANDSCAPE;
       this.characterName = r.character_name || '';
       this.referenceAssets = (r.reference_assets && Array.isArray(r.reference_assets)) ? r.reference_assets.slice() : [];
+      this.backgroundReferenceAssets = (r.background_reference_assets && Array.isArray(r.background_reference_assets)) ? r.background_reference_assets.slice() : [];
       if (r.prompt_profile) this.previewProfile = r.prompt_profile;
       this.recomposing = false;
       // Regenerate keeps the checkpoint the image was made with.
@@ -564,6 +578,7 @@ export default {
             format: this.format,
             character_name: this.isCharacterVisType ? (this.characterName || null) : null,
             reference_assets: this.referenceAssets || [],
+            background_reference_assets: this.backgroundReferenceAssets || [],
             inline_reference: this.inlineReference || null,
             // The prompt in the box is what the user saw and approved - possibly
             // hand-edited. Without this the backend's distillation pass recomposes

@@ -176,5 +176,53 @@
     "_meta": {
       "title": "Talemate CLIP Skip"
     }
+  },
+  "91": {
+    "inputs": {
+      "image": "talemate/placeholder.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Talemate Background Reference"
+    }
+  },
+  "92": {
+    "inputs": {
+      "ipadapter_file": "ip-adapter-plus_sdxl_vit-h.safetensors"
+    },
+    "class_type": "IPAdapterModelLoader",
+    "_meta": {
+      "title": "IPAdapter Model (Background)"
+    }
+  },
+  "93": {
+    "inputs": {
+      "weight": 0.45,
+      "weight_type": "style transfer",
+      "combine_embeds": "average",
+      "start_at": 0.0,
+      "end_at": 0.8,
+      "embeds_scaling": "K+V",
+      "model": [
+        "23",
+        0
+      ],
+      "ipadapter": [
+        "92",
+        0
+      ],
+      "image": [
+        "91",
+        0
+      ],
+      "clip_vision": [
+        "22",
+        0
+      ]
+    },
+    "class_type": "IPAdapterAdvanced",
+    "_meta": {
+      "title": "Apply Background Reference"
+    }
   }
 }

@@ -333,6 +333,56 @@ class Workflow(pydantic.BaseModel):
             nodes_touched=touched,
         )
 
+    def set_background_reference(self, image_path: str | None):
+        """
+        Route the sampler through the background style-transfer IPAdapter.
+
+        The shipped topology is background-free (sampler reads the character
+        chain); providing a path sets the "Talemate Background Reference"
+        image and rewires every sampler model input that reads the character
+        apply node to read the background apply node instead. No path = no
+        change, so workflows without the chain are unaffected.
+        """
+        if not image_path:
+            return
+
+        background_load = background_apply = None
+        for node_id, node in self.nodes.items():
+            title = node.get("_meta", {}).get("title", "")
+            if title == "Talemate Background Reference":
+                background_load = (str(node_id), node)
+            elif title == "Apply Background Reference":
+                background_apply = (str(node_id), node)
+
+        if not background_load or not background_apply:
+            log.debug("workflow.set_background_reference.no_chain")
+            return
+
+        background_load[1]["inputs"]["image"] = image_path
+
+        # the background apply node's own model input names the character
+        # chain's tail - rewire samplers that read that tail
+        upstream = background_apply[1]["inputs"].get("model")
+        if not isinstance(upstream, list):
+            log.warning("workflow.set_background_reference.unwired_chain")
+            return
+        touched = 0
+        for node in self.nodes.values():
+            inputs = node.get("inputs", {})
+            model_link = inputs.get("model")
+            if (
+                "sampler_name" in inputs
+                and isinstance(model_link, list)
+                and str(model_link[0]) == str(upstream[0])
+            ):
+                inputs["model"] = [background_apply[0], 0]
+                touched += 1
+        log.debug(
+            "workflow.set_background_reference",
+            image=image_path,
+            samplers_rewired=touched,
+        )
+
     def set_reference_images(self, image_paths: list[str]):
         """
         Bind uploaded reference image paths to matching nodes titled
@@ -763,6 +813,23 @@ class Backend(backends.Backend):
             # disconnect all reference nodes which allows us to run qwen image
             # edit workflows to just generate image normally.
             workflow.set_reference_images([])
+
+        # Background/environment reference (style-transfer chain). Uploaded
+        # separately from subject references - it feeds a different node and
+        # must never enter the identity slots.
+        background_bytes = request.background_reference_bytes
+        if background_bytes and background_bytes[0]:
+            asset_id = request.background_reference_assets[0]
+            bg_filename = f"talemate_bg_{asset_id[:10]}.png"
+            uploaded = await self.upload_image(
+                background_bytes[0], bg_filename, overwrite=True
+            )
+            bg_path = (
+                f"{uploaded['subfolder']}/{uploaded['name']}"
+                if uploaded.get("subfolder")
+                else uploaded["name"]
+            )
+            workflow.set_background_reference(bg_path)
 
         payload = {"prompt": workflow.model_dump().get("nodes")}
 
