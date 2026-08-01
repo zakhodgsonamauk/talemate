@@ -146,8 +146,9 @@ class TestLegacyPathGuard:
 
 
 class TestDistillTemplate:
-    def _render(self, profile_id):
+    def _render(self, profile_id, shot_type="auto"):
         import jinja2
+        from talemate.agents.visual.generation import SHOT_BLOCKS
         from talemate.agents.visual.schema import PROMPT_PROFILES
 
         src = open(
@@ -172,6 +173,7 @@ class TestDistillTemplate:
             max_prompt_tokens=profile.max_prompt_tokens,
             dialect=profile.dialect_instructions,
             profile_id=profile.id,
+            shot=SHOT_BLOCKS.get(shot_type, ""),
         )
 
     def test_pony_render_has_four_section_contract(self):
@@ -187,6 +189,35 @@ class TestDistillTemplate:
         assert "75 tokens" in text
         assert "Pony structure" not in text
         assert "Do NOT use score_9" in text
+
+    # The shot block is dialect-neutral: the same framing contract must land in
+    # both dialects, and auto must inject nothing.
+    @pytest.mark.parametrize("profile_id", ["pony", "sdxl_natural"])
+    def test_wide_shot_block_renders(self, profile_id):
+        text = self._render(profile_id, shot_type="wide")
+        assert "WIDE SHOT" in text
+        assert "wide establishing shot" in text
+        assert "lone" in text and "small in frame" in text
+        # negatives that keep the checkpoint off the hero pose
+        for term in ("close-up", "portrait", "looking at viewer"):
+            assert term in text
+
+    @pytest.mark.parametrize("profile_id", ["pony", "sdxl_natural"])
+    def test_closeup_shot_block_renders(self, profile_id):
+        text = self._render(profile_id, shot_type="closeup")
+        assert "CLOSE-UP" in text
+        assert "detailed face" in text
+        assert "wide shot" in text  # in the NEGATIVE instruction
+
+    @pytest.mark.parametrize("profile_id", ["pony", "sdxl_natural"])
+    def test_auto_shot_injects_nothing(self, profile_id):
+        text = self._render(profile_id, shot_type="auto")
+        assert "REQUESTED FRAMING" not in text
+
+    def test_medium_shot_block_renders(self):
+        text = self._render("pony", shot_type="medium")
+        assert "MEDIUM SHOT" in text
+        assert "waist up" in text
 
 
 class TestClipSkip:

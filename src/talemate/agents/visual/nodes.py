@@ -551,6 +551,7 @@ class GenerationRequestNode(AgentNode):
         self.add_input("character_name", socket_type="str", optional=True)
         self.add_input("reference_assets", socket_type="list", optional=True)
         self.add_input("callback", socket_type="function", optional=True)
+        self.add_input("shot_type", socket_type="str", optional=True)
         self.add_input("extra_config", socket_type="dict", optional=True)
         self.add_input(
             "asset_attachment_context",
@@ -582,6 +583,7 @@ class GenerationRequestNode(AgentNode):
         extra_config = self.normalized_input_value("extra_config") or {}
         callback: FunctionWrapper | None = self.normalized_input_value("callback")
         instructions = self.normalized_input_value("instructions") or ""
+        shot_type = self.normalized_input_value("shot_type") or "auto"
         asset_attachment_context: AssetAttachmentContext = self.normalized_input_value(
             "asset_attachment_context"
         )
@@ -603,6 +605,7 @@ class GenerationRequestNode(AgentNode):
             format=format,
             character_name=character_name,
             reference_assets=reference_assets,
+            shot_type=shot_type,
             callback=callback_wrapper,
             extra_config=extra_config,
             asset_attachment_context=asset_attachment_context
@@ -739,6 +742,7 @@ class FinalizePrompt(AgentNode):
         self.add_output("prompt", socket_type="str")
         self.add_output("negative_prompt", socket_type="str")
         self.add_output("prompt_profile", socket_type="str")
+        self.add_output("shot_type", socket_type="str")
 
     async def run(self, state: GraphState):
         generation_request: GenerationRequest = self.require_input("generation_request")
@@ -758,6 +762,7 @@ class FinalizePrompt(AgentNode):
                 "negative_prompt": generation_request.negative_prompt or "",
                 "prompt_profile": generation_request.prompt_profile
                 or self.agent.resolve_prompt_profile(generation_request).id,
+                "shot_type": generation_request.shot_type or "auto",
             }
         )
 

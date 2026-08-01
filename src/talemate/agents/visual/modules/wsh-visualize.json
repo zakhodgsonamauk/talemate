@@ -942,6 +942,37 @@
       "inherited": false,
       "registry": "data/MakeKeyValuePair",
       "base_type": "core/Node"
+    },
+    "0b3c00e1-69da-4031-9df7-0eaeb579051a": {
+      "title": "GET obj.shot_type",
+      "id": "0b3c00e1-69da-4031-9df7-0eaeb579051a",
+      "properties": {
+        "attribute": "shot_type"
+      },
+      "x": 397,
+      "y": 660,
+      "width": 210,
+      "height": 98,
+      "collapsed": false,
+      "inherited": false,
+      "registry": "data/Get",
+      "base_type": "core/Node"
+    },
+    "4cddf63a-c033-4b32-91fb-d89154e3e2db": {
+      "title": "KV shot_type",
+      "id": "4cddf63a-c033-4b32-91fb-d89154e3e2db",
+      "properties": {
+        "key": "shot_type",
+        "value": ""
+      },
+      "x": 2000,
+      "y": 1660,
+      "width": 210,
+      "height": 122,
+      "collapsed": true,
+      "inherited": false,
+      "registry": "data/MakeKeyValuePair",
+      "base_type": "core/Node"
     }
   },
   "edges": {
@@ -1073,7 +1104,8 @@
       "7dd0877a-67ca-4989-bab0-88b17764979d.object",
       "b7e1a3c2-1f44-4d90-9a2e-7c6d5e0f1234.object",
       "b7d1ef00-0000-4000-8000-000000000001.object",
-      "8032a9f2-467a-4992-a0ee-6db9ec096526.object"
+      "8032a9f2-467a-4992-a0ee-6db9ec096526.object",
+      "0b3c00e1-69da-4031-9df7-0eaeb579051a.object"
     ],
     "5527d9cb-6ffd-461e-bb08-0f915e06da18.context": [
       "d2bde569-e394-46b3-9d44-78791d423ce2.asset_ctx"
@@ -1158,6 +1190,15 @@
     ],
     "a989425e-5d26-4771-b935-ecbbcbdb0a4c.kv": [
       "b7d1ef00-0000-4000-8000-00000000000b.item7"
+    ],
+    "0b3c00e1-69da-4031-9df7-0eaeb579051a.value": [
+      "d2bde569-e394-46b3-9d44-78791d423ce2.shot_type"
+    ],
+    "b7d1ef00-0000-4000-8000-00000000000f.shot_type": [
+      "4cddf63a-c033-4b32-91fb-d89154e3e2db.value"
+    ],
+    "4cddf63a-c033-4b32-91fb-d89154e3e2db.kv": [
+      "b7d1ef00-0000-4000-8000-00000000000b.item8"
     ]
   },
   "groups": [

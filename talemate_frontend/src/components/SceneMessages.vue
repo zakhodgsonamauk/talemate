@@ -217,6 +217,17 @@
                     :hint="visTypeDialogProfileHint"
                     persistent-hint
                 />
+                <v-select
+                    v-model="visTypeDialog.shotType"
+                    :items="shotTypeOptions"
+                    item-title="label"
+                    item-value="value"
+                    label="Shot"
+                    density="comfortable"
+                    class="mt-4"
+                    :hint="shotTypeHint"
+                    persistent-hint
+                />
             </v-card-text>
             <v-card-actions>
                 <v-spacer></v-spacer>
@@ -635,6 +646,10 @@ export default {
                 currentCheckpoint: '',
                 checkpointChoices: [],
                 checkpointProfiles: {},
+                // Framing request, decided before the prompt is composed for
+                // the same reason the model is: the distillation writes the
+                // whole prompt around it (wide = environment-first).
+                shotType: 'auto',
             },
             illustrationSelectDialog: {
                 show: false,
@@ -663,6 +678,23 @@ export default {
         }
     },
     computed: {
+        shotTypeOptions() {
+            return [
+                { value: 'auto', label: 'Auto' },
+                { value: 'closeup', label: 'Close-up' },
+                { value: 'medium', label: 'Medium shot' },
+                { value: 'wide', label: 'Wide / establishing' },
+            ];
+        },
+        shotTypeHint() {
+            const hints = {
+                auto: 'Let the prompt decide the framing.',
+                closeup: 'Face and expression fill the frame.',
+                medium: 'Waist up.',
+                wide: 'Environment first — the subject is a small figure in the scene.',
+            };
+            return hints[this.visTypeDialog.shotType] || '';
+        },
         visTypeDialogProfileHint() {
             const labels = {
                 pony: 'Pony dialect (score tags + structured description)',
@@ -902,7 +934,7 @@ export default {
                     // explicit `undefined` over the request would erase the
                     // vis_type or character the modal was opened with.
                     const preview = { prompt: data.prompt || '', negative_prompt: data.negative_prompt || '' };
-                    for (const key of ['vis_type', 'character_name', 'format', 'prompt_profile']) {
+                    for (const key of ['vis_type', 'character_name', 'format', 'prompt_profile', 'shot_type']) {
                         if (data[key]) preview[key] = data[key];
                     }
                     // References the composer selected — the refined prompt
@@ -1457,6 +1489,7 @@ export default {
             this.visTypeDialog.hasCharacter = false;
             this.visTypeDialog.checkpoint = '';
             this.visTypeDialog.currentCheckpoint = '';
+            this.visTypeDialog.shotType = 'auto';
         },
 
         confirmVisType() {
@@ -1490,6 +1523,7 @@ export default {
 
             // Captured before closeVisTypeDialog wipes the dialog state.
             const checkpoint = this.visTypeDialog.checkpoint || '';
+            const shotType = this.visTypeDialog.shotType || 'auto';
 
             this.closeVisTypeDialog();
             this.sendVisualizeWithPrompt(message_id, {
@@ -1497,6 +1531,7 @@ export default {
                 vis_type,
                 character_name: keepsCharacter ? request.character_name : '',
                 checkpoint,
+                shot_type: shotType,
             });
         },
 
@@ -1512,6 +1547,7 @@ export default {
                     vis_type: request.vis_type,
                     character_name: request.character_name || '',
                     instructions: request.instructions || '',
+                    shot_type: request.shot_type || 'auto',
                     prefer_prompt_mode: true,
                     // The chooser's model choice rides the request so the
                     // modal's dropdown shows it immediately - no dependence on
@@ -1540,6 +1576,9 @@ export default {
             }
             if (request.instructions) {
                 payload.instructions = request.instructions;
+            }
+            if (request.shot_type && request.shot_type !== 'auto') {
+                payload.shot_type = request.shot_type;
             }
             this.getWebsocket().send(JSON.stringify(payload));
         },

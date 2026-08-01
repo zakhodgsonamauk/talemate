@@ -2225,6 +2225,74 @@
       "inherited": false,
       "registry": "data/Get",
       "base_type": "core/Node"
+    },
+    "dc43dc45-4d82-416f-95ca-92fcacf100fe": {
+      "title": "IN shot_type",
+      "id": "dc43dc45-4d82-416f-95ca-92fcacf100fe",
+      "properties": {
+        "input_type": "str",
+        "input_name": "shot_type",
+        "input_optional": true,
+        "input_group": "",
+        "num": 6
+      },
+      "x": 10,
+      "y": -1600,
+      "width": 210,
+      "height": 154,
+      "collapsed": false,
+      "inherited": false,
+      "registry": "core/Input",
+      "base_type": "core/Node"
+    },
+    "d00547cb-8374-4ac1-a418-ee874da76c0f": {
+      "title": "SET local.shot_type",
+      "id": "d00547cb-8374-4ac1-a418-ee874da76c0f",
+      "properties": {
+        "name": "shot_type",
+        "scope": "local"
+      },
+      "x": 458,
+      "y": -1600,
+      "width": 210,
+      "height": 122,
+      "collapsed": false,
+      "inherited": false,
+      "registry": "state/SetState",
+      "base_type": "core/Node"
+    },
+    "9b80e5e1-25b9-454d-ac40-e5e5eb592a38": {
+      "title": "GET local.shot_type",
+      "id": "9b80e5e1-25b9-454d-ac40-e5e5eb592a38",
+      "properties": {
+        "name": "shot_type",
+        "scope": "local"
+      },
+      "x": 700,
+      "y": -1600,
+      "width": 210,
+      "height": 98,
+      "collapsed": false,
+      "inherited": false,
+      "registry": "state/GetState",
+      "base_type": "core/Node"
+    },
+    "f06dfd76-6f1d-49f2-9f14-2c656e037cba": {
+      "title": "OUT shot_type",
+      "id": "f06dfd76-6f1d-49f2-9f14-2c656e037cba",
+      "properties": {
+        "output_type": "str",
+        "output_name": "shot_type",
+        "num": 6
+      },
+      "x": 1015,
+      "y": -1600,
+      "width": 210,
+      "height": 106,
+      "collapsed": false,
+      "inherited": false,
+      "registry": "core/Output",
+      "base_type": "core/Node"
     }
   },
   "edges": {
@@ -2630,6 +2698,18 @@
     "c06c1a51-79d7-4600-896d-3134735409ce.value": [
       "86c4e2af-ec07-4c59-a60a-133a1155e079.object",
       "967e857f-b1f2-4bac-a71c-ff0530997eb9.value"
+    ],
+    "dc43dc45-4d82-416f-95ca-92fcacf100fe.value": [
+      "d00547cb-8374-4ac1-a418-ee874da76c0f.value"
+    ],
+    "d00547cb-8374-4ac1-a418-ee874da76c0f.value": [
+      "4d8ccb0c-3072-4696-a693-31c6713e0c31.state_c"
+    ],
+    "4d8ccb0c-3072-4696-a693-31c6713e0c31.state_c": [
+      "f06dfd76-6f1d-49f2-9f14-2c656e037cba.value"
+    ],
+    "9b80e5e1-25b9-454d-ac40-e5e5eb592a38.value": [
+      "1b1a1945-713b-47b6-b762-9a6e94c73522.shot_type"
     ]
   },
   "groups": [

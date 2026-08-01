@@ -12,6 +12,7 @@ Vars:
   - identity, wardrobe, rules, sex, others, scene_anchor, location: strings, may be ""
   - instructions: the paragraph being visualised, may be ""
   - max_prompt_tokens: the CLIP token budget for the finished prompt
+  - shot: requested-framing block (SHOT_BLOCKS in generation.py), "" for auto
 
 Output: two plain lines, PROMPT: and NEGATIVE:, parsed by parse_distilled_response.
 -#}
@@ -46,6 +47,9 @@ recent story context, as a movie still of its most visually striking beat.
 {% endif %}
 {% if dialect %}
 {{ dialect }}
+{% endif %}
+{% if shot %}
+{{ shot }}
 {% endif %}
 Rules:
 

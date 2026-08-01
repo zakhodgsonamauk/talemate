@@ -157,6 +157,35 @@ PROFILE_CHECKPOINT_PATTERNS: tuple[tuple[re.Pattern, str], ...] = (
     ),
 )
 
+# Per-shot instruction blocks injected into the distillation contract next to
+# the dialect block. Dialect-neutral: the model adapts the guidance to its
+# output format (pony boosters or sdxl sentences). Each block explicitly
+# overrides the contract's no-framing-language rule, which otherwise wins.
+# "auto" injects nothing - today's behavior.
+SHOT_BLOCKS: dict[str, str] = {
+    "wide": (
+        "REQUESTED FRAMING - WIDE SHOT (this is the one exception to the\n"
+        "no-framing-language rule; include this framing vocabulary):\n"
+        "Describe the environment and setting FIRST; the subject is 'a lone\n"
+        "figure, small in frame' within it. Include: wide establishing shot,\n"
+        "full body, from a distance, cinematic scale, environment focus.\n"
+        "NEGATIVE must include: close-up, portrait, looking at viewer,\n"
+        "centered composition, face focus."
+    ),
+    "closeup": (
+        "REQUESTED FRAMING - CLOSE-UP (this is the one exception to the\n"
+        "no-framing-language rule; include this framing vocabulary):\n"
+        "Describe the subject's face and expression FIRST, setting minimal.\n"
+        "Include: close-up, detailed face.\n"
+        "NEGATIVE must include: wide shot, full body, distant."
+    ),
+    "medium": (
+        "REQUESTED FRAMING - MEDIUM SHOT (this is the one exception to the\n"
+        "no-framing-language rule; include this framing vocabulary):\n"
+        "Frame the subject waist up. Include: medium shot, waist up."
+    ),
+}
+
 _CLOTHING_WORDS = {
     "uniform",
     "shirt",
@@ -759,7 +788,12 @@ class GenerationMixin:
         # compose and finalize must not serve a stale-dialect prompt.
         profile = self.resolve_prompt_profile(request)
         request.prompt_profile = profile.id
-        key = (vt, character_name, instructions, profile.id)
+        # The prestart renders before the graph builds the GenerationRequest, so
+        # it cannot see a requested shot type and always distills "auto". A
+        # non-auto shot therefore mismatches at consume time and distills fresh -
+        # correct output at the cost of the parallelism, for the occasional shot
+        # override only.
+        key = (vt, character_name, instructions, profile.id, "auto")
 
         # Replace, and cancel, any pending task a previous compose abandoned.
         stale = getattr(self, "_pending_distillation", None)
@@ -791,6 +825,7 @@ class GenerationMixin:
             (request.character_name or "").strip(),
             (request.instructions or "").strip(),
             self.resolve_prompt_profile(request).id,
+            request.shot_type or "auto",
         )
         if key != expected:
             task.cancel()
@@ -803,12 +838,14 @@ class GenerationMixin:
                     "character": key[1],
                     "instructions": key[2][:80],
                     "profile": key[3] if len(key) > 3 else None,
+                    "shot": key[4] if len(key) > 4 else None,
                 },
                 expected={
                     "vis_type": str(expected[0]),
                     "character": expected[1],
                     "instructions": expected[2][:80],
                     "profile": expected[3],
+                    "shot": expected[4],
                 },
             )
             return False
@@ -917,6 +954,7 @@ class GenerationMixin:
             "max_prompt_tokens": min(self._max_prompt_tokens(), profile.max_prompt_tokens),
             "dialect": profile.dialect_instructions,
             "profile_id": profile.id,
+            "shot": SHOT_BLOCKS.get(request.shot_type or "auto", ""),
         }
 
         # Two attempts: cloud models refuse borderline content flakily rather than

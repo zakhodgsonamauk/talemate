@@ -97,6 +97,19 @@
               @update:model-value="onCheckpointChosen"
             />
 
+            <v-select
+              :model-value="shotType"
+              class="mt-2"
+              :items="shotTypeOptions"
+              item-title="label"
+              item-value="value"
+              label="Shot"
+              :hint="canRecompose ? 'Changing this recomposes the prompt.' : 'Framing request for the composed prompt.'"
+              persistent-hint
+              :disabled="generating || promptLoading"
+              @update:model-value="onShotTypeChosen"
+            />
+
             <v-alert
               v-if="recomposing"
               type="info"
@@ -352,6 +365,10 @@ export default {
       previewProfile: '',
       // True while a cross-profile checkpoint switch recomposes the prompt.
       recomposing: false,
+      // Requested framing, carried in from the chooser. Changing it recomposes
+      // the prompt just like a cross-dialect model switch does - the shot type
+      // shapes the whole prompt, not a suffix.
+      shotType: 'auto',
     };
   },
   computed: {
@@ -428,6 +445,24 @@ export default {
     sceneVisualStyleTemplate() {
       return this.scene?.data?.visual_style_template || null;
     },
+    shotTypeOptions() {
+      return [
+        { value: 'auto', label: 'Auto' },
+        { value: 'closeup', label: 'Close-up' },
+        { value: 'medium', label: 'Medium shot' },
+        { value: 'wide', label: 'Wide / establishing' },
+      ];
+    },
+    // A recompose needs a source message to compose from; without one the shot
+    // choice still rides the generation request but the shown prompt is the
+    // user's to edit by hand.
+    canRecompose() {
+      return Boolean(
+        this.attachmentContext &&
+        Array.isArray(this.attachmentContext.message_ids) &&
+        this.attachmentContext.message_ids.length
+      );
+    },
   },
   methods: {
     applyInitialRequest() {
@@ -466,6 +501,7 @@ export default {
       this.referenceAssets = (r.reference_assets && Array.isArray(r.reference_assets)) ? r.reference_assets.slice() : [];
       this.backgroundReferenceAssets = (r.background_reference_assets && Array.isArray(r.background_reference_assets)) ? r.background_reference_assets.slice() : [];
       if (r.prompt_profile) this.previewProfile = r.prompt_profile;
+      this.shotType = r.shot_type || 'auto';
       this.recomposing = false;
       // Regenerate keeps the checkpoint the image was made with.
       this.checkpoint = (r.extra_config && r.extra_config.checkpoint) || '';
@@ -513,10 +549,20 @@ export default {
         Array.isArray(this.attachmentContext.message_ids) &&
         this.attachmentContext.message_ids.length
       ) {
-        this.recomposeForProfile();
+        this.recomposePrompt();
       }
     },
-    recomposeForProfile() {
+    onShotTypeChosen(value) {
+      const previous = this.shotType;
+      this.shotType = value || 'auto';
+      // Same contract as a cross-dialect model switch: the framing shapes the
+      // whole prompt, so a change recomposes it when there is a source message
+      // to compose from. Without one the choice still rides the request.
+      if (this.shotType !== previous && this.canRecompose) {
+        this.recomposePrompt();
+      }
+    },
+    recomposePrompt() {
       const messageId = this.attachmentContext.message_ids[0];
       const payload = {
         type: 'visual',
@@ -528,6 +574,7 @@ export default {
       };
       if (this.characterName) payload.character_name = this.characterName;
       if (this.instructions) payload.instructions = this.instructions;
+      if (this.shotType && this.shotType !== 'auto') payload.shot_type = this.shotType;
       this.recomposing = true;
       this.getWebsocket().send(JSON.stringify(payload));
     },
@@ -551,6 +598,9 @@ export default {
         }
         if (this.instructions && this.instructions.trim()) {
           payload.instructions = this.instructions.trim();
+        }
+        if (this.shotType && this.shotType !== 'auto') {
+          payload.shot_type = this.shotType;
         }
         // `visualize` takes the attachment target as flat keys rather than a
         // nested context. Without these an adjust-flow request that was
@@ -587,6 +637,7 @@ export default {
             // backend auto-attach refills an emptied list with the subject's
             // cover, silently overriding the user's removal.
             auto_references: false,
+            shot_type: this.shotType || 'auto',
             inline_reference: this.inlineReference || null,
             // The prompt in the box is what the user saw and approved - possibly
             // hand-edited. Without this the backend's distillation pass recomposes
