@@ -81,6 +81,22 @@
           </v-row>
         </v-card-text>
         <v-card-actions>
+          <v-btn
+            variant="text"
+            color="secondary"
+            prepend-icon="mdi-upload"
+            :loading="uploading"
+            @click="$refs.uploadInput.click()"
+          >
+            Upload New
+          </v-btn>
+          <input
+            ref="uploadInput"
+            type="file"
+            accept="image/*"
+            style="display: none"
+            @change="onUploadFile"
+          />
           <v-spacer></v-spacer>
           <v-btn variant="text" @click="pickerOpen=false">Close</v-btn>
           <v-btn color="primary" variant="text" @click="applySelection">Add Selected</v-btn>
@@ -107,7 +123,7 @@ export default {
     availableAssetIds: { type: Array, default: () => [] },
     availableAssetsMap: { type: Object, default: () => ({}) },
   },
-  inject: ['registerMessageHandler', 'unregisterMessageHandler', 'requestSceneAssets'],
+  inject: ['registerMessageHandler', 'unregisterMessageHandler', 'requestSceneAssets', 'getWebsocket'],
   data() {
     return {
       referenceImages: {},
@@ -116,6 +132,10 @@ export default {
       openNodes: [],
       activeNodes: [],
       filterReferenceOnly: false,
+      // ad-hoc uploads made from this picker; shown even before the scene
+      // status refresh delivers them in availableAssetsMap
+      uploadedIds: [],
+      uploading: false,
     };
   },
   computed: {
@@ -188,8 +208,10 @@ export default {
           return meta.reference && Array.isArray(meta.reference) && meta.reference.length > 0;
         });
       }
-      
-      return ids;
+
+      // Ad-hoc uploads surface immediately, ahead of the scene status refresh.
+      const fresh = this.uploadedIds.filter(id => !ids.includes(id));
+      return [...fresh, ...ids];
     },
     atMax() {
       return this.maxReferences > 0 && this.pendingSelection && this.pendingSelection.size >= this.maxReferences;
@@ -200,6 +222,21 @@ export default {
       // no-op, computed filteredIds reacts to activeNodes
     },
     handleMessage(message) {
+      // An upload we initiated finished - show and select it.
+      if (message.type === 'scene_asset_uploaded' && this.uploading) {
+        this.uploading = false;
+        const id = message.asset_id;
+        if (id) {
+          this.uploadedIds = [id, ...this.uploadedIds];
+          if (this.atMax && this.maxReferences === 1) {
+            this.pendingSelection = new Set([id]);
+          } else if (!this.atMax) {
+            this.pendingSelection.add(id);
+            this.pendingSelection = new Set(this.pendingSelection);
+          }
+          this.requestSceneAssets([id]);
+        }
+      }
       if (message.type === 'scene_asset') {
         const ids = this.referenceAssets || [];
         if (ids && ids.includes(message.asset_id)) {
@@ -209,7 +246,10 @@ export default {
             [message.asset_id]: `data:${mediaType};base64,${message.asset}`,
           };
         }
-        if (this.availableIds && this.availableIds.includes(message.asset_id)) {
+        if (
+          (this.availableIds && this.availableIds.includes(message.asset_id)) ||
+          this.uploadedIds.includes(message.asset_id)
+        ) {
           const mediaType = message.media_type || 'image/png';
           this.referenceImages = {
             ...this.referenceImages,
@@ -217,6 +257,21 @@ export default {
           };
         }
       }
+    },
+    onUploadFile(event) {
+      const file = event.target.files && event.target.files[0];
+      event.target.value = '';
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        this.uploading = true;
+        this.getWebsocket().send(JSON.stringify({
+          type: 'upload_scene_asset',
+          vis_type: 'UNSPECIFIED',
+          content: reader.result,
+        }));
+      };
+      reader.readAsDataURL(file);
     },
     requestReferenceAssets() {
       try {

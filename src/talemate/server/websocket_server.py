@@ -762,6 +762,21 @@ class WebsocketHandler(SceneAssetsBatchingMixin, Receiver):
         asset.meta.vis_type = asset_upload.vis_type or VIS_TYPE.UNSPECIFIED
         asset.meta.character_name = asset_upload.character_name
 
+        # Always tell the frontend what was created - plain uploads (no cover
+        # flags, e.g. an ad-hoc reference image) previously got no response at
+        # all, so the uploader could never select the new asset.
+        self.queue_put(
+            {
+                "type": "scene_asset_uploaded",
+                "asset_id": asset.id,
+                "media_type": asset.media_type,
+            }
+        )
+
+        if not asset_upload.scene_cover_image and not asset_upload.character_cover_image:
+            self.scene.saved = False
+            self.scene.emit_status()
+
         if asset_upload.scene_cover_image:
             self.scene.assets.cover_image = asset.id
             self.scene.saved = False

@@ -130,7 +130,7 @@
             />
             <VisualReferenceImages
               class="mt-2"
-              title="Background Reference (style transfer - mood/setting only, no identity)"
+              title="Background Reference"
               :reference-assets="backgroundReferenceAssets"
               :editable="editAvailable && !promptLoading"
               :max-references="1"
@@ -138,6 +138,10 @@
               :available-assets-map="availableAssetsMap"
               @update:reference-assets="(v) => backgroundReferenceAssets = v"
             />
+            <div class="text-medium-emphasis text-caption mb-2">
+              Style transfer only — carries mood, palette and setting from the
+              image, never a person's identity.
+            </div>
             <v-alert v-if="!editAvailable" type="warning" density="compact" variant="text" class="mt-1 text-caption">
               <div class="text-muted">
                 Image references are unavailable. Configure the image edit backend in the visual agent or check its connection.
