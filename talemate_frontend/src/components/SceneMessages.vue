@@ -205,6 +205,18 @@
                         </template>
                     </v-radio>
                 </v-radio-group>
+                <v-select
+                    v-if="visTypeDialog.checkpointChoices.length"
+                    v-model="visTypeDialog.checkpoint"
+                    :items="visTypeDialog.checkpointChoices"
+                    item-title="label"
+                    item-value="value"
+                    label="Image Model"
+                    density="comfortable"
+                    class="mt-4"
+                    :hint="visTypeDialogProfileHint"
+                    persistent-hint
+                />
             </v-card-text>
             <v-card-actions>
                 <v-spacer></v-spacer>
@@ -616,6 +628,13 @@ export default {
                 visType: null,
                 request: null,
                 hasCharacter: false,
+                // Image model choice, offered BEFORE the prompt is composed so
+                // the composition runs in the right dialect the first time
+                // (composing then switching pays the LLM chain twice).
+                checkpoint: '',
+                currentCheckpoint: '',
+                checkpointChoices: [],
+                checkpointProfiles: {},
             },
             illustrationSelectDialog: {
                 show: false,
@@ -644,6 +663,15 @@ export default {
         }
     },
     computed: {
+        visTypeDialogProfileHint() {
+            const labels = {
+                pony: 'Pony dialect (score tags + structured description)',
+                sdxl_natural: 'Natural language (Juggernaut family)',
+                descriptive: 'Descriptive prose',
+            };
+            const profile = this.visTypeDialog.checkpointProfiles[this.visTypeDialog.checkpoint];
+            return labels[profile] || 'Applies to all image generation until changed.';
+        },
         // Offered in the Adjust & Visualize chooser. The character options are hidden
         // when the message names nobody, because those vis types need a character and
         // there is nothing here to pick one from.
@@ -851,6 +879,16 @@ export default {
                     // Clear processing state for this message
                     this.processingAssetMessageIds.delete(data.message_id);
                     this.visualizingMessageIds.delete(data.message_id);
+                }
+            }
+
+            // Checkpoint list for the vis-type chooser's model picker.
+            if (data.type === 'visual' && data.action === 'checkpoints' && this.visTypeDialog.show) {
+                this.visTypeDialog.checkpointChoices = Array.isArray(data.data) ? data.data : [];
+                this.visTypeDialog.checkpointProfiles = data.profiles || {};
+                this.visTypeDialog.currentCheckpoint = data.current || '';
+                if (!this.visTypeDialog.checkpoint) {
+                    this.visTypeDialog.checkpoint = data.current || '';
                 }
             }
 
@@ -1392,6 +1430,9 @@ export default {
             this.visTypeDialog.hasCharacter = Boolean(request.character_name);
             this.visTypeDialog.visType = request.vis_type;
             this.visTypeDialog.show = true;
+            // Populate the model picker; composing in the right dialect the
+            // first time beats composing then recomposing on a switch.
+            this.getWebsocket().send(JSON.stringify({ type: 'visual', action: 'checkpoints' }));
         },
 
         closeVisTypeDialog() {
@@ -1400,6 +1441,8 @@ export default {
             this.visTypeDialog.request = null;
             this.visTypeDialog.visType = null;
             this.visTypeDialog.hasCharacter = false;
+            this.visTypeDialog.checkpoint = '';
+            this.visTypeDialog.currentCheckpoint = '';
         },
 
         confirmVisType() {
@@ -1407,6 +1450,20 @@ export default {
             const request = this.visTypeDialog.request;
             const vis_type = this.visTypeDialog.visType;
             if (!request || !vis_type) return;
+
+            // Apply the model choice BEFORE the compose request goes out, so
+            // profile resolution sees it (same global set_checkpoint semantics
+            // as the modal's own dropdown).
+            if (
+                this.visTypeDialog.checkpoint &&
+                this.visTypeDialog.checkpoint !== this.visTypeDialog.currentCheckpoint
+            ) {
+                this.getWebsocket().send(JSON.stringify({
+                    type: 'visual',
+                    action: 'set_checkpoint',
+                    checkpoint: this.visTypeDialog.checkpoint,
+                }));
+            }
 
             // The character is only meaningful to the vis types that depict one. Sending
             // it with a background or object request would name a subject the image is
