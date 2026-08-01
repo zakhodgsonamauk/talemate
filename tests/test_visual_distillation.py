@@ -401,3 +401,23 @@ async def test_non_auto_shot_mismatches_the_auto_prestart(agent):
     assert request.distilled is True
     assert agent._pending_distillation is None
     assert stub.call_count >= 1
+
+async def test_overflowing_subject_sentence_is_word_trimmed_not_dropped(agent):
+    """Observed live (flow 95e370): the model led with a standalone framing
+    sentence and packed the whole subject into one long second sentence; the
+    sentence trim kept only the 16-token framing list and the character
+    vanished. The overflow sentence must be word-filled into the remaining
+    budget instead."""
+    filler = ", ".join(f"detail {i}" for i in range(60))
+    response = (
+        "PROMPT: Wide establishing shot, full body, from a distance, cinematic "
+        "scale, environment focus. A tall female alien with violet skin and "
+        f"geometric facial markings stands small in frame, {filler}.\n"
+        "NEGATIVE: close-up, portrait"
+    )
+    with _stub_llm(response):
+        request = _request(prompt_profile="sdxl_natural", shot_type="wide")
+        await _finalize(agent, request)
+
+    assert request.distilled is True
+    assert "violet skin" in request.prompt

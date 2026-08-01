@@ -165,24 +165,32 @@ PROFILE_CHECKPOINT_PATTERNS: tuple[tuple[re.Pattern, str], ...] = (
 SHOT_BLOCKS: dict[str, str] = {
     "wide": (
         "REQUESTED FRAMING - WIDE SHOT (this is the one exception to the\n"
-        "no-framing-language rule; include this framing vocabulary):\n"
-        "Describe the environment and setting FIRST; the subject is 'a lone\n"
-        "figure, small in frame' within it. Include: wide establishing shot,\n"
-        "full body, from a distance, cinematic scale, environment focus.\n"
+        "no-framing-language rule):\n"
+        "Compose environment-first: the FIRST sentence must describe the\n"
+        "setting AND place the subject small within it - e.g. 'A wide\n"
+        "establishing shot of a rain-slick street where a lone violet-skinned\n"
+        "figure stands small in frame.' Weave this vocabulary into the\n"
+        "description sentences - NEVER output it as a standalone list: wide\n"
+        "establishing shot, full body, from a distance, cinematic scale,\n"
+        "environment focus, a lone figure small in frame.\n"
         "NEGATIVE must include: close-up, portrait, looking at viewer,\n"
         "centered composition, face focus."
     ),
     "closeup": (
         "REQUESTED FRAMING - CLOSE-UP (this is the one exception to the\n"
-        "no-framing-language rule; include this framing vocabulary):\n"
-        "Describe the subject's face and expression FIRST, setting minimal.\n"
-        "Include: close-up, detailed face.\n"
+        "no-framing-language rule):\n"
+        "The FIRST sentence must describe the subject's face and expression\n"
+        "in close-up; setting minimal. Weave this vocabulary into the\n"
+        "description sentences - NEVER output it as a standalone list:\n"
+        "close-up, detailed face.\n"
         "NEGATIVE must include: wide shot, full body, distant."
     ),
     "medium": (
         "REQUESTED FRAMING - MEDIUM SHOT (this is the one exception to the\n"
-        "no-framing-language rule; include this framing vocabulary):\n"
-        "Frame the subject full body. Include: medium shot, full body."
+        "no-framing-language rule):\n"
+        "Frame the subject full body. Weave this vocabulary into the\n"
+        "description sentences - NEVER output it as a standalone list:\n"
+        "medium shot, full body."
     ),
 }
 
@@ -1044,6 +1052,19 @@ class GenerationMixin:
                     # the budget - a slightly over-budget prompt that depicts
                     # the subject beats an empty one
                     if kept and estimate_prompt_tokens(candidate) > budget:
+                        # Don't drop the overflowing sentence whole: a long
+                        # second sentence often carries the entire subject
+                        # description (observed live: a wide shot kept only
+                        # the 16-token framing sentence out of 98 and lost
+                        # the character completely). Fill what remains of the
+                        # budget word by word instead.
+                        words = sentence.split()
+                        while words:
+                            partial = " ".join([*kept, " ".join(words)])
+                            if estimate_prompt_tokens(partial) <= budget:
+                                kept.append(" ".join(words).rstrip(",.;"))
+                                break
+                            words.pop()
                         break
                     kept.append(sentence)
                 trimmed = " ".join(kept)
