@@ -1,0 +1,64 @@
+{
+  "1": {
+    "inputs": {
+      "image": "talemate/source.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Lab Source Image"
+    }
+  },
+  "2": {
+    "inputs": {
+      "image": "talemate/mask.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Lab Slab Mask"
+    }
+  },
+  "3": {
+    "inputs": {
+      "image": [
+        "2",
+        0
+      ],
+      "channel": "red"
+    },
+    "class_type": "ImageToMask",
+    "_meta": {
+      "title": "Lab Mask Channel"
+    }
+  },
+  "4": {
+    "inputs": {
+      "images": [
+        "1",
+        0
+      ],
+      "masks": [
+        "3",
+        0
+      ],
+      "removal_strength": 230,
+      "edge_smoothness": 8
+    },
+    "class_type": "AILab_LamaRemover",
+    "_meta": {
+      "title": "Lab LaMa Background Plate"
+    }
+  },
+  "5": {
+    "inputs": {
+      "images": [
+        "4",
+        0
+      ],
+      "filename_prefix": "talemate_bgplate"
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Lab Save Plate"
+    }
+  }
+}

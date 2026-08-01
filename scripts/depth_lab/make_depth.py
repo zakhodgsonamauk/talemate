@@ -221,6 +221,7 @@ def main() -> int:
                 "width": width,
                 "height": height,
                 "seconds": round(elapsed, 2),
+                "depth_bytes": len(depth_bytes),
             }
         )
 
