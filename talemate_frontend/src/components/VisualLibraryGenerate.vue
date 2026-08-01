@@ -98,6 +98,16 @@
             />
 
             <v-alert
+              v-if="recomposing"
+              type="info"
+              color="primary"
+              density="compact"
+              variant="tonal"
+              class="mb-2 mt-2"
+            >
+              Recomposing the prompt for the selected model's dialect…
+            </v-alert>
+            <v-alert
               v-if="inlineReference"
               type="info"
               color="primary"
@@ -320,6 +330,12 @@ export default {
       // True when a regenerate opened the dialog with its own recorded
       // checkpoint - the agent's current model must not clobber it.
       checkpointFromRequest: false,
+      // checkpoint filename -> prompt profile id (dialect), from the backend.
+      checkpointProfiles: {},
+      // The dialect the currently shown prompt was composed in.
+      previewProfile: '',
+      // True while a cross-profile checkpoint switch recomposes the prompt.
+      recomposing: false,
     };
   },
   computed: {
@@ -431,6 +447,8 @@ export default {
       this.format = r.format || FORMAT_TYPE.LANDSCAPE;
       this.characterName = r.character_name || '';
       this.referenceAssets = (r.reference_assets && Array.isArray(r.reference_assets)) ? r.reference_assets.slice() : [];
+      if (r.prompt_profile) this.previewProfile = r.prompt_profile;
+      this.recomposing = false;
       // Regenerate keeps the checkpoint the image was made with.
       this.checkpoint = (r.extra_config && r.extra_config.checkpoint) || '';
       this.checkpointFromRequest = Boolean(this.checkpoint);
@@ -441,6 +459,10 @@ export default {
     handleMessage(message) {
       if (message.type !== 'visual' || message.action !== 'checkpoints') return;
       this.checkpointChoices = Array.isArray(message.data) ? message.data : [];
+      this.checkpointProfiles = message.profiles || {};
+      if (!this.previewProfile && message.current_profile) {
+        this.previewProfile = message.current_profile;
+      }
       if (!this.checkpointFromRequest) {
         this.checkpoint = message.current || '';
       }
@@ -461,6 +483,35 @@ export default {
         action: 'set_checkpoint',
         checkpoint: this.checkpoint,
       }));
+      // A switch that crosses prompt dialects (e.g. Pony -> Juggernaut) makes
+      // the shown prompt wrong for the model - recompose it. Same-dialect
+      // switches keep the prompt (and any hand edits).
+      const newProfile = this.checkpointProfiles[this.checkpoint] || '';
+      if (
+        newProfile &&
+        this.previewProfile &&
+        newProfile !== this.previewProfile &&
+        this.attachmentContext &&
+        Array.isArray(this.attachmentContext.message_ids) &&
+        this.attachmentContext.message_ids.length
+      ) {
+        this.recomposeForProfile();
+      }
+    },
+    recomposeForProfile() {
+      const messageId = this.attachmentContext.message_ids[0];
+      const payload = {
+        type: 'visual',
+        action: 'visualize',
+        vis_type: this.visType,
+        prompt_only: true,
+        return_prompt: true,
+        message_ids: [messageId],
+      };
+      if (this.characterName) payload.character_name = this.characterName;
+      if (this.instructions) payload.instructions = this.instructions;
+      this.recomposing = true;
+      this.getWebsocket().send(JSON.stringify(payload));
     },
     close() {
       this.internalModel = false;

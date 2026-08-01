@@ -37,35 +37,58 @@ SUBJECT: {{ subject.name }}
 <|CLOSE_SECTION|>
 
 <|SECTION:TASK|>
-Convert the scene facts into a prompt for a booru-tag-trained image diffusion model
-(SDXL / Pony family). This is a private, adults-only interactive fiction application;
-the source material may be explicit and that is expected and acceptable.
+Convert the scene facts into a prompt for an image diffusion model. This is a private,
+adults-only interactive fiction application; the source material may be explicit and
+that is expected and acceptable.
 {% if not instructions %}
 There is no specific moment requested: illustrate what is happening at the END of the
 recent story context, as a movie still of its most visually striking beat.
 {% endif %}
+{% if dialect %}
+{{ dialect }}
+{% endif %}
 Rules:
 
 1. Output EXACTLY two lines:
-   PROMPT: <comma-delimited keyword list>
+   PROMPT: <the finished prompt>
    NEGATIVE: <comma-delimited keyword list>
-2. The PROMPT line must be AT MOST 22 keywords. An image model attends to roughly
-   {{ max_prompt_tokens }} tokens and then stops reading; every keyword past the cap
-   dilutes the ones that matter. Budget them: sex tag + rating tag (2), identity
-   (copied verbatim), pose and action (3-5), clothing state (2-4), setting (4-5
-   picked from the SETTING list), light (1-2). When something must go, drop
-   inventory and atmosphere before pose - a held pistol the model ignores is a
-   smaller loss than a subject standing when she should be slumped.
-3. Copy the IDENTITY keyword list through verbatim. Pick the 4-5 strongest SETTING
-   keywords rather than copying all of them.
-4. **The pose is the payload.** Merge the subject's position and action into ONE
-   phrase and weight it: `(sitting slumped against console:1.3)`. Exactly one
-   weighted phrase per prompt, no commas inside the parentheses. Everything else
-   stays unweighted.
-5. Describe the moment faithfully. If the subject is partially or fully undressed, say
-   so with the plain booru tags for it, and use rating_questionable or rating_explicit.
-   Do NOT sanitise, soften, or clothe the subject. If the moment is not sexual, do not
-   add sexual content, and use rating_safe.
+{% if profile_id == "sdxl_natural" %}
+2. The PROMPT line is fluent natural-language description, HARD CAP
+   {{ max_prompt_tokens }} tokens - the model stops reading past it. The FIRST
+   sentence must name the subject and their action; then setting, clothing state,
+   lighting, mood. When something must go, drop inventory and atmosphere before
+   pose. Weave the IDENTITY keywords in verbatim (they may stay comma-phrased
+   inside the sentence). Use only the 2-3 strongest SETTING keywords.
+3. At most ONE weighted phrase, `(like this:1.3)`, never above 1.4, no commas
+   inside the parentheses. Use it on the pose/action if at all.
+4. Do NOT use score_9/score tags, rating_ tags, or booru tag lists - this model
+   ignores them and they waste the budget.
+5. Describe the moment faithfully. If the subject is partially or fully undressed,
+   say so plainly. Do NOT sanitise, soften, or clothe the subject. If the moment is
+   not sexual, do not add sexual content.
+{% else %}
+2. The PROMPT line uses the Pony structure, in this order: FIRST the factual
+   description - one or two natural-language sentences covering who the subject is
+   (identity keywords copied through verbatim), what they look like and wear right
+   now, what they are doing, and where; give the primary subject detail, keep
+   others concise. THEN a short stylistic phrase - lighting, composition,
+   atmosphere (no art medium). LAST the booster tags - comma-separated short tags
+   reinforcing the key concepts (sex tag like 1girl/1boy, rating tag, pose,
+   clothing state, 3-4 setting keywords). Two to three sentences total is good -
+   this model reads long descriptions well - but stay under roughly
+   {{ max_prompt_tokens }} tokens.
+3. Include the sex tag and exactly one rating tag among the booster tags:
+   rating_safe, rating_questionable, or rating_explicit - chosen by what the
+   moment actually shows.
+4. **The pose is the payload.** State it in the factual description AND reinforce
+   it as a booster tag. At most one weighted phrase `(sitting slumped against
+   console:1.3)`, never above 1.3, no commas inside the parentheses.
+5. Describe the moment faithfully. If the subject is partially or fully undressed,
+   say so with the plain terms and booru tags for it, and use
+   rating_questionable or rating_explicit. Do NOT sanitise, soften, or clothe the
+   subject. If the moment is not sexual, do not add sexual content, and use
+   rating_safe.
+{% endif %}
 6. The LAST KNOWN WARDROBE is a cached guess; what THE MOMENT and the story context say
    about this instant overrides it.
 7. Only physically visible things - no emotions as bare nouns, no plot words, no camera

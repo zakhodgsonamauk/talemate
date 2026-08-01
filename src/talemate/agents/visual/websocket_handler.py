@@ -170,12 +170,31 @@ class VisualWebsocketHandler(Plugin):
         action = self._checkpoint_action(visual)
         current = action.config["model"].value if action else ""
 
+        # dialect per checkpoint, so the frontend can tell whether a switch
+        # crosses prompt profiles (and the shown prompt needs recomposing)
+        profiles: dict[str, str] = {}
+        for choice in choices:
+            value = choice.get("value") or ""
+            if value:
+                try:
+                    profiles[value] = visual.resolve_prompt_profile(
+                        checkpoint=value
+                    ).id
+                except Exception:
+                    profiles[value] = "pony"
+
         self.websocket_handler.queue_put(
             {
                 "type": "visual",
                 "action": "checkpoints",
                 "data": choices,
                 "current": current or "",
+                "profiles": profiles,
+                "current_profile": (
+                    visual.resolve_prompt_profile(checkpoint=current).id
+                    if current
+                    else visual.resolve_prompt_profile().id
+                ),
             }
         )
 

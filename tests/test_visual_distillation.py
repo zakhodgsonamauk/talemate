@@ -228,7 +228,10 @@ async def test_style_keywords_are_reapplied_around_the_distilled_core(agent):
     with _stub_llm(DISTILLED):
         await _finalize(agent, request)
 
-    assert request.prompt.startswith("semi-realistic, cinematic lighting")
+    # The profile's full quality chain leads (pony: all four score tags), then
+    # the style template's keywords, then the distilled core.
+    assert request.prompt.startswith("score_9, score_8_up, score_7_up, score_6_up")
+    assert "semi-realistic, cinematic lighting" in request.prompt
     assert "sketch" in request.negative_prompt
     assert "topless" in request.prompt
 

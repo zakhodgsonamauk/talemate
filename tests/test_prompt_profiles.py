@@ -54,6 +54,9 @@ class FakeVisualAgent(GenerationMixin):
             return self._overrides
         raise KeyError(key)
 
+    def _max_prompt_tokens(self):
+        return 150
+
 
 class TestResolution:
     def test_pony_checkpoint_by_name(self):
@@ -114,3 +117,73 @@ class TestResolution:
         agent = FakeVisualAgent(model="CyberRealisticPony_V9.safetensors")
         request = GenerationRequest(prompt="x", prompt_profile="sdxl_natural")
         assert agent.resolve_prompt_profile(request).id == "sdxl_natural"
+
+
+class TestLegacyPathGuard:
+    @pytest.mark.asyncio
+    async def test_sdxl_natural_legacy_strips_pony_tags(self):
+        agent = FakeVisualAgent(model="Juggernaut-XI.safetensors")
+        request = GenerationRequest(
+            prompt="score_9, score_8_up, rating_safe, source_anime, 1girl, violet skin, standing at console",
+            prompt_profile="sdxl_natural",
+        )
+        await agent._finalize_prompt(request)
+        low = (request.prompt or "").lower()
+        assert "score_" not in low
+        assert "rating_" not in low
+        assert "source_" not in low
+        assert "violet skin" in low
+
+    @pytest.mark.asyncio
+    async def test_pony_legacy_keeps_tag_machinery(self):
+        agent = FakeVisualAgent(model="CyberRealisticPony_V9.safetensors")
+        request = GenerationRequest(
+            prompt="score_9, 1girl, violet skin, standing at console",
+            prompt_profile="pony",
+        )
+        await agent._finalize_prompt(request)
+        assert "score_9" in (request.prompt or "")
+
+
+class TestDistillTemplate:
+    def _render(self, profile_id):
+        import jinja2
+        from talemate.agents.visual.schema import PROMPT_PROFILES
+
+        src = open(
+            "src/talemate/prompts/templates/visual/distill-image-prompt.jinja2",
+            encoding="utf-8",
+        ).read()
+        env = jinja2.Environment()
+        env.globals["llm_can_be_coerced"] = lambda: False
+        env.globals["set_prepared_response"] = lambda *_a, **_k: ""
+        profile = PROMPT_PROFILES[profile_id]
+        return env.from_string(src).render(
+            subject=SimpleNamespace(name="Kaira"),
+            identity="violet skin, indigo hair",
+            wardrobe="",
+            rules="",
+            sex="female",
+            others="",
+            scene_anchor="starship corridor",
+            location="",
+            instructions="Kaira draws her pistol.",
+            recent=[],
+            max_prompt_tokens=profile.max_prompt_tokens,
+            dialect=profile.dialect_instructions,
+            profile_id=profile.id,
+        )
+
+    def test_pony_render_has_four_section_contract(self):
+        text = self._render("pony")
+        assert "Pony structure" in text
+        assert "rating_safe" in text
+        assert "booster tags" in text.lower()
+        assert "HARD CAP" not in text
+
+    def test_sdxl_render_has_natural_contract(self):
+        text = self._render("sdxl_natural")
+        assert "HARD CAP" in text
+        assert "75 tokens" in text
+        assert "Pony structure" not in text
+        assert "Do NOT use score_9" in text

@@ -864,7 +864,7 @@ export default {
                     // explicit `undefined` over the request would erase the
                     // vis_type or character the modal was opened with.
                     const preview = { prompt: data.prompt || '', negative_prompt: data.negative_prompt || '' };
-                    for (const key of ['vis_type', 'character_name', 'format']) {
+                    for (const key of ['vis_type', 'character_name', 'format', 'prompt_profile']) {
                         if (data[key]) preview[key] = data[key];
                     }
                     // References the composer selected — the refined prompt

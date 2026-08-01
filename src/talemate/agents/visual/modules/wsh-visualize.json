@@ -814,6 +814,10 @@
         {
           "name": "item6",
           "type": "*"
+        },
+        {
+          "name": "item7",
+          "type": "*"
         }
       ]
     },
@@ -921,6 +925,22 @@
       "collapsed": false,
       "inherited": false,
       "registry": "data/Get",
+      "base_type": "core/Node"
+    },
+    "a989425e-5d26-4771-b935-ecbbcbdb0a4c": {
+      "title": "KV prompt_profile",
+      "id": "a989425e-5d26-4771-b935-ecbbcbdb0a4c",
+      "properties": {
+        "key": "prompt_profile",
+        "value": ""
+      },
+      "x": 2000,
+      "y": 1520,
+      "width": 210,
+      "height": 122,
+      "collapsed": true,
+      "inherited": false,
+      "registry": "data/MakeKeyValuePair",
       "base_type": "core/Node"
     }
   },
@@ -1132,6 +1152,12 @@
     ],
     "8032a9f2-467a-4992-a0ee-6db9ec096526.value": [
       "d2bde569-e394-46b3-9d44-78791d423ce2.callback"
+    ],
+    "b7d1ef00-0000-4000-8000-00000000000f.prompt_profile": [
+      "a989425e-5d26-4771-b935-ecbbcbdb0a4c.value"
+    ],
+    "a989425e-5d26-4771-b935-ecbbcbdb0a4c.kv": [
+      "b7d1ef00-0000-4000-8000-00000000000b.item7"
     ]
   },
   "groups": [

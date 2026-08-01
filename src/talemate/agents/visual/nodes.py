@@ -608,6 +608,11 @@ class GenerationRequestNode(AgentNode):
             asset_attachment_context=asset_attachment_context
             or AssetAttachmentContext(),
         )
+        # pin the prompting dialect for everything downstream (distillation,
+        # finalize, preview payload)
+        generation_request.prompt_profile = self.agent.resolve_prompt_profile(
+            generation_request
+        ).id
         self.set_output_values(
             {
                 "generation_request": generation_request,
@@ -733,6 +738,7 @@ class FinalizePrompt(AgentNode):
         self.add_output("generation_request", socket_type="visual/generation_request")
         self.add_output("prompt", socket_type="str")
         self.add_output("negative_prompt", socket_type="str")
+        self.add_output("prompt_profile", socket_type="str")
 
     async def run(self, state: GraphState):
         generation_request: GenerationRequest = self.require_input("generation_request")
@@ -750,6 +756,8 @@ class FinalizePrompt(AgentNode):
                 "generation_request": generation_request,
                 "prompt": generation_request.prompt or "",
                 "negative_prompt": generation_request.negative_prompt or "",
+                "prompt_profile": generation_request.prompt_profile
+                or self.agent.resolve_prompt_profile(generation_request).id,
             }
         )
 

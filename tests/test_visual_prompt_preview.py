@@ -160,6 +160,7 @@ class TestPayload:
         assert keys == {
             "prompt",
             "negative_prompt",
+            "prompt_profile",
             "vis_type",
             "character_name",
             "message_ids",

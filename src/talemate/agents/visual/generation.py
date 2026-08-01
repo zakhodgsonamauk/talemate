@@ -671,15 +671,29 @@ class GenerationMixin:
             if kw.strip()
         ]
 
+        profile = self.resolve_prompt_profile(request)
+        request.prompt_profile = profile.id
+
         keywords = sanitise_keywords(keywords)
         keywords = await self._drop_absent_character_anchors(keywords, request)
         keywords = await self._suppress_stale_wardrobe(keywords, request)
         keywords = await self._drop_duplicate_setting(keywords, request)
         keywords = await self._drop_secondary_traits(keywords, request)
-        # Before the budget trim so the tags are accounted for rather than pushed out.
-        keywords = await self._add_sex_tags(keywords, request)
-        keywords = await self._add_rating_tags(keywords, request)
-        keywords = await self._drop_score_tags_when_dressed(keywords, request)
+        if profile.id == "sdxl_natural":
+            # Pony conventions are noise to this checkpoint family: strip any
+            # score/rating/source tags the style templates injected, and skip
+            # the tag adders below - the sex/rating axes do not exist here.
+            keywords = [
+                kw
+                for kw in keywords
+                if not re.match(r"\s*(score_|rating_|source_)", kw, re.IGNORECASE)
+            ]
+        else:
+            # Before the budget trim so the tags are accounted for rather than
+            # pushed out.
+            keywords = await self._add_sex_tags(keywords, request)
+            keywords = await self._add_rating_tags(keywords, request)
+            keywords = await self._drop_score_tags_when_dressed(keywords, request)
         keywords = await self._trim_to_budget(keywords, request)
 
         keywords = list(dict.fromkeys(keywords))
@@ -741,7 +755,11 @@ class GenerationMixin:
             instructions=instructions or None,
             character_name=character_name or None,
         )
-        key = (vt, character_name, instructions)
+        # The dialect is part of the ask's identity: a checkpoint switch between
+        # compose and finalize must not serve a stale-dialect prompt.
+        profile = self.resolve_prompt_profile(request)
+        request.prompt_profile = profile.id
+        key = (vt, character_name, instructions, profile.id)
 
         # Replace, and cancel, any pending task a previous compose abandoned.
         stale = getattr(self, "_pending_distillation", None)
@@ -772,6 +790,7 @@ class GenerationMixin:
             request.vis_type,
             (request.character_name or "").strip(),
             (request.instructions or "").strip(),
+            self.resolve_prompt_profile(request).id,
         )
         if key != expected:
             task.cancel()
@@ -779,8 +798,18 @@ class GenerationMixin:
             # so the log has to show exactly which component disagreed.
             log.warning(
                 "distill_prompt.pending_mismatch",
-                pending={"vis_type": str(key[0]), "character": key[1], "instructions": key[2][:80]},
-                expected={"vis_type": str(expected[0]), "character": expected[1], "instructions": expected[2][:80]},
+                pending={
+                    "vis_type": str(key[0]),
+                    "character": key[1],
+                    "instructions": key[2][:80],
+                    "profile": key[3] if len(key) > 3 else None,
+                },
+                expected={
+                    "vis_type": str(expected[0]),
+                    "character": expected[1],
+                    "instructions": expected[2][:80],
+                    "profile": expected[3],
+                },
             )
             return False
 
@@ -797,6 +826,7 @@ class GenerationMixin:
 
         request.prompt = pre_request.prompt
         request.negative_prompt = pre_request.negative_prompt
+        request.prompt_profile = pre_request.prompt_profile
         log.debug("distill_prompt.pending_consumed", subject=key[1] or None)
         return True
 
@@ -869,6 +899,9 @@ class GenerationMixin:
                     fallback=getattr(self.client, "name", None),
                 )
 
+        profile = self.resolve_prompt_profile(request)
+        request.prompt_profile = profile.id
+
         prompt_vars = {
             "scene": scene,
             "recent": recent,
@@ -881,7 +914,9 @@ class GenerationMixin:
             "scene_anchor": setting or "",
             "location": location or "",
             "instructions": (request.instructions or "").strip(),
-            "max_prompt_tokens": self._max_prompt_tokens(),
+            "max_prompt_tokens": min(self._max_prompt_tokens(), profile.max_prompt_tokens),
+            "dialect": profile.dialect_instructions,
+            "profile_id": profile.id,
         }
 
         # Two attempts: cloud models refuse borderline content flakily rather than
@@ -924,7 +959,8 @@ class GenerationMixin:
 
         # The style templates were already flattened into the incoming prompt string,
         # where they can no longer be told apart from the LLM keywords - so they are
-        # re-fetched from their source and re-applied around the distilled core.
+        # re-fetched from their source and re-applied around the distilled core,
+        # in the dialect the target checkpoint reads.
         style_positive: list[str] = []
         style_negative: list[str] = []
         for vis_type in (VIS_TYPE.UNSPECIFIED, request.vis_type):
@@ -933,23 +969,65 @@ class GenerationMixin:
                 style_positive.extend(style.positive_keywords or [])
                 style_negative.extend(style.negative_keywords or [])
 
-        positive_keywords = [
-            normalize_keyword(kw)
-            for kw in [*style_positive, *positive.split(",")]
-            if kw.strip()
-        ]
-        negative_keywords = [
-            kw.strip()
-            for kw in [*(negative or "").split(","), *style_negative]
-            if kw.strip()
+        quality_keywords = [
+            kw.strip() for kw in profile.quality_prefix.split(",") if kw.strip()
         ]
 
-        request.prompt = ", ".join(dict.fromkeys(positive_keywords))
-        request.negative_prompt = ", ".join(dict.fromkeys(negative_keywords))
+        if profile.style_render == "natural":
+            # Natural-language checkpoints (Juggernaut family): no score/rating/
+            # source tags anywhere - strip them from template data too, since the
+            # user's installed style templates are Pony-era. The surviving style
+            # keywords (medium, render quality) join as a trailing style phrase.
+            def _tagless(keywords: list[str]) -> list[str]:
+                return [
+                    kw
+                    for kw in keywords
+                    if not re.match(r"\s*(score_|rating_|source_)", kw, re.IGNORECASE)
+                ]
+
+            style_phrase = ", ".join(
+                dict.fromkeys(_tagless([*quality_keywords, *style_positive]))
+            )
+            body = positive.strip().rstrip(",")
+            request.prompt = f"{body}. {style_phrase}" if style_phrase else body
+            negative_keywords = _tagless(
+                [
+                    kw.strip()
+                    for kw in [
+                        *(negative or "").split(","),
+                        *profile.negative_base.split(","),
+                        *style_negative,
+                    ]
+                    if kw.strip()
+                ]
+            )
+            request.negative_prompt = ", ".join(dict.fromkeys(negative_keywords))
+        else:
+            # Tag-rendered checkpoints (Pony family): quality prefix first (the
+            # profile's full score chain - dedupe absorbs whatever subset the
+            # style template already carries), then style tags, then the
+            # distilled core.
+            positive_keywords = [
+                normalize_keyword(kw)
+                for kw in [*quality_keywords, *style_positive, *positive.split(",")]
+                if kw.strip()
+            ]
+            negative_keywords = [
+                kw.strip()
+                for kw in [
+                    *(negative or "").split(","),
+                    *profile.negative_base.split(","),
+                    *style_negative,
+                ]
+                if kw.strip()
+            ]
+            request.prompt = ", ".join(dict.fromkeys(positive_keywords))
+            request.negative_prompt = ", ".join(dict.fromkeys(negative_keywords))
 
         log.debug(
             "distill_prompt",
             subject=subject.name,
+            profile=profile.id,
             tokens=estimate_prompt_tokens(request.prompt),
             prompt=request.prompt,
             negative=request.negative_prompt,
@@ -1636,7 +1714,10 @@ class GenerationMixin:
         """
         # Emphasis is rendered after this runs, and its brackets and weight cost tokens
         # the budget check would otherwise miss - observed landing at 81 against 77.
-        budget = self._max_prompt_tokens()
+        budget = min(
+            self._max_prompt_tokens(),
+            self.resolve_prompt_profile(request).max_prompt_tokens,
+        )
         if abs(self._identity_weight() - 1.0) >= 0.01:
             budget -= EMPHASIS_TOKEN_OVERHEAD
 
