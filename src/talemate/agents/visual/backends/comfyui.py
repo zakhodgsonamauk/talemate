@@ -31,6 +31,7 @@ from talemate.agents.visual.schema import (
     Resolution,
     GEN_TYPE,
     PROMPT_TYPE,
+    get_prompt_profile,
 )
 
 log = structlog.get_logger("talemate.agents.visual.comfyui")
@@ -312,6 +313,25 @@ class Workflow(pydantic.BaseModel):
                 inputs.update(updates)
                 touched += 1
         log.debug("workflow.set_sampler", profile=profile, nodes_touched=touched)
+
+    def set_clip_skip(self, stop_at_clip_layer: int):
+        """
+        Apply the prompt profile's CLIP skip to any CLIPSetLastLayer node.
+
+        Pony-family checkpoints are trained at clip skip 2 (-2 here); running
+        them at the default encoding depth is a quality tax. Workflows without
+        the node (older/custom) are silently unaffected.
+        """
+        touched = 0
+        for node in self.nodes.values():
+            if node.get("class_type") == "CLIPSetLastLayer":
+                node["inputs"]["stop_at_clip_layer"] = stop_at_clip_layer
+                touched += 1
+        log.debug(
+            "workflow.set_clip_skip",
+            stop_at_clip_layer=stop_at_clip_layer,
+            nodes_touched=touched,
+        )
 
     def set_reference_images(self, image_paths: list[str]):
         """
@@ -653,6 +673,12 @@ class Backend(backends.Backend):
         )
         if profile:
             workflow.set_sampler(profile)
+
+        # CLIP skip travels with the prompt profile (pony: -2, trained
+        # convention; others: default depth).
+        workflow.set_clip_skip(
+            get_prompt_profile(request.prompt_profile).clip_skip
+        )
 
         workflow.set_resolution(request.resolution)
         workflow.set_prompt(request.prompt, request.negative_prompt)

@@ -353,6 +353,8 @@ class PromptProfile(pydantic.BaseModel):
     negative_base: str = ""
     # style pass renders keywords (tag stanzas) or a natural-language sentence
     style_render: Literal["tags", "natural"] = "tags"
+    # CLIPSetLastLayer value (-1 = default depth; pony family trains at -2)
+    clip_skip: int = -1
 
 
 PROMPT_PROFILES: dict[str, PromptProfile] = {
@@ -379,6 +381,7 @@ PROMPT_PROFILES: dict[str, PromptProfile] = {
         weight_cap=1.3,
         negative_base="text, watermark, low quality, blurry, deformed, extra limbs, bad hands, bad anatomy",
         style_render="tags",
+        clip_skip=-2,
     ),
     "sdxl_natural": PromptProfile(
         id="sdxl_natural",

@@ -187,3 +187,55 @@ class TestDistillTemplate:
         assert "75 tokens" in text
         assert "Pony structure" not in text
         assert "Do NOT use score_9" in text
+
+
+class TestClipSkip:
+    def test_pony_profile_carries_clip_skip(self):
+        assert PROMPT_PROFILES["pony"].clip_skip == -2
+        assert PROMPT_PROFILES["sdxl_natural"].clip_skip == -1
+        assert PROMPT_PROFILES["descriptive"].clip_skip == -1
+
+    def test_workflows_carry_the_clip_skip_node(self):
+        import json
+
+        for f in (
+            "default-sdxl.json",
+            "sdxl-ipadapter-character.json",
+            "sdxl-ipadapter-character-multi.json",
+            "sdxl-ipadapter-inpaint.json",
+        ):
+            d = json.load(
+                open(f"templates/comfyui-workflows/{f}", encoding="utf-8")
+            )
+            graph = d.get("prompt", d)
+            skips = [
+                n for n in graph.values() if n.get("class_type") == "CLIPSetLastLayer"
+            ]
+            assert len(skips) == 1, f
+            # both text encoders read the skipped clip
+            for nid in ("4", "5"):
+                assert graph[nid]["inputs"]["clip"][0] == "90", f
+
+    def test_workflow_set_clip_skip(self):
+        from talemate.agents.visual.backends.comfyui import Workflow
+
+        import json
+
+        raw = json.load(
+            open(
+                "templates/comfyui-workflows/sdxl-ipadapter-character.json",
+                encoding="utf-8",
+            )
+        )
+        workflow = Workflow(
+            nodes=raw.get("prompt", raw), mtime=0.0, path="test"
+        )
+        workflow.set_clip_skip(-2)
+        skip_nodes = [
+            n
+            for n in workflow.nodes.values()
+            if n.get("class_type") == "CLIPSetLastLayer"
+        ]
+        assert skip_nodes and all(
+            n["inputs"]["stop_at_clip_layer"] == -2 for n in skip_nodes
+        )

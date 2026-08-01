@@ -23,8 +23,8 @@
     "inputs": {
       "text": "",
       "clip": [
-        "1",
-        1
+        "90",
+        0
       ]
     },
     "class_type": "CLIPTextEncode",
@@ -36,8 +36,8 @@
     "inputs": {
       "text": "",
       "clip": [
-        "1",
-        1
+        "90",
+        0
       ]
     },
     "class_type": "CLIPTextEncode",
@@ -157,7 +157,7 @@
       "add_noise": "enable",
       "noise_seed": 131938123826302,
       "steps": 30,
-      "cfg": 8,
+      "cfg": 6.0,
       "sampler_name": "dpmpp_2m",
       "scheduler": "karras",
       "start_at_step": 0,
@@ -212,6 +212,19 @@
     "class_type": "SaveImage",
     "_meta": {
       "title": "Save Image"
+    }
+  },
+  "90": {
+    "inputs": {
+      "stop_at_clip_layer": -1,
+      "clip": [
+        "1",
+        1
+      ]
+    },
+    "class_type": "CLIPSetLastLayer",
+    "_meta": {
+      "title": "Talemate CLIP Skip"
     }
   }
 }
