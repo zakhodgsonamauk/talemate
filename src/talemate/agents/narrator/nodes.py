@@ -1,6 +1,11 @@
 import structlog
 from typing import ClassVar
-from talemate.game.engine.nodes.core import GraphState, PropertyField, InputValueError
+from talemate.game.engine.nodes.core import (
+    UNRESOLVED,
+    GraphState,
+    PropertyField,
+    InputValueError,
+)
 from talemate.game.engine.nodes.registry import register
 from talemate.game.engine.nodes.agent import AgentNode, AgentSettingsNode
 from talemate.scene_message import NarratorMessage
@@ -65,7 +70,10 @@ class GenerateNarrationBase(AgentNode):
     async def prepare_input_values(self) -> dict:
         input_values = self.get_input_values()
         input_values.pop("state", None)
-        return input_values
+        # unconnected optional inputs resolve to the UNRESOLVED sentinel -
+        # drop them so the agent function's own defaults apply instead of
+        # the sentinel leaking into the rendered prompt as a class repr
+        return {k: v for k, v in input_values.items() if v is not UNRESOLVED}
 
     async def run(self, state: GraphState):
         input_values = await self.prepare_input_values()
