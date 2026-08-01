@@ -17,6 +17,7 @@ Active and completed development tracks.
 | director-trust-and-levers | Director trust and autonomy levers | feature | IN USER TESTING | EVALUATE_EXECUTION | 2026-07-31 |
 | agent-observability | Structured debug logging across agents | infrastructure | implemented, awaiting restart | EVALUATE_EXECUTION | 2026-07-31 |
 | model-aware-prompting | Prompt profiles per checkpoint dialect | feature | implemented, live-tested | EVALUATE_EXECUTION | 2026-08-01 |
+| comfyui-workflow-quality | Clip skip, sampler rebake, background reference | feature | planned | EVALUATE_PLAN | 2026-08-01 |
 
 ## Completed Tracks
 

@@ -1,0 +1,20 @@
+{
+  "version": 3,
+  "track_id": "comfyui-workflow-quality",
+  "name": "ComfyUI workflow quality - clip skip, sampler rebake, background reference",
+  "type": "feature",
+  "status": "planned",
+  "superpower_enhanced": true,
+  "created_at": "2026-08-01",
+  "loop_state": {
+    "current_step": "EVALUATE_PLAN",
+    "step_status": "NOT_STARTED",
+    "fix_cycle_count": 0,
+    "checkpoints": {
+      "PLAN": {
+        "status": "PASSED"
+      }
+    }
+  },
+  "notes": "Spec from live workflow audit 2026-08-01: no CLIPSetLastLayer anywhere (Pony wants clip skip 2 - standing quality tax), baked CFG 8 contradicts MODEL_PROFILES CFG 6, no background/environment reference (style-transfer IPAdapter chain designed), chooser-chosen model must carry into the Adjust modal deterministically. Follow-ups deliberately out of scope: regional masking, depth ControlNet location continuity, auto location-image attachment."
+}
